@@ -28,12 +28,12 @@ function.wide_space_default()
 #         """, unsafe_allow_html=True)
 
 
-# sidebar_icon = r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v11\element\UGA_logo_ExtremeHoriz_FC_MARCM.png"
+# sidebar_icon = r"element\UGA_logo_ExtremeHoriz_FC_MARCM.png"
 # st.logo(sidebar_icon, icon_image=sidebar_icon)
-st.session_state.log_file_path = r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v13\element\user_count.txt"
-# st.image(r'C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v13\element\Phy2.png',
+st.session_state.log_file_path = r"element\user_count.txt"
+# st.image(r'element\Phy2.png',
 #             width = 1300)
-st.image(r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v13\element\Application header picture-Recovered2.png")
+st.image(r"element\Application header picture-Recovered2.png")
 
 hide_close_button_css = """
 <style>
@@ -182,7 +182,7 @@ col1.markdown(
     - Export data
     """)
 
-col3.image(r'C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v13\element\SpectraGuru Welcome Page Flow Chart.png')
+col3.image(r'element\SpectraGuru Welcome Page Flow Chart.png')
 
 # st.markdown(
 #     """

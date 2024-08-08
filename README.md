@@ -19,30 +19,29 @@ Our application is hosted [here](empty)! Please use it directly, as easy as it c
 
 ### Deploy locally
 
-You do not have to host it locally to use the application. But if you wish to deploy it locally. 
+You do not have to host it locally to use the application. But if you wish to deploy it locally, please follow these steps:
 
 1. Install Python and dependencies
    
-   SpectraGuru run on:
+   SpectraGuru runs on:
 
-    altair==5.3.0
+       altair==5.3.0
 
-    deprecation==2.1.0
+       deprecation==2.1.0
 
-    matplotlib==3.8.4
+       matplotlib==3.8.4
 
-    numpy==1.23.5
+       numpy==1.23.5
 
-    pandas==2.2.2
+       pandas==2.2.2
 
-    scikit_learn==1.5.1
+       scikit_learn==1.5.1
 
-    scipy==1.14.0
+       scipy==1.14.0
 
-    streamlit==1.35.0
+       streamlit==1.35.0
 
-    streamlit_extras==0.4.3
-
+       streamlit_extras==0.4.3
 
     Or use requirements.txt to install the dependencies: 
 

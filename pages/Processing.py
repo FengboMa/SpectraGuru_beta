@@ -11,7 +11,7 @@ from datetime import datetime
 import function
 
 function.wide_space_default()
-st.session_state.log_file_path = r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v13\element\user_count.txt"
+st.session_state.log_file_path = r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v14\element\user_count.txt"
 # hide_st_style = """
 #             <style>
 #             #MainMenu {visibility: hidden;}
@@ -48,7 +48,7 @@ else:
     if 'interpolation_act' not in st.session_state:
         st.session_state.interpolation_act = False
 
-    interpolation_act = st.sidebar.toggle("Turn on Interpolation", value=False, help="Use Interpolation to transfer and round Ramanshift to its closest Integer.", key='interpolation_act')
+    interpolation_act = st.sidebar.toggle("Interpolation", value=False, help="Use Interpolation to transfer and round Ramanshift to its closest Integer.", key='interpolation_act')
     # st.sidebar.write(interpolation_ref_x)
     
     # crop
@@ -86,7 +86,7 @@ else:
     if 'despike_act' not in st.session_state:
         st.session_state.despike_act = False
     
-    despike_act = st.sidebar.toggle("Turn on Despike", 
+    despike_act = st.sidebar.toggle("Despike", 
                                     value=False, 
                                     help="Despike(Threshold, Width) Auto-Despikes spectra with old despike script. Replaces regions of spectra which increase more than a (Threshold) over a specified (Scan Width) with a line.", 
                                     key='despike_act')
@@ -108,7 +108,7 @@ else:
     if 'smoothening_act' not in st.session_state:
         st.session_state.smoothening_act = False
     
-    smoothening_act = st.sidebar.toggle("Turn on Smoothening", 
+    smoothening_act = st.sidebar.toggle("Smoothening", 
                                     value=False, 
                                     help="Smoothening in spectra processing is a technique used to reduce noise and enhance the signal by averaging adjacent data points to produce a clearer representation of the spectral data.", 
                                     key='smoothening_act')
@@ -163,7 +163,7 @@ else:
     if 'baselineremoval_act' not in st.session_state:
         st.session_state.baselineremoval_act = False
     
-    baselineremoval_act = st.sidebar.toggle("Turn on Baseline Removal", 
+    baselineremoval_act = st.sidebar.toggle("Baseline Removal", 
                                             value=False, 
                                             help="Remove baselines (or backgrounds) from data by either by including a baseline function when fitting a sum of functions to the data, or by actually subtracting a baseline estimate from the data.", 
                                             key='baselineremoval_act')
@@ -194,7 +194,7 @@ else:
     if 'normalization_act' not in st.session_state:
         st.session_state.normalization_act = False
     
-    normalization_act = st.sidebar.toggle("Turn on Normalization", 
+    normalization_act = st.sidebar.toggle("Normalization", 
                                             value=False, 
                                             help="Normalize By Area(Area) simply divides each spectra's values by the area under the spectra then multiplies by the (Area) value. ie: It sets the area under each spectra equal to (Area)", 
                                             key='normalization_act')
@@ -207,7 +207,7 @@ else:
     if 'outlierremoval_act' not in st.session_state:
         st.session_state.outlierremoval_act = False
     
-    outlierremoval_act = st.sidebar.toggle("Turn on Outlier Removal", 
+    outlierremoval_act = st.sidebar.toggle("Outlier Removal", 
                                     value=False, 
                                     help="The function removes outlier spectra from a dataframe based on single threshold, distance, and correlation criteria.", 
                                     key='outlierremoval_act')
@@ -491,8 +491,9 @@ else:
             mime="text/csv",
         )
         
-        if st.session_state.baselineremoval_act:
-            st.write(st.session_state.remove_outliers_log)
+        if st.session_state.outlierremoval_act:
+            st.write("**Following spectra has been detect and removed by outlier removal function**")
+            st.table(st.session_state.remove_outliers_log)
         
     except:
         pass

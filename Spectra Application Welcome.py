@@ -30,10 +30,11 @@ function.wide_space_default()
 
 # sidebar_icon = r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v11\element\UGA_logo_ExtremeHoriz_FC_MARCM.png"
 # st.logo(sidebar_icon, icon_image=sidebar_icon)
-st.session_state.log_file_path = r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v13\element\user_count.txt"
+
 # st.image(r'C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v13\element\Phy2.png',
 #             width = 1300)
-st.image(r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v13\element\Application header picture-Recovered2.png")
+st.image(r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v14\element\Application header picture-3.png")
+st.session_state.log_file_path = r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v14\element\user_count.txt"
 
 hide_close_button_css = """
 <style>
@@ -50,8 +51,8 @@ modal = Modal(
     key="welcome_modal",
     
     # Optional
-    padding=50,    # default value
-    max_width=700  # default value
+    padding=30, 
+    max_width=750 
 )
 
 st.html(
@@ -69,14 +70,13 @@ if 'popup_closed' not in st.session_state:
 
 if not st.session_state.popup_closed:
     with modal.container():
-        st.info('SpectraGuru is still under development. Current version: SpectraGuru ver. 0.13.6')
+        st.info('SpectraGuru is still under development. Current version: SpectraGuru ver. 0.14.2')
         
         st.write("")
         st.write("Thanks for visiting SpectraGuru, a spectroscopy processing and visualization tool.")
         st.write("If you encounter a problem, please send an email to Fengbo.Ma@uga.edu")
         st.divider()
         st.write("**:arrow_upper_left: After clicking Start button below, then navigate to Data Upload located at the top of the sidebar to begin!**")
-        st.divider()
         
         # check = st.button('Start', type='primary')
         # if check:
@@ -93,7 +93,7 @@ if not st.session_state.popup_closed:
 
 
 st.write("# SpectraGuru  - A Spectra Analysis Application ")
-st.info('SpectraGuru is still under development. Current version: SpectraGuru ver. 0.13.6')
+st.info('SpectraGuru is still under development. Current version: SpectraGuru ver. 0.14.2')
 
 # current_user_count = function.log_user_count(st.session_state.log_file_path)
 try:
@@ -182,7 +182,7 @@ col1.markdown(
     - Export data
     """)
 
-col3.image(r'C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v13\element\SpectraGuru Welcome Page Flow Chart.png')
+col3.image(r'C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v14\element\SpectraGuru Welcome Page Flow Chart.png')
 
 # st.markdown(
 #     """

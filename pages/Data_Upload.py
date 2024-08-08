@@ -4,6 +4,7 @@ import pandas as pd
 import function
 
 function.wide_space_default()
+st.session_state.log_file_path = r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v14\element\user_count.txt"
 
 hide_st_style = """
             <style>
@@ -82,59 +83,137 @@ st.markdown("""
             
             """)
 
-multi_file = st.checkbox("Uploading Multiple Files", 
-                    value=True, 
-                    help = """
-                    Check box if the files are sharing common X-axis and for the same sample. The csv or txt file should be separated by tab.
-                    """)
+upload_file_format = st.selectbox(label="Select data format you wish to upload", 
+                                options=("Multi files: .txt files (two-column single spectrum files, common x)",
+                                        "Multi files: .csv files (two-column single spectrum files, common x)",
+                                        "Single file: .csv file (A tab-separated csv (tsv) file)",
+                                        "Single file: .csv file (A comma-separated csv (csv) file)"),
+                                help="See documentation for detailed description on supported format.",
+                                placeholder="Please choose a format",
+                                index = None)
 
-if multi_file is True:
-    st.write("#### Upload Multiple Files")
-    # Multi file uploader
-    uploaded_multi_file = st.file_uploader("", type=["csv","txt"], key='multi_file_uploader', accept_multiple_files=True)
+loaded = False
+
+if upload_file_format == None:
+    if 'df' not in st.session_state:
+        st.error("Please select a data format and upload your data")
+
+elif upload_file_format == "Multi files: .txt files (two-column single spectrum files, common x)":
+    uploaded_multi_file = st.file_uploader("", type=["txt"], key='multi_file_uploader', accept_multiple_files=True)
+    # file_loaded = True
     try:
         if uploaded_multi_file is not None:
+            loaded = True
             df = load_multi_data(uploaded_multi_file)
             
             st.session_state.df = df
             st.session_state.backup = df
-        # if 'df' in st.session_state:
             
-        #     st.write("#### Preview")
-        #     st.write(st.session_state.df)
-            # st.write(st.session_state.df_original)
     except:
-        print("Load your data")
-
-else: 
-    st.write("#### Upload a Single File")
-    
-    st.write("Check the box if it is a tab-separated csv file")
-    
-    tab_csv = st.checkbox("This is a tab separated csv file", 
-                        value=True, 
-                        help = """
-                        Check box if the file is a tab-separated csv (tsv).                                                        
-                        A tab-separated csv (tsv) file is a type of text file used
-                        to store data in a tabular format, similar to a standard csv file, but 
-                        with tab characters ("/t") used as the delimiter instead of commas. This format 
-                        is useful for ensuring that data containing commas remains correctly parsed.""")
-    
+        pass
+elif upload_file_format == "Multi files: .csv files (two-column single spectrum files, common x)":
+    uploaded_multi_file = st.file_uploader("", type=["csv"], key='multi_file_uploader', accept_multiple_files=True)
+    # file_loaded = True
+    try:
+        if uploaded_multi_file is not None:
+            loaded = True
+            df = load_multi_data(uploaded_multi_file)
+            
+            st.session_state.df = df
+            st.session_state.backup = df
+    except:
+        pass
+elif upload_file_format == "Single file: .csv file (A tab-separated csv (tsv) file)":
     uploaded_file = st.file_uploader("", type="csv", key='file_uploader')
-
-    if uploaded_file is not None:
-        
-        if tab_csv == False:
-            df = load_data(uploaded_file)
-        elif tab_csv == True:
+    # file_loaded = True
+    try: 
+        if uploaded_file is not None:
+            loaded = True
             df = load_tab_data(uploaded_file)
+
+            st.session_state.df = df
+            st.session_state.backup = df
+    except:
+        pass
+elif upload_file_format == "Single file: .csv file (A comma-separated csv (csv) file)":
+    uploaded_file = st.file_uploader("", type="csv", key='file_uploader')
+    # file_loaded = True
+    try: 
+        if uploaded_file is not None:
+            loaded = True
+            df = load_data(uploaded_file)
+
+            st.session_state.df = df
+            st.session_state.backup = df
+    except:
+        pass
+
+
+# multi_file = st.checkbox("Uploading Multiple Files", 
+#                     value=True, 
+#                     help = """
+#                     Check box if the files are sharing common X-axis and for the same sample. The csv or txt file should be separated by tab.
+#                     """)
+
+# if multi_file is True:
+#     st.write("#### Upload Multiple Files")
+#     # Multi file uploader
+#     uploaded_multi_file = st.file_uploader("", type=["csv","txt"], key='multi_file_uploader', accept_multiple_files=True)
+#     try:
+#         if uploaded_multi_file is not None:
+#             df = load_multi_data(uploaded_multi_file)
+            
+#             st.session_state.df = df
+#             st.session_state.backup = df
+#         # if 'df' in st.session_state:
+            
+#         #     st.write("#### Preview")
+#         #     st.write(st.session_state.df)
+#             # st.write(st.session_state.df_original)
+#     except:
+#         print("Load your data")
+
+# else: 
+#     st.write("#### Upload a Single File")
+    
+#     st.write("Check the box if it is a tab-separated csv file")
+    
+#     tab_csv = st.checkbox("This is a tab separated csv file", 
+#                         value=True, 
+#                         help = """
+#                         Check box if the file is a tab-separated csv (tsv).                                                        
+#                         A tab-separated csv (tsv) file is a type of text file used
+#                         to store data in a tabular format, similar to a standard csv file, but 
+#                         with tab characters ("/t") used as the delimiter instead of commas. This format 
+#                         is useful for ensuring that data containing commas remains correctly parsed.""")
+    
+#     uploaded_file = st.file_uploader("", type="csv", key='file_uploader')
+
+#     if uploaded_file is not None:
         
-        st.session_state.df = df
-        st.session_state.backup = df
+#         if tab_csv == False:
+#             df = load_data(uploaded_file)
+#         elif tab_csv == True:
+#             df = load_tab_data(uploaded_file)
+        
+#         st.session_state.df = df
+#         st.session_state.backup = df
         
 if 'df' in st.session_state:
+    st.divider()
+    col1, col2 = st.columns([2, 12])
+    
+    if col1.button(label='Processing Page', key='switch_processing_page'):
+        st.switch_page("pages/Processing.py")
+    col2.markdown(' :arrow_left: **Go to Processing Page to process data**')
     
     st.write("#### Preview")
     st.write(st.session_state.backup)
     
     function.update_mode_option()
+# elif upload_file_format is not None or 'backup' not in st.session_state or load_error == True:
+# elif 'df' not in st.session_state and load_error == True:
+# st.write(loaded)
+# st.write('df' in st.session_state)
+# st.write(upload_file_format is None)
+#         st.error("Data upload is failed. Please check your data format.")

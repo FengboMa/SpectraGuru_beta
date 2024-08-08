@@ -10,7 +10,8 @@ def update_mode_option():
 # Default to wide
 def wide_space_default():
     import streamlit as st
-    st.set_page_config(layout="wide")
+    st.set_page_config(layout="wide", 
+                    page_icon=r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v14\element\tab_bar_pic.png")
 
 # Reset button function
 def reset_processing():

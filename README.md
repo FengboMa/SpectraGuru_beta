@@ -1,4 +1,4 @@
-![alt text](logo.png)
+<img src="logo.png" width="300">
 
 # SpectraGuru - Spectra Analysis Application
 
@@ -9,7 +9,7 @@ Find our documentation page: [here](https://fengboma.github.io/docs.spectraguru/
 ## What is SpectraGuru?
 SpectraGuru is a spectra analysis application designed to provide user-friendly tools for processing and visualizing spectra, aimed at accelerating your research. It functions as a dashboard or a specialized tool within a Python environment, organized with various modular functions that allow users to process spectroscopy data in a pipeline. SpectraGuru is based on python streamlit framework. 
 
---
+---
 
 ## Quick start
 
@@ -24,15 +24,25 @@ You do not have to host it locally to use the application. But if you wish to de
 1. Install python and dependencies
    
    SpectraGuru run on:
+
     altair==5.3.0
+
     deprecation==2.1.0
+
     matplotlib==3.8.4
+
     numpy==1.23.5
+
     pandas==2.2.2
+
     scikit_learn==1.5.1
+
     scipy==1.14.0
+
     streamlit==1.35.0
+
     streamlit_extras==0.4.3
+
 
     Or use requirements.txt to install the dependencies: 
 

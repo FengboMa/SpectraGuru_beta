@@ -4,7 +4,13 @@ from streamlit_modal import Modal
 # import streamlit.components.v1 as components
 
 import function
+import os
 
+# Get the current script's directory
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Change the working directory
+os.chdir(current_dir)
 
 
 function.wide_space_default()
@@ -33,8 +39,8 @@ function.wide_space_default()
 
 # st.image(r'C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v13\element\Phy2.png',
 #             width = 1300)
-st.image(r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v14\element\Application header picture-3.png")
-st.session_state.log_file_path = r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v14\element\user_count.txt"
+st.image(r"element/Application header picture-3.png")
+st.session_state.log_file_path = r"element/user_count.txt"
 
 hide_close_button_css = """
 <style>
@@ -182,7 +188,7 @@ col1.markdown(
     - Export data
     """)
 
-col3.image(r'C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v14\element\SpectraGuru Welcome Page Flow Chart.png')
+col3.image(r'element/SpectraGuru Welcome Page Flow Chart.png')
 
 # st.markdown(
 #     """

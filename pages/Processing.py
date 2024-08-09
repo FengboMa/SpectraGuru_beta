@@ -281,7 +281,6 @@ else:
             elif normalization_function == "Normalize by peak":
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply(function.normalize_by_peak, axis = 0)
             elif normalization_function == "Min max normalize":
-                st.sidebar.write(1)
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply(function.min_max_normalize, axis = 0)
                 
 

@@ -118,10 +118,18 @@ def normalize_by_area(spectra, ramanshift):
     return normalized_spectra
 
 # Normalize by peak
-def normalize_by_peak(spectra, ramanshift):
+def normalize_by_peak(spectra):
     import numpy as np
     peak_intensity = np.max(spectra)  # Find the maximum intensity in the spectra
     normalized_spectra = spectra / peak_intensity  # Normalize by the peak intensity
+    return normalized_spectra
+
+# Min Max normalize
+def min_max_normalize(spectra):
+    import numpy as np
+    min_val = np.min(spectra)
+    max_val = np.max(spectra)
+    normalized_spectra = (spectra - min_val) / (max_val - min_val)  # Normalize the single series (column)
     return normalized_spectra
 
 # Despike

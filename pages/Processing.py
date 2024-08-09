@@ -11,7 +11,7 @@ from datetime import datetime
 import function
 
 function.wide_space_default()
-st.session_state.log_file_path = r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v14\element\user_count.txt"
+st.session_state.log_file_path = r"element/user_count.txt"
 # hide_st_style = """
 #             <style>
 #             #MainMenu {visibility: hidden;}
@@ -202,7 +202,8 @@ else:
     if normalization_act:
         # Add more functions to this selectbox if needed
         normalization_function = st.sidebar.selectbox(label="Select your Normalization Function",  options=["Normalize by area", 
-                                                                                                            "Normalize by peak"])
+                                                                                                            "Normalize by peak",
+                                                                                                            "Min max normalize"])
     
     # Outlier Removal
     if 'outlierremoval_act' not in st.session_state:
@@ -278,7 +279,11 @@ else:
             if normalization_function == "Normalize by area":
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply(function.normalize_by_area, ramanshift =st.session_state.df.iloc[:, 0], axis = 0)        
             elif normalization_function == "Normalize by peak":
-                st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply(function.normalize_by_peak, ramanshift =st.session_state.df.iloc[:, 0], axis = 0)        
+                st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply(function.normalize_by_peak, axis = 0)
+            elif normalization_function == "Min max normalize":
+                st.sidebar.write(1)
+                st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply(function.min_max_normalize, axis = 0)
+                
 
         # outlier removal act
         if outlierremoval_act:

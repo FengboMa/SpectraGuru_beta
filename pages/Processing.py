@@ -201,7 +201,8 @@ else:
     
     if normalization_act:
         # Add more functions to this selectbox if needed
-        normalization_function = st.sidebar.selectbox(label="Select your Normalization Function",  options=["Normalize by area"])
+        normalization_function = st.sidebar.selectbox(label="Select your Normalization Function",  options=["Normalize by area", 
+                                                                                                            "Normalize by peak"])
     
     # Outlier Removal
     if 'outlierremoval_act' not in st.session_state:
@@ -276,6 +277,8 @@ else:
         if normalization_act:
             if normalization_function == "Normalize by area":
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply(function.normalize_by_area, ramanshift =st.session_state.df.iloc[:, 0], axis = 0)        
+            elif normalization_function == "Normalize by peak":
+                st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply(function.normalize_by_peak, ramanshift =st.session_state.df.iloc[:, 0], axis = 0)        
 
         # outlier removal act
         if outlierremoval_act:

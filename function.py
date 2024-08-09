@@ -117,6 +117,13 @@ def normalize_by_area(spectra, ramanshift):
     normalized_spectra = spectra / abs(area)  # Ensure the area is always positive
     return normalized_spectra
 
+# Normalize by peak
+def normalize_by_peak(spectra, ramanshift):
+    import numpy as np
+    peak_intensity = np.max(spectra)  # Find the maximum intensity in the spectra
+    normalized_spectra = spectra / peak_intensity  # Normalize by the peak intensity
+    return normalized_spectra
+
 # Despike
 def despikeSpec(spectra, ramanshift, threshold=100, zap_length=11):
     import numpy as np

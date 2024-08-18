@@ -426,3 +426,15 @@ def log_spectra_processed_count(log_file_path):
             file.write(f"{key}\t{value}\n")
     
     return counts["Spectra_Processed"]
+
+# Peak finding function
+def peak_identification(spectra, height=None, threshold=None, distance=None, 
+                        prominence=None, width=None, wlen=None, 
+                        rel_height=0.5, plateau_size=None):
+    from scipy.signal import find_peaks
+    
+    peaks,properties = find_peaks(spectra, height=height, threshold=threshold, distance=distance, 
+                        prominence=prominence, width=width, wlen=wlen, 
+                        rel_height=rel_height, plateau_size=plateau_size)
+    
+    return peaks,properties

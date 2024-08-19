@@ -126,7 +126,7 @@ st.markdown(
 
 col1, col2 = st.columns([2, 12])
 if col1.button(label='Data Upload Page', key='switch_data_upload_page'):
-    st.switch_page("pages/Data_Upload.py")
+    st.switch_page("pages/2_Data_Upload.py")
 col2.markdown(' :arrow_left: **Start with upload your data in Data Upload Page**')
 
 st.divider()

@@ -204,7 +204,7 @@ if 'df' in st.session_state:
     col1, col2 = st.columns([2, 12])
     
     if col1.button(label='Processing Page', key='switch_processing_page'):
-        st.switch_page("pages/Processing.py")
+        st.switch_page("pages/3_Processing.py")
     col2.markdown(' :arrow_left: **Go to Processing Page to process data**')
     
     st.write("#### Preview")

@@ -6,6 +6,7 @@ import altair as alt
 # from streamlit_extras.chart_container import chart_container
 from streamlit_extras.row import row
 from datetime import datetime
+import pandas as pd
 import function
 
 function.wide_space_default()
@@ -48,7 +49,7 @@ if 'df' in st.session_state:
         st.sidebar.write("Find peaks only on average:")
         st.sidebar.write(True)
         
-        st.sidebar.number_input(label='Height',min_value= 0, max_value= 5000, placeholder='Insert a number',
+        st.sidebar.number_input(label='Height',min_value= 0, max_value= 10000, placeholder='Insert a number',
                                     key = 'peak_iden_height',step = 1, value = None,
                                     help = "Required height of peaks.")
         
@@ -56,7 +57,7 @@ if 'df' in st.session_state:
                                     key = 'peak_iden_threshold',step = 1, value = None,
                                     help = "Required threshold of peaks, the vertical distance to its neighboring samples.")
         
-        st.sidebar.number_input(label='Distance',min_value= 0, max_value= 5000, placeholder='Insert a number',
+        st.sidebar.number_input(label='Distance',min_value= 1, max_value= 5000, placeholder='Insert a number',
                                     key = 'peak_iden_distance',step = 1, value = None,
                                     help = "Required minimal horizontal distance (>= 1) in samples between neighbouring peaks. Smaller peaks are removed first until the condition is fulfilled for all remaining peaks.")
         
@@ -64,7 +65,7 @@ if 'df' in st.session_state:
                                     key = 'peak_iden_prominence',step = 1, value = None,
                                     help = "Required prominence of peaks. The prominence of a peak measures how much a peak stands out from the surrounding baseline of the signal and is defined as the vertical distance between the peak and its lowest contour line.")
         
-        st.sidebar.number_input(label='Width',min_value= 0, max_value= 5000, placeholder='Insert a number',
+        st.sidebar.number_input(label='Width',min_value= 1, max_value= 5000, placeholder='Insert a number',
                                     key = 'peak_iden_width',step = 1, value = None,
                                     help = "Required width of peaks in samples.")
 # st.sidebar.button(label="Plot", key='stats_plot',  type='primary')
@@ -465,22 +466,22 @@ else:
         elif st.session_state.stats_plot_select == "Peak Identification and Stats":   
             filtered_avg_df = stats_data_melted[stats_data_melted['Sample ID'] == 'Average']
             
-            avg_stats_base2 = alt.Chart(filtered_avg_df).mark_line().encode(
-                    x=alt.X('Ramanshift', title='Raman shift/cm^-1', type='quantitative'),
-                    y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
-                    tooltip=alt.value(None),
-                    color=alt.value('blue'),
-                    size=alt.value(3)
-                    ).properties(
-                        width=1300,
-                        height=600,
-                        title='Spectra Average Data Plot'
-                    )
+            # avg_stats_base2 = alt.Chart(filtered_avg_df).mark_line().encode(
+            #         x=alt.X('Ramanshift', title='Raman shift/cm^-1', type='quantitative'),
+            #         y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
+            #         tooltip=alt.value(None),
+            #         color=alt.value('blue'),
+            #         size=alt.value(3)
+            #         ).properties(
+            #             width=1300,
+            #             height=600,
+            #             title='Spectra Average Data Plot'
+            #         )
                 
-            # st.altair_chart(avg_stats_base2, use_container_width=False)   
-            show_plot = avg_stats_base2 
-            st.altair_chart(show_plot)
-            st.write(filtered_avg_df)
+            # # st.altair_chart(avg_stats_base2, use_container_width=False)   
+            # show_plot = avg_stats_base2 
+            # st.altair_chart(show_plot)
+            # st.write(filtered_avg_df)
             
             peaks, properties = function.peak_identification(spectra=filtered_avg_df['Intensity'].to_numpy(),
                                                             height= st.session_state.peak_iden_height,
@@ -489,22 +490,22 @@ else:
                                                             prominence = st.session_state.peak_iden_prominence,
                                                             width = st.session_state.peak_iden_width)
 
-            # Print detected peaks indices
-            st.write(peaks)
+            # # Print detected peaks indices
+            # st.write(peaks)
 
             # Extract Raman shift and intensity values
             raman_shift = filtered_avg_df['Ramanshift']
             intensity = filtered_avg_df['Intensity']
 
             # Plot the Raman shift vs. Intensity with detected peaks using .iloc
-            fig = plt.figure(figsize=(10, 6))
-            plt.plot(raman_shift, intensity, label='Intensity')
-            plt.plot(raman_shift.iloc[peaks], intensity.iloc[peaks], "ro", markersize=8, label='Peaks')  # Red 'o' markers for peaks
-            plt.title('Peak Detection in Raman Shift Data Using peak_identification Function')
-            plt.xlabel('Raman Shift')
-            plt.ylabel('Intensity')
-            plt.legend()
-            st.pyplot(fig)
+            # fig = plt.figure(figsize=(10, 6))
+            # plt.plot(raman_shift, intensity, label='Intensity')
+            # plt.plot(raman_shift.iloc[peaks], intensity.iloc[peaks], "ro", markersize=8, label='Peaks')  # Red 'o' markers for peaks
+            # plt.title('Peak Detection in Raman Shift Data Using peak_identification Function')
+            # plt.xlabel('Raman Shift')
+            # plt.ylabel('Intensity')
+            # plt.legend()
+            # st.pyplot(fig)
             
             
             # peaks, _ = peak_identification(spectra=filtered_avg_df['Intensity'].to_numpy(), prominence=1.0)
@@ -545,5 +546,25 @@ else:
 
             # Display the plot in Streamlit (if using Streamlit)
             st.altair_chart(interactive_plot)
+            
+            
+            st.write("**Peak property**")
+            
+            
+            
+            properties_df = pd.DataFrame(properties)
+            
+            # properties_df['peak_heights'] = [peaks].values
+            
+            # st.write(properties_df)
+            
+            peak_df = peak_df.reset_index(drop=True)
+            properties_df = properties_df.reset_index(drop=True)
+            
+            # st.write(peak_df)
+            
+            peak_df = pd.concat([peak_df, properties_df], axis=1)
+            
+            st.write(peak_df)
             
             function.log_plot_generated_count(st.session_state.log_file_path)

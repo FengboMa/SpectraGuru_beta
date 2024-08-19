@@ -99,7 +99,7 @@ if not st.session_state.popup_closed:
 
 
 st.write("# SpectraGuru  - A Spectra Analysis Application ")
-st.info('SpectraGuru is still under development. Current version: SpectraGuru ver. 0.14.2')
+# st.info('SpectraGuru is still under development. Current version: SpectraGuru ver. 0.15')
 
 # current_user_count = function.log_user_count(st.session_state.log_file_path)
 try:
@@ -117,6 +117,8 @@ st.sidebar.success("Navigate to Data Upload page above to start")
 st.markdown(
     """
     SpectraGuru is a spectra analysis application designed to provide user-friendly tools for processing and visualizing spectra, aimed at accelerating your research. It functions as a dashboard or a specialized tool within a Python environment, organized with various modular functions that allow users to process spectroscopy data in a pipeline.
+    
+    **Visit our [documentation](https://fengboma.github.io/docs.spectraguru/) for more information about SpectraGuru.**
     
     ---
     

@@ -20,7 +20,7 @@ st.session_state.log_file_path = r"C:\Users\zhaoy_admin\Desktop\OneDrive - Unive
 # st.markdown(hide_st_style, unsafe_allow_html=True)
 
 if 'df' in st.session_state:
-    st.sidebar.write("#### Statistics")
+    st.sidebar.write("#### Analytics")
 
     # Side bar to select which plot and parameters
     st.sidebar.selectbox('Select Statistics Plot', 
@@ -71,7 +71,7 @@ if 'df' in st.session_state:
 # Stats section layout
 """"""""""""
 # Main Page
-st.markdown("## Statistics")
+st.markdown("## Analytics")
 
 if 'df' not in st.session_state:
     st.error('Please go back to Data Upload and upload your data.')

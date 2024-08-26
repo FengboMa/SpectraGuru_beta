@@ -49,25 +49,46 @@ if 'df' in st.session_state:
         st.sidebar.write("Find peaks only on average:")
         st.sidebar.write(True)
         
-        st.sidebar.number_input(label='Height',min_value= 0, max_value= 10000, placeholder='Insert a number',
-                                    key = 'peak_iden_height',step = 1, value = None,
-                                    help = "Required height of peaks.")
+        st.sidebar.toggle(label="Auto Peak Identification", value=True, key="peak_iden_auto")
         
-        st.sidebar.number_input(label='Threshold',min_value= 0, max_value= 5000, placeholder='Insert a number',
-                                    key = 'peak_iden_threshold',step = 1, value = None,
-                                    help = "Required threshold of peaks, the vertical distance to its neighboring samples.")
-        
-        st.sidebar.number_input(label='Distance',min_value= 1, max_value= 5000, placeholder='Insert a number',
-                                    key = 'peak_iden_distance',step = 1, value = None,
-                                    help = "Required minimal horizontal distance (>= 1) in samples between neighbouring peaks. Smaller peaks are removed first until the condition is fulfilled for all remaining peaks.")
-        
-        st.sidebar.number_input(label='Prominence',min_value= 0, max_value= 5000, placeholder='Insert a number',
-                                    key = 'peak_iden_prominence',step = 1, value = None,
-                                    help = "Required prominence of peaks. The prominence of a peak measures how much a peak stands out from the surrounding baseline of the signal and is defined as the vertical distance between the peak and its lowest contour line.")
-        
-        st.sidebar.number_input(label='Width',min_value= 1, max_value= 5000, placeholder='Insert a number',
-                                    key = 'peak_iden_width',step = 1, value = None,
-                                    help = "Required width of peaks in samples.")
+        if st.session_state.peak_iden_auto == True:
+            st.session_state.peak_iden_height_p = 0
+            st.session_state.peak_iden_threshold_p = 0
+            st.session_state.peak_iden_distance_p = 1
+            st.session_state.peak_iden_prominence_p = 0
+            st.session_state.peak_iden_width_p = 0
+            
+            st.sidebar.number_input(label='Number of Peaks to identify',min_value= 1, max_value= 10000, placeholder='Insert a number',
+                                        key = 'peak_iden_auto_num',step = 1, value = 10,
+                                        help = "Number of peak you wish to identify automatically.")
+            
+        else:       
+            st.sidebar.number_input(label='Height',min_value= 0.00, max_value= 10000.00, placeholder='Insert a number',
+                                        key = 'peak_iden_height',step = 1.00, value = None,
+                                        help = "Required height of peaks.")
+            
+            st.sidebar.number_input(label='Threshold',min_value= 0.00, max_value= 5000.00, placeholder='Insert a number',
+                                        key = 'peak_iden_threshold',step = 1.00, value = None,
+                                        help = "Required threshold of peaks, the vertical distance to its neighboring samples.")
+            
+            st.sidebar.number_input(label='Distance',min_value= 1.00, max_value= 5000.00, placeholder='Insert a number',
+                                        key = 'peak_iden_distance',step = 1.00, value = None,
+                                        help = "Required minimal horizontal distance (>= 1) in samples between neighbouring peaks. Smaller peaks are removed first until the condition is fulfilled for all remaining peaks.")
+            
+            st.sidebar.number_input(label='Prominence',min_value= 0.00, max_value= 5000.00, placeholder='Insert a number',
+                                        key = 'peak_iden_prominence',step = 1.00, value = None,
+                                        help = "Required prominence of peaks. The prominence of a peak measures how much a peak stands out from the surrounding baseline of the signal and is defined as the vertical distance between the peak and its lowest contour line.")
+            
+            st.sidebar.number_input(label='Width',min_value= 0.00, max_value= 5000.00, placeholder='Insert a number',
+                                        key = 'peak_iden_width',step = 1.00, value = None,
+                                        help = "Required width of peaks in samples.")
+            
+            st.session_state.peak_iden_height_p = st.session_state.peak_iden_height
+            st.session_state.peak_iden_threshold_p = st.session_state.peak_iden_threshold
+            st.session_state.peak_iden_distance_p = st.session_state.peak_iden_distance
+            st.session_state.peak_iden_prominence_p = st.session_state.peak_iden_prominence
+            st.session_state.peak_iden_width_p = st.session_state.peak_iden_width
+            
 # st.sidebar.button(label="Plot", key='stats_plot',  type='primary')
 # Stats section layout
 """"""""""""
@@ -484,14 +505,12 @@ else:
             # st.write(filtered_avg_df)
             
             peaks, properties = function.peak_identification(spectra=filtered_avg_df['Intensity'].to_numpy(),
-                                                            height= st.session_state.peak_iden_height,
-                                                            threshold = st.session_state.peak_iden_threshold,
-                                                            distance = st.session_state.peak_iden_distance,
-                                                            prominence = st.session_state.peak_iden_prominence,
-                                                            width = st.session_state.peak_iden_width)
+                                                            height= st.session_state.peak_iden_height_p,
+                                                            threshold = st.session_state.peak_iden_threshold_p,
+                                                            distance = st.session_state.peak_iden_distance_p,
+                                                            prominence = st.session_state.peak_iden_prominence_p,
+                                                            width = st.session_state.peak_iden_width_p)
 
-            # # Print detected peaks indices
-            # st.write(peaks)
 
             # Extract Raman shift and intensity values
             raman_shift = filtered_avg_df['Ramanshift']
@@ -512,7 +531,26 @@ else:
 
             # Step 2: Prepare a DataFrame for the peak markers
             peak_df = filtered_avg_df.iloc[peaks].copy()
+            
+            properties_df = pd.DataFrame(properties)
+            
+            # properties_df['peak_heights'] = [peaks].values
+            
+            # st.write(properties_df)
+            
+            peak_df = peak_df.reset_index(drop=True)
+            properties_df = properties_df.reset_index(drop=True)
+            
+            # st.write(peak_df)
+            
+            peak_df = pd.concat([peak_df, properties_df], axis=1)
+            
+            if st.session_state.peak_iden_auto:
+                peak_df = peak_df.sort_values(by='prominences', ascending=False).head(st.session_state.peak_iden_auto_num)
+            else:
+                peak_df = peak_df.sort_values(by='prominences', ascending=False)
 
+            
             # Step 3: Create the base interactive plot
             avg_stats_base2 = alt.Chart(filtered_avg_df).mark_line().encode(
                 x=alt.X('Ramanshift', title='Raman shift/cm^-1', type='quantitative'),
@@ -549,21 +587,6 @@ else:
             
             
             st.write("**Peak property**")
-            
-            
-            
-            properties_df = pd.DataFrame(properties)
-            
-            # properties_df['peak_heights'] = [peaks].values
-            
-            # st.write(properties_df)
-            
-            peak_df = peak_df.reset_index(drop=True)
-            properties_df = properties_df.reset_index(drop=True)
-            
-            # st.write(peak_df)
-            
-            peak_df = pd.concat([peak_df, properties_df], axis=1)
             
             st.write(peak_df)
             

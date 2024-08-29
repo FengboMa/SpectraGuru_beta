@@ -12,22 +12,7 @@ import function
 
 function.wide_space_default()
 st.session_state.log_file_path = r"element/user_count.txt"
-# hide_st_style = """
-#             <style>
-#             #MainMenu {visibility: hidden;}
-#             footer {visibility: hidden;}
-#             header {visibility: hidden;}
-#             </style>
-#             """
-# st.markdown(hide_st_style, unsafe_allow_html=True)
 
-# Testing
-# import time
-
-# sidebar_icon = r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v11\element\UGA_logo_ExtremeHoriz_FC_MARCM.png"
-# st.logo(sidebar_icon, icon_image=sidebar_icon)
-
-""""""""
 # Sidebar for processing
 if 'df' not in st.session_state:
     st.sidebar.write(" ")
@@ -36,12 +21,21 @@ else:
     st.sidebar.markdown("""
                     ### Processing
                     
-                    Select processing steps:
                     """)
     # try:
     # st.session_state.crop_min = st.session_state.df.iloc[:, 0].min()
     # st.session_state.crop_max = st.session_state.df.iloc[:, 0].max()
-    
+    # with st.sidebar.form(key="processing_form"):
+        
+    #     st.write("Inside the form")
+        
+    #     interpolation_ref_x = round(st.session_state.df.iloc[:, 0])
+    #     if 'interpolation_act' not in st.session_state:
+    #         st.session_state.interpolation_act = False
+
+    #     interpolation_act = st.toggle("Interpolation", value=False, help="Use Interpolation to transfer and round Ramanshift to its closest Integer.", key='interpolation_act')
+            
+    #     submitted = st.form_submit_button("Submit")
     # Interpolation
     # st.sidebar.markdown("**Interpolation**")
     interpolation_ref_x = round(st.session_state.df.iloc[:, 0])
@@ -93,11 +87,11 @@ else:
     
     if despike_act:
         # Add more functions to this selectbox if needed
-        despike_act_threshold = st.sidebar.number_input(label="Despike threshold",
+        st.session_state.despike_threshold = st.sidebar.number_input(label="Despike threshold",
                                                         min_value = 0, max_value = 1000, value = 300,
                                                         step = 1, placeholder="Insert a number")
         
-        despike_act_zap_length = st.sidebar.number_input(label="Despike zap length / window size",
+        st.session_state.despike_zap_length = st.sidebar.number_input(label="Despike zap length / window size",
                                                         min_value = 0, max_value = 100, value = 11,
                                                         step = 1, placeholder="Insert a number")
     
@@ -227,69 +221,208 @@ else:
         outlierremoval_act_correlation_threshold = st.sidebar.number_input(label="Outlier Removal correlation Threshold",
                                                         min_value = 1, max_value = 20, value = 4,
                                                         step = 1, placeholder="Insert a number")
-    # Processing button and reaction
-    if st.sidebar.button("Process", type='primary', key = 'process'):        
-        function.log_spectra_processed_count(st.session_state.log_file_path)
-        # interpolation act
+    # """
+    #     # Processing button and reaction
+    #     if st.sidebar.button("Process", type='primary', key = 'process'):        
+    #         function.log_spectra_processed_count(st.session_state.log_file_path)
+    #         # interpolation act
+    #         if interpolation_act:
+    #             interpolated_df = pd.DataFrame(interpolation_ref_x, columns=[st.session_state.df.columns[0]])
+    #             for col in st.session_state.df[1:]:
+    #                 f = interp1d(st.session_state.df.iloc[:, 0], st.session_state.df[col], kind='linear',bounds_error=False,fill_value="extrapolate")
+    #                 interpolated_values = f(interpolation_ref_x)
+    #                 interpolated_df[col] = interpolated_values
+    #             interpolated_df = interpolated_df.drop_duplicates()
+    #             # st.sidebar.write(interpolated_df)
+    #             st.session_state.df = interpolated_df
+                
+    #         # crop act
+    #         st.session_state.df = st.session_state.df[(st.session_state.df.iloc[:, 0] >= cropping[0]) & (st.session_state.df.iloc[:, 0] <= cropping[1])]
+            
+    #         # despike_act
+    #         if despike_act:
+    #             st.session_state.df.iloc[:, 1:] = function.despikeSpec(spectra = st.session_state.df.iloc[:, 1:],
+    #                                                                     ramanshift = st.session_state.df.iloc[:, 0],
+    #                                                                     threshold = despike_act_threshold,
+    #                                                                     zap_length = despike_act_zap_length)
+            
+            
+    #         # smoothening_act
+    #         if smoothening_act:
+    #             if smoothening_function == "Savitzky-Golay filter":
+    #                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply( lambda col: function.savgol_filter_spectra(col, 
+    #                                                                                                                                 window_length = smoothening_act_window_length,
+    #                                                                                                                                 polyorder = smoothening_act_polyorder))
+            
+    #             elif smoothening_function == "1D Fast Fourier Transform filter": 
+    #                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply( lambda col: function.FFT_spectra(col, 
+    #                                                                                                                         FFT_threshold = smoothening_act_FFT_threshold,
+    #                                                                                                                         padding_method = smoothening_act_FFT_padding))
+                
+    #         # baselineremoval_act
+    #         if baselineremoval_act:
+    #             if baselineremoval_function == "airPLS":
+    #                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:] - st.session_state.df.iloc[:, 1:].apply( lambda col: function.airPLS(col.values, 
+    #                                                                                                                             lambda_=baselineremoval_airPLS_lambda, 
+    #                                                                                                                             porder=baselineremoval_airPLS_porder, 
+    #                                                                                                                             itermax=baselineremoval_airPLS_itermax))
+    #             if baselineremoval_function == "ModPoly":
+    #                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:] - st.session_state.df.iloc[:, 1:].apply( lambda col: function.ModPoly(col.values, 
+    #                                                                                                                             degree=baselineremoval_ModPoly_degree))
+    #         # normalization act
+    #         if normalization_act:
+    #             if normalization_function == "Normalize by area":
+    #                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply(function.normalize_by_area, ramanshift =st.session_state.df.iloc[:, 0], axis = 0)        
+    #             elif normalization_function == "Normalize by peak":
+    #                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply(function.normalize_by_peak, axis = 0)
+    #             elif normalization_function == "Min max normalize":
+    #                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply(function.min_max_normalize, axis = 0)
+                    
+
+    #         # outlier removal act
+    #         if outlierremoval_act:
+    #             df_cleaned, st.session_state.remove_outliers_log = function.remove_outliers(st.session_state.df)
+    #             st.session_state.df = pd.concat([st.session_state.df.iloc[:, 0], df_cleaned], axis=1)
+    # """
+
+
+    @st.cache_data
+    def process_data(
+        df, 
+        interpolation_act, 
+        despike_act, 
+        smoothening_act, 
+        baselineremoval_act, 
+        normalization_act, 
+        outlierremoval_act,
+        parameters):
+        # Create a copy of the original dataframe to avoid modifying the original data
+        processed_df = df.copy()
+
+        # Interpolation
         if interpolation_act:
-            interpolated_df = pd.DataFrame(interpolation_ref_x, columns=[st.session_state.df.columns[0]])
-            for col in st.session_state.df[1:]:
-                f = interp1d(st.session_state.df.iloc[:, 0], st.session_state.df[col], kind='linear',bounds_error=False,fill_value="extrapolate")
+            interpolation_ref_x = round(processed_df.iloc[:, 0])
+            interpolated_df = pd.DataFrame(interpolation_ref_x, columns=[processed_df.columns[0]])
+            for col in processed_df.columns[1:]:
+                f = interp1d(processed_df.iloc[:, 0], processed_df[col], kind='linear', bounds_error=False, fill_value="extrapolate")
                 interpolated_values = f(interpolation_ref_x)
                 interpolated_df[col] = interpolated_values
-            interpolated_df = interpolated_df.drop_duplicates()
-            # st.sidebar.write(interpolated_df)
-            st.session_state.df = interpolated_df
-            
-        # crop act
-        st.session_state.df = st.session_state.df[(st.session_state.df.iloc[:, 0] >= cropping[0]) & (st.session_state.df.iloc[:, 0] <= cropping[1])]
-        
-        # despike_act
-        if despike_act:
-            st.session_state.df.iloc[:, 1:] = function.despikeSpec(spectra = st.session_state.df.iloc[:, 1:],
-                                                                    ramanshift = st.session_state.df.iloc[:, 0],
-                                                                    threshold = despike_act_threshold,
-                                                                    zap_length = despike_act_zap_length)
-        
-        
-        # smoothening_act
-        if smoothening_act:
-            if smoothening_function == "Savitzky-Golay filter":
-                st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply( lambda col: function.savgol_filter_spectra(col, 
-                                                                                                                                window_length = smoothening_act_window_length,
-                                                                                                                                polyorder = smoothening_act_polyorder))
-        
-            elif smoothening_function == "1D Fast Fourier Transform filter": 
-                st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply( lambda col: function.FFT_spectra(col, 
-                                                                                                                        FFT_threshold = smoothening_act_FFT_threshold,
-                                                                                                                        padding_method = smoothening_act_FFT_padding))
-            
-        # baselineremoval_act
-        if baselineremoval_act:
-            if baselineremoval_function == "airPLS":
-                st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:] - st.session_state.df.iloc[:, 1:].apply( lambda col: function.airPLS(col.values, 
-                                                                                                                            lambda_=baselineremoval_airPLS_lambda, 
-                                                                                                                            porder=baselineremoval_airPLS_porder, 
-                                                                                                                            itermax=baselineremoval_airPLS_itermax))
-            if baselineremoval_function == "ModPoly":
-                st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:] - st.session_state.df.iloc[:, 1:].apply( lambda col: function.ModPoly(col.values, 
-                                                                                                                            degree=baselineremoval_ModPoly_degree))
-        # normalization act
-        if normalization_act:
-            if normalization_function == "Normalize by area":
-                st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply(function.normalize_by_area, ramanshift =st.session_state.df.iloc[:, 0], axis = 0)        
-            elif normalization_function == "Normalize by peak":
-                st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply(function.normalize_by_peak, axis = 0)
-            elif normalization_function == "Min max normalize":
-                st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply(function.min_max_normalize, axis = 0)
-                
+            processed_df = interpolated_df.drop_duplicates()
 
-        # outlier removal act
+        # Cropping (if needed based on UI slider inputs)
+        if 'crop_range' in parameters:
+            crop_min, crop_max = parameters['crop_range']
+            processed_df = processed_df[(processed_df.iloc[:, 0] >= crop_min) & (processed_df.iloc[:, 0] <= crop_max)]
+
+        # Despiking
+        if despike_act:
+            processed_df.iloc[:, 1:] = function.despikeSpec(
+                spectra=processed_df.iloc[:, 1:],
+                ramanshift=processed_df.iloc[:, 0],
+                threshold=parameters['despike_threshold'],
+                zap_length=parameters['despike_zap_length']
+            )
+
+        # Smoothing
+        if smoothening_act:
+            if parameters['smoothening_function'] == "Savitzky-Golay filter":
+                processed_df.iloc[:, 1:] = processed_df.iloc[:, 1:].apply(
+                    lambda col: function.savgol_filter_spectra(
+                        col, 
+                        window_length=parameters['smooth_window_length'],
+                        polyorder=parameters['smooth_polyorder']
+                    )
+                )
+            elif parameters['smoothening_function'] == "1D Fast Fourier Transform filter":
+                processed_df.iloc[:, 1:] = processed_df.iloc[:, 1:].apply(
+                    lambda col: function.FFT_spectra(
+                        col, 
+                        FFT_threshold=parameters['FFT_threshold'],
+                        padding_method=parameters['FFT_padding']
+                    )
+                )
+
+        # Baseline Removal
+        if baselineremoval_act:
+            if parameters['baselineremoval_function'] == "airPLS":
+                processed_df.iloc[:, 1:] = processed_df.iloc[:, 1:] - processed_df.iloc[:, 1:].apply(
+                    lambda col: function.airPLS(
+                        col.values, 
+                        lambda_=parameters['airPLS_lambda'], 
+                        porder=parameters['airPLS_porder'], 
+                        itermax=parameters['airPLS_itermax']
+                    )
+                )
+            elif parameters['baselineremoval_function'] == "ModPoly":
+                processed_df.iloc[:, 1:] = processed_df.iloc[:, 1:] - processed_df.iloc[:, 1:].apply(
+                    lambda col: function.ModPoly(
+                        col.values, 
+                        degree=parameters['ModPoly_degree']
+                    )
+                )
+
+        # Normalization
+        if normalization_act:
+            if parameters['normalization_function'] == "Normalize by area":
+                processed_df.iloc[:, 1:] = processed_df.iloc[:, 1:].apply(
+                    function.normalize_by_area, 
+                    ramanshift=processed_df.iloc[:, 0], 
+                    axis=0
+                )
+            elif parameters['normalization_function'] == "Normalize by peak":
+                processed_df.iloc[:, 1:] = processed_df.iloc[:, 1:].apply(
+                    function.normalize_by_peak, 
+                    axis=0
+                )
+            elif parameters['normalization_function'] == "Min max normalize":
+                processed_df.iloc[:, 1:] = processed_df.iloc[:, 1:].apply(
+                    function.min_max_normalize, 
+                    axis=0
+                )
+
+        # Outlier Removal
         if outlierremoval_act:
-            df_cleaned, st.session_state.remove_outliers_log = function.remove_outliers(st.session_state.df)
-            st.session_state.df = pd.concat([st.session_state.df.iloc[:, 0], df_cleaned], axis=1)
-        
+            df_cleaned, outliers_log = function.remove_outliers(processed_df)
+            processed_df = pd.concat([processed_df.iloc[:, 0], df_cleaned], axis=1)
+            st.session_state.remove_outliers_log = outliers_log  # Storing the log in session state
+
+        return processed_df
+
     
+    # Usage Example in your Streamlit app
+    if st.sidebar.button("Process", type='primary', key='process'):
+        # Define parameters for processing
+        parameters = {
+            'despike_threshold': st.session_state.despike_threshold,
+            'despike_zap_length': st.session_state.despike_zap_length,
+            'smooth_window_length': st.session_state.smooth_window_length,
+            'smooth_polyorder': st.session_state.smooth_polyorder,
+            'smoothening_function': st.session_state.smoothening_function,
+            'FFT_threshold': st.session_state.FFT_threshold,
+            'FFT_padding': st.session_state.smoothening_act_FFT_padding,
+            'baselineremoval_function': st.session_state.baselineremoval_function,
+            'airPLS_lambda': st.session_state.baselineremoval_airPLS_lambda,
+            'airPLS_porder': st.session_state.baselineremoval_airPLS_porder,
+            'airPLS_itermax': st.session_state.baselineremoval_airPLS_itermax,
+            'ModPoly_degree': st.session_state.baselineremoval_ModPoly_degree,
+            'normalization_function': st.session_state.normalization_function,
+            'crop_range': cropping  # Assuming cropping is defined based on the slider input
+        }
+
+        # Call the process_data function
+        processed_data = process_data(
+            st.session_state.df,
+            interpolation_act=st.session_state.interpolation_act,
+            despike_act=st.session_state.despike_act,
+            smoothening_act=st.session_state.smoothening_act,
+            baselineremoval_act=st.session_state.baselineremoval_act,
+            normalization_act=st.session_state.normalization_act,
+            outlierremoval_act=st.session_state.outlierremoval_act,
+            parameters=parameters
+        )
+
+        # Store the processed data back in session state
+        st.session_state.processed_df = processed_data
     # Function to reset the toggle
     # def reset_processing():
     #     st.session_state.df = st.session_state.df_original
@@ -301,7 +434,7 @@ else:
     # except:
     #     pass
 
-""""""""
+# """"""""
 # Main Page
 st.write("## Visualization and Processing")
 
@@ -357,129 +490,106 @@ else:
         if "Average" in data_melted['Sample ID'].values:
             data_melted = data_melted[data_melted['Sample ID'] != "Average"]
             
-        if mode_option == False:
-            # Original V10
-            # # Create a selection object
-            # nearest = alt.selection_single(
-            #     nearest=True,
-            #     on='mouseover',
-            #     fields=[x_axis],
-            #     empty='none',
-            # )
-
-            # base = alt.Chart(data_melted).mark_line().encode(
-            #     x=alt.X(x_axis, title='Raman shift/cm^-1', type='quantitative'),
-            #     y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
-            #     color='Sample ID:N',
-            #     size=alt.condition(
-            #         alt.datum['Sample ID'] == 'Average',
-            #         alt.value(4),  # Line width for the "Average" sample
-            #         alt.value(2)   # Line width for other samples
-            #     ),
-            #     strokeDash=alt.condition(
-            #         alt.datum['Sample ID'] == 'Average',
-            #         alt.value([8, 8]),  # Dash pattern for the "Average" sample
-            #         alt.value([1, 0])   # Solid line for other samples
-            #     )
-            # )
-            # # Create selectors
-            # selectors = alt.Chart(data_melted).mark_point().encode(
-            #     x=alt.X(x_axis, type='quantitative'),
-            #     opacity=alt.value(0)
-            # ).add_selection(
-            #     nearest
-            # )
-
-            # # Define points to be highlighted on hover
-            # points = base.mark_point().transform_filter(
-            #     nearest
-            # )
-
-            # text = alt.Chart(data_melted).mark_text(
-            #     align='left',
-            #     dx=5,
-            #     dy=-5,
-            #     fontSize=15,
-            #     fontWeight=600,
-            # ).transform_filter(
-            #     nearest
-            # ).encode(
-            #     x=alt.X(x_axis, type='quantitative'),
-            #     y=alt.Y('Intensity', type='quantitative'),
-            #     text=alt.condition(nearest, 'Intensity:Q', alt.value(' ')),
-            #     color='Sample ID:N'
-            # )
-
-            # # Create the rule for the vertical line
-            # rules = alt.Chart(data_melted).mark_rule(color='gray').encode(
-            #     x=alt.X(x_axis, type='quantitative')
-            # ).transform_filter(
-            #     nearest
-            # )
-
-            # # Layer the base, selectors, points, text, and rules
-            # chart = alt.layer(
-            #     base, selectors, points, rules, text
-            # ).properties(
-            #     width=1300,
-            #     height=600,
-            #     title='Spectra Data Plot'
-            # ).interactive()
+        # if mode_option == False:
             
-            # st.altair_chart(chart, use_container_width=False)
+        #     base = alt.Chart(data_melted).mark_line().encode(
+        #         x=alt.X(x_axis, title='Raman shift/cm^-1', type='quantitative'),
+        #         y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
+        #         color='Sample ID:N',
+        #         size=alt.condition(
+        #             alt.datum['Sample ID'] == 'Average',
+        #             alt.value(2),  # Line width for the "Average" sample
+        #             alt.value(2)   # Line width for other samples
+        #         ),
+        #         strokeDash=alt.condition(
+        #             alt.datum['Sample ID'] == 'Average',
+        #             alt.value([8, 8]),  # Dash pattern for the "Average" sample
+        #             alt.value([1, 0])   # Solid line for other samples
+        #         )
+        #         ).properties(
+        #             width=1300,
+        #             height=600,
+        #             title='Spectra Data Plot'
+        #         ).interactive()
             
+        #     # Define the nearest selection
+        #     # click = alt.selection_single(nearest=True, on='click')
+        #     st.altair_chart(base, use_container_width=False)
+        #     function.log_plot_generated_count(st.session_state.log_file_path)
             
-            base = alt.Chart(data_melted).mark_line().encode(
-                x=alt.X(x_axis, title='Raman shift/cm^-1', type='quantitative'),
-                y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
-                color='Sample ID:N',
-                size=alt.condition(
-                    alt.datum['Sample ID'] == 'Average',
-                    alt.value(2),  # Line width for the "Average" sample
-                    alt.value(2)   # Line width for other samples
-                ),
-                strokeDash=alt.condition(
-                    alt.datum['Sample ID'] == 'Average',
-                    alt.value([8, 8]),  # Dash pattern for the "Average" sample
-                    alt.value([1, 0])   # Solid line for other samples
-                )
+        # elif mode_option == True:
+        #     base = alt.Chart(data_melted).mark_line().encode(
+        #         x=alt.X(x_axis, title='Raman shift/cm^-1', type='quantitative'),
+        #         y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
+        #         tooltip=alt.value(None),
+        #         color='Sample ID:N',
+        #         size=alt.condition(
+        #             alt.datum['Sample ID'] == 'Average',
+        #             alt.value(2),  # Line width for the "Average" sample
+        #             alt.value(2)   # Line width for other samples
+        #         ),
+        #         strokeDash=alt.condition(
+        #             alt.datum['Sample ID'] == 'Average',
+        #             alt.value([8, 8]),  # Dash pattern for the "Average" sample
+        #             alt.value([1, 0])   # Solid line for other samples
+        #         )
+        #         ).properties(
+        #             width=1300,
+        #             height=600,
+        #             title='Spectra Data Plot'
+        #         )
+        @st.cache_data
+        def create_plot(data, mode_option, x_axis):
+            if mode_option == False:
+                base = alt.Chart(data).mark_line().encode(
+                    x=alt.X(x_axis, title='Raman shift/cm^-1', type='quantitative'),
+                    y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
+                    color='Sample ID:N',
+                    size=alt.condition(
+                        alt.datum['Sample ID'] == 'Average',
+                        alt.value(2),  # Line width for the "Average" sample
+                        alt.value(2)   # Line width for other samples
+                    ),
+                    strokeDash=alt.condition(
+                        alt.datum['Sample ID'] == 'Average',
+                        alt.value([8, 8]),  # Dash pattern for the "Average" sample
+                        alt.value([1, 0])   # Solid line for other samples
+                    )
                 ).properties(
                     width=1300,
                     height=600,
                     title='Spectra Data Plot'
                 ).interactive()
-            
-            # Define the nearest selection
-            # click = alt.selection_single(nearest=True, on='click')
-            st.altair_chart(base, use_container_width=False)
-            function.log_plot_generated_count(st.session_state.log_file_path)
-            
-        elif mode_option == True:
-            base = alt.Chart(data_melted).mark_line().encode(
-                x=alt.X(x_axis, title='Raman shift/cm^-1', type='quantitative'),
-                y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
-                tooltip=alt.value(None),
-                color='Sample ID:N',
-                size=alt.condition(
-                    alt.datum['Sample ID'] == 'Average',
-                    alt.value(2),  # Line width for the "Average" sample
-                    alt.value(2)   # Line width for other samples
-                ),
-                strokeDash=alt.condition(
-                    alt.datum['Sample ID'] == 'Average',
-                    alt.value([8, 8]),  # Dash pattern for the "Average" sample
-                    alt.value([1, 0])   # Solid line for other samples
-                )
+            else:
+                base = alt.Chart(data).mark_line().encode(
+                    x=alt.X(x_axis, title='Raman shift/cm^-1', type='quantitative'),
+                    y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
+                    tooltip=alt.value(None),
+                    color='Sample ID:N',
+                    size=alt.condition(
+                        alt.datum['Sample ID'] == 'Average',
+                        alt.value(2),  # Line width for the "Average" sample
+                        alt.value(2)   # Line width for other samples
+                    ),
+                    strokeDash=alt.condition(
+                        alt.datum['Sample ID'] == 'Average',
+                        alt.value([8, 8]),  # Dash pattern for the "Average" sample
+                        alt.value([1, 0])   # Solid line for other samples
+                    )
                 ).properties(
                     width=1300,
                     height=600,
                     title='Spectra Data Plot'
                 )
+            return base
             
-            # Define the nearest selection
-            # click = alt.selection_single(nearest=True, on='click')
-            st.altair_chart(base, use_container_width=False)
-            function.log_plot_generated_count(st.session_state.log_file_path)
+            
+        plot = create_plot(data_melted, mode_option, x_axis)
+        st.altair_chart(plot, use_container_width=False)
+
+        # Define the nearest selection
+        st.altair_chart(base, use_container_width=False)
+        function.log_plot_generated_count(st.session_state.log_file_path)
         
         
         # Download 

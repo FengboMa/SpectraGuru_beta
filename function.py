@@ -458,7 +458,7 @@ def get_transformed_spectrum_data():
         return None
 
     try:
-        cur.execute("SELECT * FROM spectrum_data;")
+        cur.execute("SELECT * FROM spectrum_data WHERE spectrum_id IN (1, 2, 3, 4, 5);")
         spectrum_data = cur.fetchall()
         column_names = [desc[0] for desc in cur.description]
         # Convert the result into a pandas DataFrame
@@ -466,7 +466,7 @@ def get_transformed_spectrum_data():
         # Display the DataFrame
         # print(spectrum_data)
 
-        cur.execute("SELECT * FROM spectrum;")
+        cur.execute("SELECT * FROM spectrum WHERE batch_id IN (1);")
 
         spectrum_name = cur.fetchall()
 
@@ -512,7 +512,8 @@ def get_transformed_spectrum_data():
         JOIN
             project_batch pb ON p.project_id = pb.project_id
         JOIN
-            "databatch" db ON db.batch_id = pb.batch_id;
+            "databatch" db ON db.batch_id = pb.batch_id
+        WHERE db.batch_id = 1;
         '''
 
         # Execute the query

@@ -97,6 +97,17 @@ loaded = False
 if upload_file_format == None:
     if 'df' not in st.session_state:
         st.error("Please select a data format and upload your data")
+        
+        #Sample data
+        st.write("")
+        st.write('Don\'t have data? Try with Sample data.' )
+        
+        if st.button(label='Load sample data'):
+            df = function.get_transformed_spectrum_data()
+            
+            st.session_state.df = df
+            st.session_state.backup = df
+
 
 elif upload_file_format == "Multi files: .txt files (two-column single spectrum files, common x)":
     uploaded_multi_file = st.file_uploader("", type=["txt"], key='multi_file_uploader', accept_multiple_files=True)

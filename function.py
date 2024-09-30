@@ -438,3 +438,132 @@ def peak_identification(spectra, height=None, threshold=None, distance=None,
                         rel_height=rel_height, plateau_size=plateau_size)
     
     return peaks,properties
+
+# Sample data
+def get_transformed_spectrum_data():
+    import psycopg2
+    import pandas as pd
+    # Connect to the PostgreSQL database
+    try:
+        conn = psycopg2.connect(
+            dbname='SpectraGuruDB',
+            user='sg_read',
+            password='Aa123456',
+            host='localhost',
+            port='5432'
+        )
+        cur = conn.cursor()
+    except Exception as e:
+        print(f"Error connecting to the database: {e}")
+        return None
+
+    try:
+        cur.execute("SELECT * FROM spectrum_data;")
+        spectrum_data = cur.fetchall()
+        column_names = [desc[0] for desc in cur.description]
+        # Convert the result into a pandas DataFrame
+        spectrum_data = pd.DataFrame(spectrum_data, columns=column_names)
+        # Display the DataFrame
+        # print(spectrum_data)
+
+        cur.execute("SELECT * FROM spectrum;")
+
+        spectrum_name = cur.fetchall()
+
+        column_names = [desc[0] for desc in cur.description]
+
+        # Convert the result into a pandas DataFrame
+        spectrum_name = pd.DataFrame(spectrum_name, columns=column_names)
+
+        # Display the DataFrame
+        # print(spectrum_name)
+
+        query = '''
+        SELECT 
+            u.user_id AS user_id,
+            u.name AS user_name,
+            u.location AS user_location,
+            u.institution AS user_institution,
+            p.project_id AS project_id,
+            p.start_date AS project_start_date,
+            p.source AS project_source,
+            db.batch_id AS batch_id,
+            db.upload_date AS batch_upload_date,
+            db.analyte_name AS batch_analyte_name,
+            db.buffer_solution AS batch_buffer_solution,
+            db.instrument_details AS batch_instrument_details,
+            db.wavelength AS batch_wavelength,
+            db.power AS batch_power,
+            db.concentration AS batch_concentration,
+            db.concentration_units AS batch_concentration_units,
+            db.accumulation_time AS batch_accumulation_time,
+            db.experimental_procedure AS batch_experimental_procedure,
+            db.substrate_type AS batch_substrate_type,
+            db.substrate_material AS batch_substrate_material,
+            db.preparation_conditions AS batch_preparation_conditions,
+            db.data_type AS batch_data_type,
+            db.notes AS batch_notes
+        FROM
+            "user" u
+        JOIN
+            project_user pu ON u.user_id = pu.user_id
+        JOIN
+            "project" p ON p.project_id = pu.project_id
+        JOIN
+            project_batch pb ON p.project_id = pb.project_id
+        JOIN
+            "databatch" db ON db.batch_id = pb.batch_id;
+        '''
+
+        # Execute the query
+        cur.execute(query)
+
+        # Fetch all results from the executed query
+        rows = cur.fetchall()
+
+        # Get column names from the cursor description
+        column_names = [desc[0] for desc in cur.description]
+
+        # Convert the result into a pandas DataFrame
+        df = pd.DataFrame(rows, columns=column_names)
+
+        # Display the DataFrame
+        # print(df)
+
+        cur.close()
+        conn.close()
+
+        spectrum_data_wide = spectrum_data.pivot(index='spectrum_id', columns='wavenumber', values='intensity')
+
+        # Display the wide DataFrame
+        # print(spectrum_data_wide)
+        merged_df1 = pd.merge(spectrum_data_wide, spectrum_name, on='spectrum_id')
+        merged_spectrum_data = pd.merge(merged_df1, df, on='batch_id')
+
+        raman_shift_columns = []
+        for col in merged_spectrum_data.columns[1:-9]:
+            try:
+                # Attempt to convert column name to float
+                float(col)
+                raman_shift_columns.append(col)
+            except ValueError:
+                # Skip columns that cannot be converted to float
+                continue
+
+        # Display the extracted columns to ensure correctness
+        # print(raman_shift_columns)
+
+        # Continue with transforming the dataframe using these extracted columns
+        raman_shift_values = pd.to_numeric(raman_shift_columns)
+
+        # Create a new dataframe similar to other_df, with the Raman shift values as the 'RamanShift' column
+        transformed_df = pd.DataFrame(raman_shift_values, columns=['RamanShift'])
+
+        # Add each spectrum as a new column to transformed_df using 'spectrum_name' from merged_spectrum_data
+        for idx, row in merged_spectrum_data.iterrows():
+            spectrum_name = row['spectrum_name']  # Use 'spectrum_name' from the merged dataframe
+            transformed_df[spectrum_name] = row[raman_shift_columns].values
+        
+        return transformed_df
+    except:
+        pass

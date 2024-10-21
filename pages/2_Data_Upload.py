@@ -100,7 +100,7 @@ if upload_file_format == None:
         
         #Sample data
         st.write("")
-        st.write('Don\'t have data? Try with Sample data.' )
+        st.write('Don\'t have data? Try with sample data.' )
         
         if st.button(label='Load sample data'):
             df = function.get_transformed_spectrum_data()

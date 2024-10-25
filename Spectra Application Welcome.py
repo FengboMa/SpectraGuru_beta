@@ -88,12 +88,13 @@ if not st.session_state.popup_closed:
         # if check:
         #     st.session_state.popup_closed = True
         
-        value = st.checkbox("By checking this box, you agree with Policy, License and Disclaimer of SpectraGuru")
+        # value = st.checkbox("By checking this box, you agree with Policy, License and Disclaimer of SpectraGuru")
+        value = st.checkbox("By checking this box, you agree with Policy and Disclaimer of SpectraGuru")
         if value:
             st.button('Start')
             st.session_state.popup_closed = True
             st.session_state.current_user_count = function.log_user_count(st.session_state.log_file_path)
-        st.caption("More information about SpectraGuru [Policy, License and Disclaimer](https://fengboma.github.io/docs.spectraguru/docs/Policies-License-Disclaimers.html)")
+        st.caption("More information about SpectraGuru [documentation](https://fengboma.github.io/docs.spectraguru/).")
 
 # -------------
 

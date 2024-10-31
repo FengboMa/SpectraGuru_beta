@@ -4,3 +4,6 @@ primaryColor="#046307"
 
 [browser]
 gatherUsageStats = false
+
+[server]
+port = 80

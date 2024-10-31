@@ -24,7 +24,7 @@ if 'df' in st.session_state:
     st.sidebar.write("#### Analytics")
 
     # Side bar to select which plot and parameters
-    st.sidebar.selectbox('Select Statistics Plot', 
+    st.sidebar.selectbox('Select Analytics Plot', 
                         options= ("Average Plot with Original Spectra", 
                                 "Confidence Interval Plot",
                                 "Correlation Heatmap",

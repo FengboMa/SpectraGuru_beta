@@ -81,7 +81,7 @@ def WhittakerSmooth(x,w,lambda_,differences=1):
     background=spsolve(A,B)
     return np.array(background)
 
-def airPLS(x, lambda_=100, porder=1, itermax=15):
+def airPLS(x, lambda_=100, porder=1, itermax=15, tau = 0.001):
     import numpy as np
     '''
     Adaptive iteratively reweighted penalized least squares for baseline fitting
@@ -100,7 +100,7 @@ def airPLS(x, lambda_=100, porder=1, itermax=15):
         z=WhittakerSmooth(x,w,lambda_, porder)
         d=x-z
         dssn=np.abs(d[d<0].sum())
-        if(dssn<0.001*(abs(x)).sum() or i==itermax):
+        if(dssn<tau*(abs(x)).sum() or i==itermax):
             if(i==itermax): print('WARING max iteration reached!')
             break
         w[d>=0]=0 # d>0 means that this point is part of a peak, so its weight is set to 0 in order to ignore it
@@ -565,6 +565,6 @@ def get_transformed_spectrum_data():
             spectrum_name = row['spectrum_name']  # Use 'spectrum_name' from the merged dataframe
             transformed_df[spectrum_name] = row[raman_shift_columns].values
         
-        return transformed_df
+        return transformed_df.astype('float64')
     except:
         pass

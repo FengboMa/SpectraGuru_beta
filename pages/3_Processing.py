@@ -183,7 +183,12 @@ else:
             
             baselineremoval_airPLS_itermax = st.sidebar.number_input(label="AirPLS max iteration",
                                                                     min_value=5, max_value = 100, value = 15, 
-                                                                    step = 5, placeholder="Insert a number") 
+                                                                    step = 5, placeholder="Insert a number")
+            
+            baselineremoval_airPLS_tau = st.sidebar.number_input(label="AirPLS tolerance",
+                                                                    min_value=0.0000000001, max_value = 0.001000000, value = 0.001000000, 
+                                                                    step = 0.0000000001, placeholder="Insert a number",format="%.10f") 
+            
         elif baselineremoval_function == "ModPoly":
             baselineremoval_ModPoly_degree = st.sidebar.number_input(label="ModPoly Polynomial degree",
                                                                     min_value=1, max_value = 20, value = 5, 
@@ -270,7 +275,8 @@ else:
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:] - st.session_state.df.iloc[:, 1:].apply( lambda col: function.airPLS(col.values, 
                                                                                                                             lambda_=baselineremoval_airPLS_lambda, 
                                                                                                                             porder=baselineremoval_airPLS_porder, 
-                                                                                                                            itermax=baselineremoval_airPLS_itermax))
+                                                                                                                            itermax=baselineremoval_airPLS_itermax,
+                                                                                                                            tau=baselineremoval_airPLS_tau))
             if baselineremoval_function == "ModPoly":
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:] - st.session_state.df.iloc[:, 1:].apply( lambda col: function.ModPoly(col.values, 
                                                                                                                             degree=baselineremoval_ModPoly_degree))

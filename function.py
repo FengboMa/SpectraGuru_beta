@@ -568,3 +568,95 @@ def get_transformed_spectrum_data():
         return transformed_df.astype('float64')
     except:
         pass
+
+def hierarchical_clustering_heatmap(df):
+    """
+    Function to create a hierarchical clustering heatmap on the sample columns of the input dataframe.
+    
+    Parameters:
+    df (pd.DataFrame): Input dataframe with Raman shifts as rows and samples as columns.
+    
+    Returns:
+    sns.matrix.ClusterGrid: The generated clustermap plot.
+    """
+    import seaborn as sns 
+    import matplotlib.pyplot as plt 
+
+    # Remove any unnamed index column if present, and set 'Ramanshift' as the index
+    df_processed = df.drop(columns=[col for col in df.columns if 'Unnamed' in col], errors='ignore').set_index('Ramanshift')
+    
+    # Create a clustermap with clustering on sample columns only
+    clustermap = sns.clustermap(df_processed, 
+                                row_cluster=False, 
+                                col_cluster=True, 
+                                method='ward', cmap="viridis", figsize=(10, 15))
+    
+    return clustermap
+
+def pca(df):
+    
+    import altair as alt
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.decomposition import PCA
+    import pandas as pd
+    # Step 1: Drop non-numeric or irrelevant columns
+    df_transposed = df.set_index('Ramanshift').T
+
+    
+    scaler = StandardScaler()
+    df_standardized = scaler.fit_transform(df_transposed)
+    
+    # Step 3: Apply PCA
+    pca = PCA()
+    pca_components = pca.fit_transform(df_standardized)
+    explained_variance = pca.explained_variance_ratio_.cumsum()
+    
+    # Create a DataFrame for PCA results
+    pca_df = pd.DataFrame(pca_components, columns=[f'PC{i+1}' for i in range(pca_components.shape[1])])
+    pca_df['Ramanshift'] = df_transposed.index
+
+    # Step 4: Generate the Altair plots
+    # Plot 1: PC1 vs PC2
+    pc1_vs_pc2_plot = alt.Chart(pca_df).mark_circle(size=60).encode(
+        x='PC1',
+        y='PC2',
+        tooltip=['Ramanshift', 'PC1', 'PC2']
+    ).properties(
+        title='PCA: PC1 vs PC2',
+        width=400,
+        height=400
+    )
+
+    # Plot 2: Cumulative Variance Explained
+    explained_variance_df = pd.DataFrame({
+        'Component': [f'PC{i+1}' for i in range(len(explained_variance))],
+        'Cumulative Variance': explained_variance
+    })
+
+    cumulative_variance_plot = alt.Chart(explained_variance_df).mark_line(point=True).encode(
+        x=alt.X('Component', title='Principal Component'),
+        y=alt.Y('Cumulative Variance', title='Cumulative Variance Explained')
+    ).properties(
+        title='Cumulative Variance Explained by Principal Components',
+        width=400,
+        height=300
+    )
+
+    # Plot 3: Loading Plot for PC1 and PC2
+    # loadings = pca.components_[:2].T  # Transpose to get loadings for PC1 and PC2
+    # loading_df = pd.DataFrame(loadings, columns=['PC1 Loading', 'PC2 Loading'], index=df_transposed.columns).reset_index()
+    # loading_df = loading_df.rename(columns={'index': 'Feature'})
+
+    # loading_plot = alt.Chart(loading_df).mark_circle(size=80).encode(
+    #     x='PC1 Loading',
+    #     y='PC2 Loading',
+    #     tooltip=['Feature', 'PC1 Loading', 'PC2 Loading'],
+    #     color=alt.Color('Feature:N')  # Ensure Feature is treated as a nominal data type
+    # ).properties(
+    #     title='Loading Plot for PC1 and PC2',
+    #     width=400,
+    #     height=400
+    # )
+    
+    # Return PCA-transformed data and the plots
+    return pca_df, pc1_vs_pc2_plot, cumulative_variance_plot

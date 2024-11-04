@@ -28,7 +28,9 @@ if 'df' in st.session_state:
                         options= ("Average Plot with Original Spectra", 
                                 "Confidence Interval Plot",
                                 "Correlation Heatmap",
-                                "Peak Identification and Stats"),
+                                "Peak Identification and Stats",
+                                "Hierarchically-clustered Heatmap",
+                                "Principal Components Analysis (PCA)"),
                         key="stats_plot_select")
 
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
@@ -591,3 +593,32 @@ else:
             st.write(peak_df)
             
             function.log_plot_generated_count(st.session_state.log_file_path)
+        
+        elif st.session_state.stats_plot_select == "Hierarchically-clustered Heatmap":
+            
+            st.write("**Hierarchically-clustered Heatmap**")
+            
+            temp = st.session_state.temp.drop(columns=['Average'])
+            
+            st.pyplot(function.hierarchical_clustering_heatmap(temp))
+        
+            function.log_plot_generated_count(st.session_state.log_file_path)
+        
+        elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)":
+            
+            st.write("**Principal Components Analysis (PCA)**")
+            
+            temp = st.session_state.temp.drop(columns=['Average'])
+            
+            st.write(temp.set_index('Ramanshift').T)
+            
+            pca_result_df, pc1_vs_pc2_plot, cumulative_variance_plot = function.pca(temp)
+            
+            st.altair_chart(pc1_vs_pc2_plot)
+            function.log_plot_generated_count(st.session_state.log_file_path)
+            st.altair_chart(cumulative_variance_plot)
+            function.log_plot_generated_count(st.session_state.log_file_path)
+            # st.altair_chart(loading_plot)
+            # function.log_plot_generated_count(st.session_state.log_file_path)
+            
+            st.write(pca_result_df)

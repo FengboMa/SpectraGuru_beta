@@ -76,7 +76,7 @@ if 'popup_closed' not in st.session_state:
 
 if not st.session_state.popup_closed:
     with modal.container():
-        st.info('SpectraGuru is still under development. Current version: SpectraGuru ver. 0.14.2')
+        st.info('SpectraGuru is still under development. Current version: SpectraGuru ver. 1.0.1')
         
         st.write("")
         st.write("Thanks for visiting SpectraGuru, a spectroscopy processing and visualization tool.")
@@ -93,7 +93,7 @@ if not st.session_state.popup_closed:
             st.button('Start')
             st.session_state.popup_closed = True
             st.session_state.current_user_count = function.log_user_count(st.session_state.log_file_path)
-        st.caption("More information about SpectraGuru [Policy, License and Disclaimer](https://fengboma.github.io/docs.spectraguru/docs/Policies-License-Disclaimers.html)")
+        st.caption("More information about SpectraGuru [Policy, License and Disclaimer](https://fengboma.github.io/docs.spectraguru/docs/License-Policies-Disclaimers.html)")
 
 # -------------
 

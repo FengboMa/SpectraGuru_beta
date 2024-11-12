@@ -174,7 +174,7 @@ else:
         
         if baselineremoval_function == "airPLS":
             baselineremoval_airPLS_lambda = st.sidebar.number_input(label="AirPLS lambda", help="The larger lambda is,  the smoother the resulting background, z.",
-                                                                    min_value = 1, max_value = 1000, value = 100,
+                                                                    min_value = 1, max_value = 1000000, value = 100,
                                                                     step = 1, placeholder="Insert a number")
             
             baselineremoval_airPLS_porder = st.sidebar.number_input(label="AirPLS p order", help="Adaptive iteratively reweighted penalized least squares for baseline fitting.",
@@ -182,11 +182,11 @@ else:
                                                                     step = 1, placeholder="Insert a number")
             
             baselineremoval_airPLS_itermax = st.sidebar.number_input(label="AirPLS max iteration",
-                                                                    min_value=5, max_value = 100, value = 15, 
+                                                                    min_value=5, max_value = 1000, value = 15, 
                                                                     step = 5, placeholder="Insert a number")
             
             baselineremoval_airPLS_tau = st.sidebar.number_input(label="AirPLS tolerance",
-                                                                    min_value=0.0000000001, max_value = 0.001000000, value = 0.001000000, 
+                                                                    min_value=0.0000000001, max_value = 0.100000000, value = 0.001000000, 
                                                                     step = 0.0000000001, placeholder="Insert a number",format="%.10f") 
             
         elif baselineremoval_function == "ModPoly":

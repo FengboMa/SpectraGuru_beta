@@ -580,7 +580,7 @@ def hierarchical_clustering_heatmap(df):
     sns.matrix.ClusterGrid: The generated clustermap plot.
     """
     import seaborn as sns 
-    import matplotlib.pyplot as plt 
+    import numpy as np
 
     # Remove any unnamed index column if present, and set 'Ramanshift' as the index
     df_processed = df.drop(columns=[col for col in df.columns if 'Unnamed' in col], errors='ignore').set_index('Ramanshift')
@@ -591,9 +591,49 @@ def hierarchical_clustering_heatmap(df):
                                 col_cluster=True, 
                                 method='ward', cmap="viridis", figsize=(10, 15))
     
+    yticks = np.arange(0, len(df_processed.index), 100)
+    clustermap.ax_heatmap.set_yticks(yticks)
+    clustermap.ax_heatmap.set_yticklabels(df_processed.index[yticks])
+    
+    # clustermap.ax_heatmap.set_visible(False)
+    # clustermap.data2d = np.full(df_processed.shape, np.nan)
+    # clustermap.ax_heatmap.imshow(clustermap.data2d, cmap="Greys", aspect='auto')
+    
     return clustermap
 
-def pca(df):
+def hierarchical_clustering_tree(df):
+    """
+    Generates a hierarchical clustering dendrogram using Ward's method and returns the plot.
+    
+    Parameters:
+    df (DataFrame): Input DataFrame with 'Ramanshift' as one of the columns.
+    
+    Returns:
+    Figure: A Matplotlib Figure object with the dendrogram plot.
+    """
+    import scipy.cluster.hierarchy as sch
+    import matplotlib.pyplot as plt
+    
+    # Process the DataFrame: drop 'Unnamed' columns and set index to 'Ramanshift'
+    df_processed = df.drop(columns=[col for col in df.columns if 'Unnamed' in col], errors='ignore').set_index('Ramanshift')
+    
+    # 1. Calculate the distance matrix (transpose to cluster columns)
+    distance_matrix = sch.distance.pdist(df_processed.T)
+    
+    # 2. Apply hierarchical clustering with Ward's method
+    linkage_matrix = sch.linkage(distance_matrix, method='ward')
+    
+    # 3. Create the dendrogram plot without displaying it
+    fig, ax = plt.subplots(figsize=(10, 8))
+    sch.dendrogram(linkage_matrix, labels=df_processed.columns, leaf_rotation=90, ax=ax)
+    ax.set_title('Hierarchical Clustering Dendrogram (Ward\'s Method)')
+    ax.set_xlabel('Sample')
+    ax.set_ylabel('Distance')
+    
+    # Return the figure
+    return fig
+
+def pca(df, horizontal_pc='PC1', vertical_pc='PC2'):
     
     import altair as alt
     from sklearn.preprocessing import StandardScaler
@@ -618,45 +658,61 @@ def pca(df):
     # Step 4: Generate the Altair plots
     # Plot 1: PC1 vs PC2
     pc1_vs_pc2_plot = alt.Chart(pca_df).mark_circle(size=60).encode(
-        x='PC1',
-        y='PC2',
-        tooltip=['Ramanshift', 'PC1', 'PC2']
+        x=horizontal_pc,
+        y=vertical_pc,
+        tooltip=['Ramanshift', horizontal_pc, vertical_pc]
     ).properties(
-        title='PCA: PC1 vs PC2',
-        width=400,
-        height=400
+        title=f'PCA: {horizontal_pc} vs {vertical_pc}',
+        width=1000,
+        height=500
     )
 
     # Plot 2: Cumulative Variance Explained
+
     explained_variance_df = pd.DataFrame({
         'Component': [f'PC{i+1}' for i in range(len(explained_variance))],
         'Cumulative Variance': explained_variance
     })
 
+    # Convert the 'Component' column to a categorical type with the correct order
+    explained_variance_df['Component'] = pd.Categorical(
+        explained_variance_df['Component'],
+        categories=[f'PC{i+1}' for i in range(len(explained_variance))],
+        ordered=True
+    )
+
+    # Plot with Altair
     cumulative_variance_plot = alt.Chart(explained_variance_df).mark_line(point=True).encode(
         x=alt.X('Component', title='Principal Component'),
         y=alt.Y('Cumulative Variance', title='Cumulative Variance Explained')
     ).properties(
         title='Cumulative Variance Explained by Principal Components',
-        width=400,
-        height=300
+        width=1000,
+        height=500
+    )
+    # Plot 3: Loading Plot for PC1 and PC2
+    loadings = pca.components_[:3]
+    feature_names = df_transposed.columns  # Original feature names
+
+    # Create a DataFrame with the loadings
+    loading_df = pd.DataFrame({
+        'Feature': feature_names,
+        'PC1': loadings[0],
+        'PC2': loadings[1],
+        'PC3': loadings[2]
+    })
+    
+    loading_df_melted = loading_df.melt(id_vars='Feature', var_name='Principal Component', value_name='Loading')
+    
+    loading_plot = alt.Chart(loading_df_melted).mark_line(point=False).encode(
+        x=alt.X('Feature', title='Original Features'),
+        y=alt.Y('Loading', title='Loading Value'),
+        color='Principal Component',  # Different colors for PC1, PC2, and PC3
+    ).properties(
+        title='Loadings on Principal Components 1, 2, and 3',
+        width=1000,
+        height=500
     )
 
-    # Plot 3: Loading Plot for PC1 and PC2
-    # loadings = pca.components_[:2].T  # Transpose to get loadings for PC1 and PC2
-    # loading_df = pd.DataFrame(loadings, columns=['PC1 Loading', 'PC2 Loading'], index=df_transposed.columns).reset_index()
-    # loading_df = loading_df.rename(columns={'index': 'Feature'})
-
-    # loading_plot = alt.Chart(loading_df).mark_circle(size=80).encode(
-    #     x='PC1 Loading',
-    #     y='PC2 Loading',
-    #     tooltip=['Feature', 'PC1 Loading', 'PC2 Loading'],
-    #     color=alt.Color('Feature:N')  # Ensure Feature is treated as a nominal data type
-    # ).properties(
-    #     title='Loading Plot for PC1 and PC2',
-    #     width=400,
-    #     height=400
-    # )
-    
     # Return PCA-transformed data and the plots
-    return pca_df, pc1_vs_pc2_plot, cumulative_variance_plot
+    return pca_df, pc1_vs_pc2_plot, cumulative_variance_plot, loading_plot

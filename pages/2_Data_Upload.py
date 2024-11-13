@@ -99,14 +99,14 @@ if upload_file_format == None:
         st.error("Please select a data format and upload your data")
         
         #Sample data
-        # st.write("")
-        # st.write('Don\'t have data? Try with sample data.' )
+        st.write("")
+        st.write('Don\'t have data? Try with sample data.' )
         
-        # if st.button(label='Load sample data'):
-        #     df = function.get_transformed_spectrum_data()
+        if st.button(label='Load sample data'):
+            df = load_data(r'element/sampledata.csv')
             
-        #     st.session_state.df = df
-        #     st.session_state.backup = df
+            st.session_state.df = df
+            st.session_state.backup = df
 
 
 elif upload_file_format == "Multi files: .txt files (two-column single spectrum files, common x)":

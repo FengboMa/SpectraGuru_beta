@@ -10,7 +10,7 @@ import pandas as pd
 import function
 
 function.wide_space_default()
-st.session_state.log_file_path = r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v13\element\user_count.txt"
+st.session_state.log_file_path = r"element/user_count.txt"
 # hide_st_style = """
 #             <style>
 #             #MainMenu {visibility: hidden;}

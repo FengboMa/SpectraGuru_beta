@@ -1,5 +1,8 @@
 <img src="logo.png" width="300">
 
+[![Documentation Status](https://img.shields.io/badge/Documentation-latest-green)](https://fengboma.github.io/docs.spectraguru/) 
+[![License: Apache](https://img.shields.io/badge/License-Apache_2.0-yellow)](https://www.apache.org/licenses/LICENSE-2.0) 
+
 # SpectraGuru - Spectra Analysis Application
 
 *SpectraGuru is currently under development! Thank you for your patience.*
@@ -68,7 +71,7 @@ streamlit run SpectraGuru_beta/Spectra Application Welcome.py
 ---
 
 ### About this Project
-The project was started in Jun 2024 by Dr. Yiping Zhao and Dr. Xianyan Chen from the University of Georgia as a part of a USDA-funded project. See more [about us](https://www.zhao-nano-lab.com/)!
+The project was started in Jun 2024 by Dr. Yiping Zhao and Dr. Xianyan Chen from the University of Georgia. See more [about us](https://www.zhao-nano-lab.com/)!
 
 ---
 

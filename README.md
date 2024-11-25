@@ -19,7 +19,7 @@ SpectraGuru is a spectra analysis application designed to provide user-friendly 
 
 ### Visit our site
 
-Our application is hosted [here](empty)! Please use it directly, as easy as it can go.
+Our application is hosted [here](spectraguru.org)! Please use it directly, as easy as it can go.
 
 ### Deploy locally
 

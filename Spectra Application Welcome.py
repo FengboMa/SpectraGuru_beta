@@ -206,14 +206,33 @@ col1.markdown(
     - Correlation Heatmap
     """)
 
+
 st.markdown(
     """
     ---
 
-    ### About Us
+    ### Visitor geographic map
+
+    The geographic map visualizes where visiter from based on their latitude and longitude, with color intensity representing the frequency at each location. Each point on the map is derived from our record, showing the geographical distribution of occurrences.
+"""
+)
+
+# st.html(
+#     "\"
+# )
+
+import streamlit.components.v1 as components
+p = open(r"element\traffic_heatmap.html")
+components.html(p.read(), scrolling=True, height=550)
+
+
+st.markdown(
+    """
+    ---
+
+    ### About Us 
 
     - Find us here: [Zhao Nano Lab](https://www.zhao-nano-lab.com/)
     - Explore more or report an issue? Send us a message to us (zhao-nano-lab@uga.edu)
 """
 )
-

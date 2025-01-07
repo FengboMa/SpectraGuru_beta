@@ -24,11 +24,13 @@ if 'df' in st.session_state:
     st.sidebar.write("#### Analytics")
 
     # Side bar to select which plot and parameters
-    st.sidebar.selectbox('Select Statistics Plot', 
+    st.sidebar.selectbox('Select Analytics Plot', 
                         options= ("Average Plot with Original Spectra", 
                                 "Confidence Interval Plot",
                                 "Correlation Heatmap",
-                                "Peak Identification and Stats"),
+                                "Peak Identification and Stats",
+                                "Hierarchically-clustered Heatmap",
+                                "Principal Components Analysis (PCA)"),
                         key="stats_plot_select")
 
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
@@ -88,7 +90,15 @@ if 'df' in st.session_state:
             st.session_state.peak_iden_distance_p = st.session_state.peak_iden_distance
             st.session_state.peak_iden_prominence_p = st.session_state.peak_iden_prominence
             st.session_state.peak_iden_width_p = st.session_state.peak_iden_width
-            
+    elif st.session_state.stats_plot_select == "Hierarchically-clustered Heatmap":
+        st.sidebar.toggle(label="Show clustered heatmap", value=True, key="HCA_heatmap")
+    elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)":
+        num_rows = st.session_state.df.shape[1] - 1
+        pc_list = [f"PC{i+1}" for i in range(num_rows)] 
+        st.sidebar.selectbox(label="Select Horizontal PC", options=pc_list, index=0,key="PCA_horizontal")
+        st.sidebar.selectbox(label="Select Vertical PC", options=pc_list, index=1,key="PCA_vertical")
+        st.sidebar.toggle(label="Coloring by Hierarchically-clustering", value=True, key="PCA_HCA")
+                
 # st.sidebar.button(label="Plot", key='stats_plot',  type='primary')
 # Stats section layout
 """"""""""""
@@ -591,3 +601,35 @@ else:
             st.write(peak_df)
             
             function.log_plot_generated_count(st.session_state.log_file_path)
+        
+        elif st.session_state.stats_plot_select == "Hierarchically-clustered Heatmap":
+            
+            st.write("**Hierarchically-clustered Heatmap**")
+            
+            temp = st.session_state.temp.drop(columns=['Average'])
+            
+            if st.session_state.HCA_heatmap:
+                st.pyplot(function.hierarchical_clustering_heatmap(temp))
+            else:
+                st.pyplot(function.hierarchical_clustering_tree(temp))
+        
+            function.log_plot_generated_count(st.session_state.log_file_path)
+        
+        elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)":
+            
+            st.write("**Principal Components Analysis (PCA)**")
+            
+            temp = st.session_state.temp.drop(columns=['Average'])
+            
+            # st.write(temp.set_index('Ramanshift').T)
+            
+            pca_result_df, pc1_vs_pc2_plot, cumulative_variance_plot,loading_plot = function.pca(temp, horizontal_pc=st.session_state.PCA_horizontal,vertical_pc=st.session_state.PCA_vertical)
+            
+            st.altair_chart(pc1_vs_pc2_plot)
+            function.log_plot_generated_count(st.session_state.log_file_path)
+            st.altair_chart(cumulative_variance_plot)
+            function.log_plot_generated_count(st.session_state.log_file_path)
+            st.altair_chart(loading_plot)
+            function.log_plot_generated_count(st.session_state.log_file_path)
+            
+            st.write(pca_result_df)

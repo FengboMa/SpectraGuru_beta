@@ -81,7 +81,7 @@ def WhittakerSmooth(x,w,lambda_,differences=1):
     background=spsolve(A,B)
     return np.array(background)
 
-def airPLS(x, lambda_=100, porder=1, itermax=15):
+def airPLS(x, lambda_=100, porder=1, itermax=15, tau = 0.001):
     import numpy as np
     '''
     Adaptive iteratively reweighted penalized least squares for baseline fitting
@@ -100,7 +100,7 @@ def airPLS(x, lambda_=100, porder=1, itermax=15):
         z=WhittakerSmooth(x,w,lambda_, porder)
         d=x-z
         dssn=np.abs(d[d<0].sum())
-        if(dssn<0.001*(abs(x)).sum() or i==itermax):
+        if(dssn<tau*(abs(x)).sum() or i==itermax):
             if(i==itermax): print('WARING max iteration reached!')
             break
         w[d>=0]=0 # d>0 means that this point is part of a peak, so its weight is set to 0 in order to ignore it
@@ -565,6 +565,154 @@ def get_transformed_spectrum_data():
             spectrum_name = row['spectrum_name']  # Use 'spectrum_name' from the merged dataframe
             transformed_df[spectrum_name] = row[raman_shift_columns].values
         
-        return transformed_df
+        return transformed_df.astype('float64')
     except:
         pass
+
+def hierarchical_clustering_heatmap(df):
+    """
+    Function to create a hierarchical clustering heatmap on the sample columns of the input dataframe.
+    
+    Parameters:
+    df (pd.DataFrame): Input dataframe with Raman shifts as rows and samples as columns.
+    
+    Returns:
+    sns.matrix.ClusterGrid: The generated clustermap plot.
+    """
+    import seaborn as sns 
+    import numpy as np
+
+    # Remove any unnamed index column if present, and set 'Ramanshift' as the index
+    df_processed = df.drop(columns=[col for col in df.columns if 'Unnamed' in col], errors='ignore').set_index('Ramanshift')
+    
+    # Create a clustermap with clustering on sample columns only
+    clustermap = sns.clustermap(df_processed, 
+                                row_cluster=False, 
+                                col_cluster=True, 
+                                method='ward', cmap="viridis", figsize=(10, 15))
+    
+    yticks = np.arange(0, len(df_processed.index), 100)
+    clustermap.ax_heatmap.set_yticks(yticks)
+    clustermap.ax_heatmap.set_yticklabels(df_processed.index[yticks])
+    
+    # clustermap.ax_heatmap.set_visible(False)
+    # clustermap.data2d = np.full(df_processed.shape, np.nan)
+    # clustermap.ax_heatmap.imshow(clustermap.data2d, cmap="Greys", aspect='auto')
+    
+    return clustermap
+
+def hierarchical_clustering_tree(df):
+    """
+    Generates a hierarchical clustering dendrogram using Ward's method and returns the plot.
+    
+    Parameters:
+    df (DataFrame): Input DataFrame with 'Ramanshift' as one of the columns.
+    
+    Returns:
+    Figure: A Matplotlib Figure object with the dendrogram plot.
+    """
+    import scipy.cluster.hierarchy as sch
+    import matplotlib.pyplot as plt
+    
+    # Process the DataFrame: drop 'Unnamed' columns and set index to 'Ramanshift'
+    df_processed = df.drop(columns=[col for col in df.columns if 'Unnamed' in col], errors='ignore').set_index('Ramanshift')
+    
+    # 1. Calculate the distance matrix (transpose to cluster columns)
+    distance_matrix = sch.distance.pdist(df_processed.T)
+    
+    # 2. Apply hierarchical clustering with Ward's method
+    linkage_matrix = sch.linkage(distance_matrix, method='ward')
+    
+    # 3. Create the dendrogram plot without displaying it
+    fig, ax = plt.subplots(figsize=(10, 8))
+    sch.dendrogram(linkage_matrix, labels=df_processed.columns, leaf_rotation=90, ax=ax)
+    ax.set_title('Hierarchical Clustering Dendrogram (Ward\'s Method)')
+    ax.set_xlabel('Sample')
+    ax.set_ylabel('Distance')
+    
+    # Return the figure
+    return fig
+
+def pca(df, horizontal_pc='PC1', vertical_pc='PC2'):
+    
+    import altair as alt
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.decomposition import PCA
+    import pandas as pd
+    # Step 1: Drop non-numeric or irrelevant columns
+    df_transposed = df.set_index('Ramanshift').T
+
+    
+    scaler = StandardScaler()
+    df_standardized = scaler.fit_transform(df_transposed)
+    
+    # Step 3: Apply PCA
+    pca = PCA()
+    pca_components = pca.fit_transform(df_standardized)
+    explained_variance = pca.explained_variance_ratio_.cumsum()
+    
+    # Create a DataFrame for PCA results
+    pca_df = pd.DataFrame(pca_components, columns=[f'PC{i+1}' for i in range(pca_components.shape[1])])
+    pca_df['Ramanshift'] = df_transposed.index
+
+    # Step 4: Generate the Altair plots
+    # Plot 1: PC1 vs PC2
+    pc1_vs_pc2_plot = alt.Chart(pca_df).mark_circle(size=60).encode(
+        x=horizontal_pc,
+        y=vertical_pc,
+        tooltip=['Ramanshift', horizontal_pc, vertical_pc]
+    ).properties(
+        title=f'PCA: {horizontal_pc} vs {vertical_pc}',
+        width=1000,
+        height=500
+    )
+
+    # Plot 2: Cumulative Variance Explained
+
+    explained_variance_df = pd.DataFrame({
+        'Component': [f'PC{i+1}' for i in range(len(explained_variance))],
+        'Cumulative Variance': explained_variance
+    })
+
+    # Convert the 'Component' column to a categorical type with the correct order
+    explained_variance_df['Component'] = pd.Categorical(
+        explained_variance_df['Component'],
+        categories=[f'PC{i+1}' for i in range(len(explained_variance))],
+        ordered=True
+    )
+
+    # Plot with Altair
+    cumulative_variance_plot = alt.Chart(explained_variance_df).mark_line(point=True).encode(
+        x=alt.X('Component', title='Principal Component'),
+        y=alt.Y('Cumulative Variance', title='Cumulative Variance Explained')
+    ).properties(
+        title='Cumulative Variance Explained by Principal Components',
+        width=1000,
+        height=500
+    )
+    # Plot 3: Loading Plot for PC1 and PC2
+    loadings = pca.components_[:3]
+    feature_names = df_transposed.columns  # Original feature names
+
+    # Create a DataFrame with the loadings
+    loading_df = pd.DataFrame({
+        'Feature': feature_names,
+        'PC1': loadings[0],
+        'PC2': loadings[1],
+        'PC3': loadings[2]
+    })
+    
+    loading_df_melted = loading_df.melt(id_vars='Feature', var_name='Principal Component', value_name='Loading')
+    
+    loading_plot = alt.Chart(loading_df_melted).mark_line(point=False).encode(
+        x=alt.X('Feature', title='Original Features'),
+        y=alt.Y('Loading', title='Loading Value'),
+        color='Principal Component',  # Different colors for PC1, PC2, and PC3
+    ).properties(
+        title='Loadings on Principal Components 1, 2, and 3',
+        width=1000,
+        height=500
+    )
+
+    # Return PCA-transformed data and the plots
+    return pca_df, pc1_vs_pc2_plot, cumulative_variance_plot, loading_plot

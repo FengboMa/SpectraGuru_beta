@@ -76,7 +76,7 @@ if 'popup_closed' not in st.session_state:
 
 if not st.session_state.popup_closed:
     with modal.container():
-        st.info('SpectraGuru is still under development. Current version: SpectraGuru ver. 1.0.1')
+        st.info('SpectraGuru is still under development. Current version: SpectraGuru ver. 1.1.1')
         
         st.write("")
         st.write("Thanks for visiting SpectraGuru, a spectroscopy processing and visualization tool.")

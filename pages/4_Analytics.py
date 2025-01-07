@@ -30,7 +30,8 @@ if 'df' in st.session_state:
                                 "Correlation Heatmap",
                                 "Peak Identification and Stats",
                                 "Hierarchically-clustered Heatmap",
-                                "Principal Components Analysis (PCA)"),
+                                "Principal Components Analysis (PCA)",
+                                "T-SNE Dimensionality Reduction"),
                         key="stats_plot_select")
 
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
@@ -98,8 +99,11 @@ if 'df' in st.session_state:
         st.sidebar.selectbox(label="Select Horizontal PC", options=pc_list, index=0,key="PCA_horizontal")
         st.sidebar.selectbox(label="Select Vertical PC", options=pc_list, index=1,key="PCA_vertical")
         st.sidebar.toggle(label="Coloring by Hierarchically-clustering", value=True, key="PCA_HCA")
-                
-# st.sidebar.button(label="Plot", key='stats_plot',  type='primary')
+    elif st.session_state.stats_plot_select == "T-SNE Dimensionality Reduction":
+        max_perplexity = st.session_state.df.shape[1] - 1
+        st.sidebar.select_slider(label="t-SNE Perplexity", options=list(range(1,max_perplexity)),value=2, key="tSNE_perplexity")
+        st.sidebar.select_slider(label="t-SNE Maximum number of iterations", options=list(range(200,1001)), value=500, key="tSNE_n_iter")
+
 # Stats section layout
 """"""""""""
 # Main Page
@@ -633,3 +637,18 @@ else:
             function.log_plot_generated_count(st.session_state.log_file_path)
             
             st.write(pca_result_df)
+        
+        elif st.session_state.stats_plot_select == "T-SNE Dimensionality Reduction":
+            
+            st.write("**T-distributed Stochastic Neighbor Embedding (t-SNE) Dimensionality Reduction**")
+            
+            temp = st.session_state.temp.drop(columns=['Average'])
+            
+            # st.write(temp.set_index('Ramanshift').T)
+            
+            tsne_df, tsne_plot = function.tsne(temp, perplexity=st.session_state.tSNE_perplexity,n_iter=st.session_state.tSNE_n_iter)
+            
+            st.altair_chart(tsne_plot)
+            function.log_plot_generated_count(st.session_state.log_file_path)
+            
+            st.write(tsne_df)

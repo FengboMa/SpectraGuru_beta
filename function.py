@@ -716,3 +716,38 @@ def pca(df, horizontal_pc='PC1', vertical_pc='PC2'):
 
     # Return PCA-transformed data and the plots
     return pca_df, pc1_vs_pc2_plot, cumulative_variance_plot, loading_plot
+
+def tsne(df, perplexity=5, n_iter=500):
+    import altair as alt
+    from sklearn.manifold import TSNE
+    from sklearn.preprocessing import StandardScaler
+    import pandas as pd
+    
+    random_state=42
+    
+    # Step 1: Transpose and standardize the data
+    df_transposed = df.set_index('Ramanshift').T
+    scaler = StandardScaler()
+    df_standardized = scaler.fit_transform(df_transposed)
+    
+    # Step 2: Apply t-SNE
+    tsne = TSNE(n_components=2, perplexity=perplexity, n_iter=n_iter,random_state=random_state)
+    tsne_components = tsne.fit_transform(df_standardized)
+    
+    # Step 3: Create a DataFrame for t-SNE results
+    tsne_df = pd.DataFrame(tsne_components, columns=['TSNE1', 'TSNE2'])
+    tsne_df['Ramanshift'] = df_transposed.index
+
+    # Step 4: Generate the Altair plot
+    tsne_plot = alt.Chart(tsne_df).mark_circle(size=60).encode(
+        x='TSNE1',
+        y='TSNE2',
+        tooltip=['Ramanshift', 'TSNE1', 'TSNE2']
+    ).properties(
+        title='t-SNE Visualization',
+        width=1000,
+        height=500
+    )
+
+    # Step 5: Return t-SNE results and visualization
+    return tsne_df, tsne_plot

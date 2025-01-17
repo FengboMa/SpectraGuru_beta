@@ -559,10 +559,12 @@ else:
             
             peak_df = pd.concat([peak_df, properties_df], axis=1)
             
+            # st.write(peak_df)
+            
             if st.session_state.peak_iden_auto:
                 peak_df = peak_df.sort_values(by='prominences', ascending=False).head(st.session_state.peak_iden_auto_num)
             else:
-                peak_df = peak_df.sort_values(by='prominences', ascending=False)
+                peak_df = peak_df.sort_values(by='Intensity', ascending=False)
 
             
             # Step 3: Create the base interactive plot

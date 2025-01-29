@@ -30,8 +30,8 @@ if 'df' in st.session_state:
                                 "Correlation Heatmap",
                                 "Peak Identification and Stats",
                                 "Hierarchically-clustered Heatmap",
-                                "Principal Components Analysis (PCA)",
-                                "T-SNE Dimensionality Reduction"),
+                                "Principal Components Analysis (PCA)-Beta",
+                                "T-SNE Dimensionality Reduction-Beta"),
                         key="stats_plot_select")
 
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
@@ -93,13 +93,13 @@ if 'df' in st.session_state:
             st.session_state.peak_iden_width_p = st.session_state.peak_iden_width
     elif st.session_state.stats_plot_select == "Hierarchically-clustered Heatmap":
         st.sidebar.toggle(label="Show clustered heatmap", value=True, key="HCA_heatmap")
-    elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)":
+    elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)-Beta":
         num_rows = st.session_state.df.shape[1] - 1
         pc_list = [f"PC{i+1}" for i in range(num_rows)] 
         st.sidebar.selectbox(label="Select Horizontal PC", options=pc_list, index=0,key="PCA_horizontal")
         st.sidebar.selectbox(label="Select Vertical PC", options=pc_list, index=1,key="PCA_vertical")
         st.sidebar.toggle(label="Coloring by Hierarchically-clustering", value=True, key="PCA_HCA")
-    elif st.session_state.stats_plot_select == "T-SNE Dimensionality Reduction":
+    elif st.session_state.stats_plot_select == "T-SNE Dimensionality Reduction-Beta":
         max_perplexity = st.session_state.df.shape[1] - 1
         st.sidebar.select_slider(label="t-SNE Perplexity", options=list(range(1,max_perplexity)),value=2, key="tSNE_perplexity")
         st.sidebar.select_slider(label="t-SNE Maximum number of iterations", options=list(range(200,1001)), value=500, key="tSNE_n_iter")
@@ -621,9 +621,9 @@ else:
         
             function.log_plot_generated_count(st.session_state.log_file_path)
         
-        elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)":
+        elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)-Beta":
             
-            st.write("**Principal Components Analysis (PCA)**")
+            st.write("**Principal Components Analysis (PCA)-Beta**")
             
             temp = st.session_state.temp.drop(columns=['Average'])
             
@@ -640,9 +640,9 @@ else:
             
             st.write(pca_result_df)
         
-        elif st.session_state.stats_plot_select == "T-SNE Dimensionality Reduction":
+        elif st.session_state.stats_plot_select == "T-SNE Dimensionality Reduction-Beta":
             
-            st.write("**T-distributed Stochastic Neighbor Embedding (t-SNE) Dimensionality Reduction**")
+            st.write("**T-distributed Stochastic Neighbor Embedding (t-SNE) Dimensionality Reduction - Beta**")
             
             temp = st.session_state.temp.drop(columns=['Average'])
             

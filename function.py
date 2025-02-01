@@ -633,55 +633,143 @@ def hierarchical_clustering_tree(df):
     # Return the figure
     return fig
 
-def pca(df, horizontal_pc='PC1', vertical_pc='PC2'):
+# def pca1(df, horizontal_pc='PC1', vertical_pc='PC2'):
     
+#     import altair as alt
+#     from sklearn.preprocessing import StandardScaler
+#     from sklearn.decomposition import PCA
+#     import pandas as pd
+#     # Step 1: Drop non-numeric or irrelevant columns
+#     df_transposed = df.set_index('Ramanshift').T
+
+    
+#     scaler = StandardScaler()
+#     df_standardized = scaler.fit_transform(df_transposed)
+    
+#     # Step 3: Apply PCA
+#     pca = PCA()
+#     pca_components = pca.fit_transform(df_standardized)
+#     explained_variance = pca.explained_variance_ratio_.cumsum()
+    
+#     # Create a DataFrame for PCA results
+#     pca_df = pd.DataFrame(pca_components, columns=[f'PC{i+1}' for i in range(pca_components.shape[1])])
+#     pca_df['Ramanshift'] = df_transposed.index
+
+#     # Step 4: Generate the Altair plots
+#     # Plot 1: PC1 vs PC2
+#     pc1_vs_pc2_plot = alt.Chart(pca_df).mark_circle(size=60).encode(
+#         x=horizontal_pc,
+#         y=vertical_pc,
+#         tooltip=['Ramanshift', horizontal_pc, vertical_pc]
+#     ).properties(
+#         title=f'PCA: {horizontal_pc} vs {vertical_pc}',
+#         width=1000,
+#         height=500
+#     )
+
+#     # Plot 2: Cumulative Variance Explained
+
+#     explained_variance_df = pd.DataFrame({
+#         'Component': [f'PC{i+1}' for i in range(len(explained_variance))],
+#         'Cumulative Variance': explained_variance
+#     })
+
+#     # Convert the 'Component' column to a categorical type with the correct order
+#     explained_variance_df['Component'] = pd.Categorical(
+#         explained_variance_df['Component'],
+#         categories=[f'PC{i+1}' for i in range(len(explained_variance))],
+#         ordered=True
+#     )
+
+#     # Plot with Altair
+#     cumulative_variance_plot = alt.Chart(explained_variance_df).mark_line(point=True).encode(
+#         x=alt.X('Component', title='Principal Component'),
+#         y=alt.Y('Cumulative Variance', title='Cumulative Variance Explained')
+#     ).properties(
+#         title='Cumulative Variance Explained by Principal Components',
+#         width=1000,
+#         height=500
+#     )
+#     # Plot 3: Loading Plot for PC1 and PC2
+#     loadings = pca.components_[:3]
+#     feature_names = df_transposed.columns  # Original feature names
+
+#     # Create a DataFrame with the loadings
+#     loading_df = pd.DataFrame({
+#         'Feature': feature_names,
+#         'PC1': loadings[0],
+#         'PC2': loadings[1],
+#         'PC3': loadings[2]
+#     })
+        
+#     loading_df_melted = loading_df.melt(id_vars='Feature', var_name='Principal Component', value_name='Loading')
+    
+#     loading_plot = alt.Chart(loading_df_melted).mark_line(point=False).encode(
+#         x=alt.X('Feature', title='Original Features'),
+#         y=alt.Y('Loading', title='Loading Value'),
+#         color='Principal Component',  # Different colors for PC1, PC2, and PC3
+#     ).properties(
+#         title='Loadings on Principal Components 1, 2, and 3',
+#         width=1000,
+#         height=500
+#     )
+
+#     # Return PCA-transformed data and the plots
+#     return pca_df, pc1_vs_pc2_plot, cumulative_variance_plot, loading_plot
+
+def pca(df, label_df=None, is_label=False, horizontal_pc='PC1', vertical_pc='PC2'):
     import altair as alt
     from sklearn.preprocessing import StandardScaler
     from sklearn.decomposition import PCA
     import pandas as pd
+
     # Step 1: Drop non-numeric or irrelevant columns
     df_transposed = df.set_index('Ramanshift').T
 
-    
+    # Step 2: Standardize the data
     scaler = StandardScaler()
     df_standardized = scaler.fit_transform(df_transposed)
-    
+
     # Step 3: Apply PCA
     pca = PCA()
     pca_components = pca.fit_transform(df_standardized)
     explained_variance = pca.explained_variance_ratio_.cumsum()
-    
-    # Create a DataFrame for PCA results
-    pca_df = pd.DataFrame(pca_components, columns=[f'PC{i+1}' for i in range(pca_components.shape[1])])
-    pca_df['Ramanshift'] = df_transposed.index
 
-    # Step 4: Generate the Altair plots
-    # Plot 1: PC1 vs PC2
+    # Step 4: Create a DataFrame for PCA results
+    pca_df = pd.DataFrame(pca_components, columns=[f'PC{i+1}' for i in range(pca_components.shape[1])])
+    pca_df['Ramanshift'] = df_transposed.index  # Assign sample names
+
+    # Step 5: Merge with label_df if is_label is True
+    if is_label and label_df is not None:
+        pca_df = pca_df.merge(label_df, on='Ramanshift', how='left')
+
+    # Step 6: Generate the Altair plots
+    # Conditional color encoding based on is_label flag
+    color_encoding = alt.Color('Label:N', title='Group Label') if is_label else alt.value('blue')
+
     pc1_vs_pc2_plot = alt.Chart(pca_df).mark_circle(size=60).encode(
         x=horizontal_pc,
         y=vertical_pc,
-        tooltip=['Ramanshift', horizontal_pc, vertical_pc]
+        color=color_encoding,  # Apply conditional coloring
+        tooltip=['Ramanshift', horizontal_pc, vertical_pc] + (['Label'] if is_label else [])
     ).properties(
         title=f'PCA: {horizontal_pc} vs {vertical_pc}',
         width=1000,
         height=500
     )
 
-    # Plot 2: Cumulative Variance Explained
-
+    # Step 7: Cumulative Variance Explained Plot
     explained_variance_df = pd.DataFrame({
         'Component': [f'PC{i+1}' for i in range(len(explained_variance))],
         'Cumulative Variance': explained_variance
     })
 
-    # Convert the 'Component' column to a categorical type with the correct order
     explained_variance_df['Component'] = pd.Categorical(
         explained_variance_df['Component'],
         categories=[f'PC{i+1}' for i in range(len(explained_variance))],
         ordered=True
     )
 
-    # Plot with Altair
     cumulative_variance_plot = alt.Chart(explained_variance_df).mark_line(point=True).encode(
         x=alt.X('Component', title='Principal Component'),
         y=alt.Y('Cumulative Variance', title='Cumulative Variance Explained')
@@ -690,24 +778,24 @@ def pca(df, horizontal_pc='PC1', vertical_pc='PC2'):
         width=1000,
         height=500
     )
-    # Plot 3: Loading Plot for PC1 and PC2
+
+    # Step 8: Loading Plot for PC1, PC2, and PC3
     loadings = pca.components_[:3]
     feature_names = df_transposed.columns  # Original feature names
 
-    # Create a DataFrame with the loadings
     loading_df = pd.DataFrame({
         'Feature': feature_names,
         'PC1': loadings[0],
         'PC2': loadings[1],
         'PC3': loadings[2]
     })
-    
+
     loading_df_melted = loading_df.melt(id_vars='Feature', var_name='Principal Component', value_name='Loading')
-    
+
     loading_plot = alt.Chart(loading_df_melted).mark_line(point=False).encode(
         x=alt.X('Feature', title='Original Features'),
         y=alt.Y('Loading', title='Loading Value'),
-        color='Principal Component',  # Different colors for PC1, PC2, and PC3
+        color='Principal Component'
     ).properties(
         title='Loadings on Principal Components 1, 2, and 3',
         width=1000,
@@ -716,6 +804,7 @@ def pca(df, horizontal_pc='PC1', vertical_pc='PC2'):
 
     # Return PCA-transformed data and the plots
     return pca_df, pc1_vs_pc2_plot, cumulative_variance_plot, loading_plot
+
 
 def tsne(df, perplexity=5, n_iter=500):
     import altair as alt

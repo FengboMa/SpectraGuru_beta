@@ -114,11 +114,16 @@ elif upload_file_format == "Multi files: .txt files (two-column single spectrum 
     # file_loaded = True
     try:
         if uploaded_multi_file is not None:
-            loaded = True
-            df = load_multi_data(uploaded_multi_file)
+            # loaded = True
+            # df = load_multi_data(uploaded_multi_file)
             
-            st.session_state.df = df
-            st.session_state.backup = df
+            # st.session_state.df = df
+            # st.session_state.backup = df
+            loaded = True
+            # df = load_multi_data(uploaded_multi_file)
+            
+            st.session_state.df = load_multi_data(uploaded_multi_file)
+            st.session_state.backup = load_multi_data(uploaded_multi_file)
             
     except:
         pass

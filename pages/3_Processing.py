@@ -23,7 +23,7 @@ st.session_state.log_file_path = r"element/user_count.txt"
 
 # Testing
 # import time
-
+# st.session_state.start_time = time.time()
 # sidebar_icon = r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v11\element\UGA_logo_ExtremeHoriz_FC_MARCM.png"
 # st.logo(sidebar_icon, icon_image=sidebar_icon)
 
@@ -53,30 +53,32 @@ else:
     
     # crop
     # st.sidebar.markdown("**Crop**")
-    # st.session_state.crop_min = st.session_state.df.iloc[:, 0].min()
-    # st.session_state.crop_max = st.session_state.df.iloc[:, 0].max()
-    # if 'crop_act' not in st.session_state:
-    #     st.session_state.crop_act = False
-    # crop_act = st.sidebar.toggle("Turn on Crop", value=False, help="Use Crop to select range.", key='crop_act')
+    c_crop_min = st.session_state.df.iloc[:, 0].min()
+    c_crop_max = st.session_state.df.iloc[:, 0].max()
+    if 'crop_act' not in st.session_state:
+        st.session_state.crop_act = False
+    crop_act = st.sidebar.toggle("Crop", value=False, help="Use Crop to select range.", key='crop_act')
     
-    # if crop_act:
-    #     st.sidebar.number_input("Crop min", 
-    #                             min_value=st.session_state.df.iloc[:, 0].min(), 
-    #                             max_value=st.session_state.df.iloc[:, 0].max(),
-    #                             value=st.session_state.df.iloc[:, 0].min(),
-    #                             step=1.00,
-    #                             key="crop_min")
+    if crop_act:
+        st.sidebar.write("Spectra range: " ,c_crop_min, " - ", c_crop_max)
+        st.sidebar.number_input("Crop min", 
+                                min_value=0.00, 
+                                max_value=9999.00,
+                                value=c_crop_min,
+                                step=1.00,
+                                key="crop_min")
         
-    #     st.sidebar.number_input("Crop max", 
-    #                             min_value=st.session_state.df.iloc[:, 0].min(), 
-    #                             max_value=st.session_state.df.iloc[:, 0].max(),
-    #                             value=st.session_state.df.iloc[:, 0].max(),
-    #                             step=1.00,
-    #                             key="crop_max")
-        # cropping  = st.sidebar.slider("Select range for Spectra",st.session_state.df.iloc[:, 0].min(), st.session_state.df.iloc[:, 0].max(),
-        #         (st.session_state.crop_min, st.session_state.crop_max), help="Crop spectra to the desired step size.")
-    cropping  = st.sidebar.slider("Select range for Spectra",st.session_state.df.iloc[:, 0].min(), st.session_state.df.iloc[:, 0].max(),
-            (st.session_state.df.iloc[:, 0].min(), st.session_state.df.iloc[:, 0].max()), help="Crop spectra to the desired step size.")
+        st.sidebar.number_input("Crop max", 
+                                min_value=0.00, 
+                                max_value=9999.00,
+                                value=c_crop_max,
+                                step=1.00,
+                                key="crop_max")
+        cropping  = st.sidebar.slider("Select range for Spectra",st.session_state.df.iloc[:, 0].min(), st.session_state.df.iloc[:, 0].max(),
+                (st.session_state.crop_min, st.session_state.crop_max), help="Crop spectra to the desired step size.")
+    
+    # cropping  = st.sidebar.slider("Select range for Spectra",st.session_state.df.iloc[:, 0].min(), st.session_state.df.iloc[:, 0].max(),
+    #         (st.session_state.df.iloc[:, 0].min(), st.session_state.df.iloc[:, 0].max()), help="Crop spectra to the desired step size.")
     
     
     
@@ -306,6 +308,14 @@ else:
         st.session_state.df = st.session_state.backup
     # except:
     #     pass
+    
+    @st.fragment()
+    def toggle_and_text():
+        cols = st.columns(2)
+        cols[0].toggle("Toggle")
+        cols[1].text_area("Enter text")
+    with st.sidebar:
+        toggle_and_text()
 
 """"""""
 # Main Page
@@ -333,36 +343,89 @@ else:
     
     # Create an Altair plot
     # st.write("#### Visualization on Spectra")
-    
+    ###############################
     # Data muli selection
-    st.session_state.df.rename(columns={st.session_state.df.columns[0]: 'Ramanshift'}, inplace=True)
-    x_axis = st.session_state.df.columns[0]
+    # st.session_state.df.rename(columns={st.session_state.df.columns[0]: 'Ramanshift'}, inplace=True)
+    # x_axis = st.session_state.df.columns[0]
     
-    st.session_state.spectra_selected = st.multiselect(label= '**Select Spectra/s you want to visualize**', options= list(st.session_state.df.columns[1:]), default=list(st.session_state.df.columns[1:]))
-    columns_to_select  = [st.session_state.df.columns[0]] + st.session_state.spectra_selected
+    # st.session_state.spectra_selected = st.multiselect(label= '**Select Spectra/s you want to visualize**', options= list(st.session_state.df.columns[1:]), default=list(st.session_state.df.columns[1:]))
+    # columns_to_select  = [st.session_state.df.columns[0]] + st.session_state.spectra_selected
     
-    # Plot mode Select
-    plot_row = row([0.1, 0.9])
+    # # Plot mode Select
     
-    if plot_row.button("Plot", type='primary',key = 'plot') or st.session_state.get('process') or st.session_state.get('reset'):
-        st.session_state.temp = st.session_state.df[columns_to_select]
+    
+    # if plot_row.button("Plot", type='primary',key = 'plot') or st.session_state.get('process') or st.session_state.get('reset'):
+    #     st.session_state.temp = st.session_state.df[columns_to_select]
+###################################
 
-    # st.session_state.start_time = time.time()
+    @st.cache_data
+    def get_selected_columns(df, selected_spectra):
+        columns_to_select = [df.columns[0]] + selected_spectra
+        return df[columns_to_select]
+
+    # Ensure first column is renamed (only once per session)
+    if "df" in st.session_state:
+        if st.session_state.df.columns[0] != "Ramanshift":
+            st.session_state.df.rename(columns={st.session_state.df.columns[0]: "Ramanshift"}, inplace=True)
+
+        x_axis = st.session_state.df.columns[0]  # This is now always 'Ramanshift'
+
+        # Multiselect for spectra selection
+        st.session_state.spectra_selected = st.multiselect(
+            label="**Select Spectra/s you want to visualize**",
+            options=list(st.session_state.df.columns[1:]),
+            default=list(st.session_state.df.columns[1:])
+        )
+
+        # Get cached selected data
+        plot_row = row([0.1, 0.9])
+        if plot_row.button("Plot", type="primary", key="plot") or st.session_state.get("process") or st.session_state.get("reset"):
+            st.session_state.temp = get_selected_columns(st.session_state.df, st.session_state.spectra_selected)
+
+    
     # st.write(st.session_state.temp)
     # if st.button('end time'):
     #     st.session_state.elapsed_time = time.time() - st.session_state.start_time
     #     st.write("Test time (ms):")
     #     st.write(int(st.session_state.elapsed_time * 1000))
-        
+    # plot_row = row([0.1, 0.9])
     mode_option = plot_row.toggle(label = 'Activate Fast Mode Plotting', value = st.session_state['update_mode_option'],  key = 'mode_option', help = 'Enable Fast Mode Plotting for faster plotting times by sacrificing interactive functions. If you upload more than 20 spectra, Fast Mode will be activated automatically.')
         
     
     try:
-        data_melted = st.session_state.temp.melt(id_vars=[x_axis], var_name='Sample ID', value_name='Intensity')
-        # st.session_state.data_melt = data_melted
-        if "Average" in data_melted['Sample ID'].values:
-            data_melted = data_melted[data_melted['Sample ID'] != "Average"]
+        # data_melted = st.session_state.temp.melt(id_vars=[x_axis], var_name='Sample ID', value_name='Intensity')
+        # # st.session_state.data_melt = data_melted
+        # if "Average" in data_melted['Sample ID'].values:
+        #     data_melted = data_melted[data_melted['Sample ID'] != "Average"]
+        ################################
+        @st.cache_data
+        def melt_and_filter_data(temp_df, x_axis):
+            """Caches the melted DataFrame and removes 'Average' if present."""
+            data_melted = temp_df.melt(id_vars=[x_axis], var_name='Sample ID', value_name='Intensity')
             
+            # Remove 'Average' if it exists
+            if "Average" in data_melted['Sample ID'].values:
+                data_melted = data_melted[data_melted['Sample ID'] != "Average"]
+            
+            return data_melted
+        # @st.cache_data
+        # def melt_and_filter_data(temp_df, x_axis):
+        #     """Caches the melted DataFrame and removes 'Average' if present."""
+        #     data_melted = temp_df.melt(id_vars=[x_axis], var_name='Sample ID', value_name='Intensity')
+            
+        #     # Remove 'Average' if it exists
+        #     if "Average" in data_melted['Sample ID'].values:
+        #         data_melted = data_melted[data_melted['Sample ID'] != "Average"]
+            
+        #     return data_melted
+
+        # Ensure 'temp' exists in session state before calling
+        # if "temp" in st.session_state:
+        #     data_melted = melt_and_filter_data(st.session_state.temp, x_axis)
+
+            # Store in session state if needed
+            # st.session_state.data_melt = data_melted
+        #########################################    
         if mode_option == False:
             # Original V10
             # # Create a selection object
@@ -435,7 +498,36 @@ else:
             # st.altair_chart(chart, use_container_width=False)
             
             
-            base = alt.Chart(data_melted).mark_line().encode(
+            # base = alt.Chart(data_melted).mark_line().encode(
+            #     x=alt.X(x_axis, title='Raman shift/cm^-1', type='quantitative'),
+            #     y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
+            #     color='Sample ID:N',
+            #     size=alt.condition(
+            #         alt.datum['Sample ID'] == 'Average',
+            #         alt.value(2),  # Line width for the "Average" sample
+            #         alt.value(2)   # Line width for other samples
+            #     ),
+            #     strokeDash=alt.condition(
+            #         alt.datum['Sample ID'] == 'Average',
+            #         alt.value([8, 8]),  # Dash pattern for the "Average" sample
+            #         alt.value([1, 0])   # Solid line for other samples
+            #     )
+            #     ).properties(
+            #         width=1300,
+            #         height=600,
+            #         title='Spectra Data Plot'
+            #     ).interactive()
+            
+            # # Define the nearest selection
+            # # click = alt.selection_single(nearest=True, on='click')
+            # st.altair_chart(base, use_container_width=False)
+            
+
+
+            @st.cache_data
+            # Generate the Altair plot
+            def generate_altair_plot(data):
+                base = alt.Chart(data).mark_line().encode(
                 x=alt.X(x_axis, title='Raman shift/cm^-1', type='quantitative'),
                 y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
                 color='Sample ID:N',
@@ -454,14 +546,26 @@ else:
                     height=600,
                     title='Spectra Data Plot'
                 ).interactive()
+                return base
             
-            # Define the nearest selection
-            # click = alt.selection_single(nearest=True, on='click')
-            st.altair_chart(base, use_container_width=False)
+            st.write("xxxxx")
+            
+            if "temp" in st.session_state:
+                data_melted = melt_and_filter_data(st.session_state.temp, x_axis)
+            
+            cached_plot = generate_altair_plot(data_melted)
+            st.write("yyyyy")
+            # Display Plot
+            st.altair_chart(cached_plot, use_container_width=False)
+            st.write("zzzzz")
             function.log_plot_generated_count(st.session_state.log_file_path)
             
         elif mode_option == True:
-            base = alt.Chart(data_melted).mark_line().encode(
+                
+            @st.cache_data
+            # Generate the Altair plot
+            def generate_altair_plot_fastmode(data):
+                base = base = alt.Chart(data).mark_line().encode(
                 x=alt.X(x_axis, title='Raman shift/cm^-1', type='quantitative'),
                 y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
                 tooltip=alt.value(None),
@@ -481,11 +585,21 @@ else:
                     height=600,
                     title='Spectra Data Plot'
                 )
+                return base
             
-            # Define the nearest selection
-            # click = alt.selection_single(nearest=True, on='click')
-            st.altair_chart(base, use_container_width=False)
+            if "temp" in st.session_state:
+                data_melted = melt_and_filter_data(st.session_state.temp, x_axis)
+            
+            cached_plot = generate_altair_plot_fastmode(data_melted)
+            st.write("1111")
+            # Display Plot
+            st.altair_chart(cached_plot, use_container_width=False)
+            st.write("2222")
             function.log_plot_generated_count(st.session_state.log_file_path)
+            # # Define the nearest selection
+            # # click = alt.selection_single(nearest=True, on='click')
+            # st.altair_chart(base, use_container_width=False)
+            # function.log_plot_generated_count(st.session_state.log_file_path)
         
         
         # Download 

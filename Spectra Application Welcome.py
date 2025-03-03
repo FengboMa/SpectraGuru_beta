@@ -54,7 +54,7 @@ hide_close_button_css = """
 st.markdown(hide_close_button_css, unsafe_allow_html=True)
 modal = Modal(
     "Welcome to SpectraGuru", 
-    key="welcome_modal",
+    key="welcome_modal", 
     
     # Optional
     padding=20, 

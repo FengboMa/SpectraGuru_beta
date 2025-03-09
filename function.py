@@ -16,7 +16,7 @@ def wide_space_default():
 # Reset button function
 def reset_processing():
     import streamlit as st
-    st.session_state.df = st.session_state.backup
+    st.session_state.df = st.session_state.backup.copy()
     st.session_state.interpolation_act = False
     st.session_state.crop_act = False
     st.session_state.smoothening_act = False

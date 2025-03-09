@@ -33,267 +33,273 @@ if 'df' not in st.session_state:
     st.sidebar.write(" ")
         
 else:
-    st.sidebar.markdown("""
-                    ### Processing
-                    
-                    Select processing steps:
-                    """)
-    # try:
-    # st.session_state.crop_min = st.session_state.df.iloc[:, 0].min()
-    # st.session_state.crop_max = st.session_state.df.iloc[:, 0].max()
-    
-    # Interpolation
-    # st.sidebar.markdown("**Interpolation**")
-    interpolation_ref_x = round(st.session_state.df.iloc[:, 0])
-    if 'interpolation_act' not in st.session_state:
-        st.session_state.interpolation_act = False
+    @st.fragment()
+    def pre_processing():
+        st.markdown("""
+                        ### Processing
+                        
+                        Select processing steps:
+                        """)
+        # try:
+        # st.session_state.crop_min = st.session_state.df.iloc[:, 0].min()
+        # st.session_state.crop_max = st.session_state.df.iloc[:, 0].max()
+        
+        # Interpolation
+        # st.sidebar.markdown("**Interpolation**")
+        st.session_state.interpolation_ref_x = round(st.session_state.df.iloc[:, 0])
+        if 'interpolation_act' not in st.session_state:
+            st.session_state.interpolation_act = False
 
-    interpolation_act = st.sidebar.toggle("Interpolation", value=False, help="Use Interpolation to transfer and round Ramanshift to its closest Integer.", key='interpolation_act')
-    # st.sidebar.write(interpolation_ref_x)
-    
-    # crop
-    # st.sidebar.markdown("**Crop**")
-    c_crop_min = st.session_state.df.iloc[:, 0].min()
-    c_crop_max = st.session_state.df.iloc[:, 0].max()
-    if 'crop_act' not in st.session_state:
-        st.session_state.crop_act = False
-    crop_act = st.sidebar.toggle("Crop", value=False, help="Use Crop to select range.", key='crop_act')
-    
-    if crop_act:
-        st.sidebar.write("Spectra range: " ,c_crop_min, " - ", c_crop_max)
-        st.sidebar.number_input("Crop min", 
-                                min_value=0.00, 
-                                max_value=9999.00,
-                                value=c_crop_min,
-                                step=1.00,
-                                key="crop_min")
+        interpolation_act = st.toggle("Interpolation", value=False, help="Use Interpolation to transfer and round Ramanshift to its closest Integer.", key='interpolation_act')
+        # st.sidebar.write(interpolation_ref_x)
         
-        st.sidebar.number_input("Crop max", 
-                                min_value=0.00, 
-                                max_value=9999.00,
-                                value=c_crop_max,
-                                step=1.00,
-                                key="crop_max")
-        cropping  = st.sidebar.slider("Select range for Spectra",st.session_state.df.iloc[:, 0].min(), st.session_state.df.iloc[:, 0].max(),
-                (st.session_state.crop_min, st.session_state.crop_max), help="Crop spectra to the desired step size.")
-    
-    # cropping  = st.sidebar.slider("Select range for Spectra",st.session_state.df.iloc[:, 0].min(), st.session_state.df.iloc[:, 0].max(),
-    #         (st.session_state.df.iloc[:, 0].min(), st.session_state.df.iloc[:, 0].max()), help="Crop spectra to the desired step size.")
-    
-    
-    
-    # Despike
-    # st.sidebar.markdown("**Despike**")
-    
-    if 'despike_act' not in st.session_state:
-        st.session_state.despike_act = False
-    
-    despike_act = st.sidebar.toggle("Despike", 
-                                    value=False, 
-                                    help="Despike(Threshold, Width) Auto-Despikes spectra with old despike script. Replaces regions of spectra which increase more than a (Threshold) over a specified (Scan Width) with a line.", 
-                                    key='despike_act')
-    
-    if despike_act:
-        # Add more functions to this selectbox if needed
-        despike_act_threshold = st.sidebar.number_input(label="Despike threshold",
-                                                        min_value = 0, max_value = 1000, value = 300,
-                                                        step = 1, placeholder="Insert a number")
+        # crop
+        # st.sidebar.markdown("**Crop**")
+        c_crop_min = st.session_state.df.iloc[:, 0].min()
+        c_crop_max = st.session_state.df.iloc[:, 0].max()
+        if 'crop_act' not in st.session_state:
+            st.session_state.crop_act = False
+        crop_act = st.toggle("Crop", value=False, help="Use Crop to select range.", key='crop_act')
         
-        despike_act_zap_length = st.sidebar.number_input(label="Despike zap length / window size",
-                                                        min_value = 0, max_value = 100, value = 11,
-                                                        step = 1, placeholder="Insert a number")
-    
-    
-    # Smoothening
-    # st.sidebar.markdown("**Smoothening**")
-    
-    if 'smoothening_act' not in st.session_state:
-        st.session_state.smoothening_act = False
-    
-    smoothening_act = st.sidebar.toggle("Smoothening", 
-                                    value=False, 
-                                    help="Smoothening in spectra processing is a technique used to reduce noise and enhance the signal by averaging adjacent data points to produce a clearer representation of the spectral data.", 
-                                    key='smoothening_act')
-    
-    if smoothening_act:
-        # Add more functions to this selectbox if needed
-        smoothening_function = st.sidebar.selectbox(label="Select your smoothening Function",  options=["Savitzky-Golay filter","1D Fast Fourier Transform filter"])
+        if crop_act:
+            st.write("Spectra range: " ,c_crop_min, " - ", c_crop_max)
+            st.number_input("Crop min", 
+                                    min_value=0.00, 
+                                    max_value=9999.00,
+                                    value=c_crop_min,
+                                    step=1.00,
+                                    key="crop_min")
+            
+            st.number_input("Crop max", 
+                                    min_value=0.00, 
+                                    max_value=9999.00,
+                                    value=c_crop_max,
+                                    step=1.00,
+                                    key="crop_max")
+            st.session_state.cropping  = st.slider("Select range for Spectra",st.session_state.df.iloc[:, 0].min(), st.session_state.df.iloc[:, 0].max(),
+                    (st.session_state.crop_min, st.session_state.crop_max), help="Crop spectra to the desired step size.")
         
-        if smoothening_function == "Savitzky-Golay filter":
-        # Add more functions to this selectbox if needed
-            smoothening_act_window_length = st.sidebar.number_input(label="Savitzky-Golay window length",
-                                                            min_value = 1, max_value = 100, value = 15,
-                                                            step = 1, placeholder="Insert a number", help='The length of the filter window (i.e., the number of coefficients).')
+        # cropping  = st.sidebar.slider("Select range for Spectra",st.session_state.df.iloc[:, 0].min(), st.session_state.df.iloc[:, 0].max(),
+        #         (st.session_state.df.iloc[:, 0].min(), st.session_state.df.iloc[:, 0].max()), help="Crop spectra to the desired step size.")
+        
+        
+        
+        # Despike
+        # st.sidebar.markdown("**Despike**")
+        
+        if 'despike_act' not in st.session_state:
+            st.session_state.despike_act = False
+        
+        despike_act = st.toggle("Despike", 
+                                        value=False, 
+                                        help="Despike(Threshold, Width) Auto-Despikes spectra with old despike script. Replaces regions of spectra which increase more than a (Threshold) over a specified (Scan Width) with a line.", 
+                                        key='despike_act')
+        
+        if despike_act:
+            # Add more functions to this selectbox if needed
+            st.session_state.despike_act_threshold = st.number_input(label="Despike threshold",
+                                                            min_value = 0, max_value = 1000, value = 300,
+                                                            step = 1, placeholder="Insert a number")
             
-            smoothening_act_polyorder = st.sidebar.number_input(label="Savitzky-Golay polynomial order",
-                                                            min_value = 1, max_value = 15, value = 2,
-                                                            step = 1, placeholder="Insert a number", help="The order of the polynomial used to fit the samples. polyorder must be less than Savitzky-Golay window length.")
-        elif smoothening_function == "1D Fast Fourier Transform filter":
-            help_txt = '''
-            The threshold is a parameter sets the cutoff frequency for the low-pass filter applied to the spectra in the frequency domain. This threshold determines which frequency components are preserved and which are filtered out.
+            st.session_state.despike_act_zap_length = st.number_input(label="Despike zap length / window size",
+                                                            min_value = 0, max_value = 100, value = 11,
+                                                            step = 1, placeholder="Insert a number")
+        
+        
+        # Smoothening
+        # st.sidebar.markdown("**Smoothening**")
+        
+        if 'smoothening_act' not in st.session_state:
+            st.session_state.smoothening_act = False
+        
+        smoothening_act = st.toggle("Smoothening", 
+                                        value=False, 
+                                        help="Smoothening in spectra processing is a technique used to reduce noise and enhance the signal by averaging adjacent data points to produce a clearer representation of the spectral data.", 
+                                        key='smoothening_act')
+        
+        if smoothening_act:
+            # Add more functions to this selectbox if needed
+            st.session_state.smoothening_function = st.selectbox(label="Select your smoothening Function",  options=["Savitzky-Golay filter","1D Fast Fourier Transform filter"])
             
-            The filtering process is governed by the following equation:
-            $$
-            \\text{FFT\\_filtered}(k) = \\begin{cases} 
-            \\text{FFT}(\\text{signal})(k) & \\text{if } |\\text{freq}(k)| \\leq \\text{cutoff} \\\\ 
-            0 & \\text{otherwise}
-            \\end{cases}
-            $$
-            
-            '''
-            smoothening_act_FFT_threshold = st.sidebar.number_input(label="FFT threshold",
-                                                            min_value = 0.001, max_value = 10.000, value = 0.100
-                                                            , placeholder="Insert a number", help=help_txt)
+            if st.session_state.smoothening_function == "Savitzky-Golay filter":
+            # Add more functions to this selectbox if needed
+                st.session_state.smoothening_act_window_length = st.number_input(label="Savitzky-Golay window length",
+                                                                min_value = 1, max_value = 100, value = 15,
+                                                                step = 1, placeholder="Insert a number", help='The length of the filter window (i.e., the number of coefficients).')
+                
+                st.session_state.smoothening_act_polyorder = st.number_input(label="Savitzky-Golay polynomial order",
+                                                                min_value = 1, max_value = 15, value = 2,
+                                                                step = 1, placeholder="Insert a number", help="The order of the polynomial used to fit the samples. polyorder must be less than Savitzky-Golay window length.")
+            elif st.session_state.smoothening_function == "1D Fast Fourier Transform filter":
+                help_txt = '''
+                The threshold is a parameter sets the cutoff frequency for the low-pass filter applied to the spectra in the frequency domain. This threshold determines which frequency components are preserved and which are filtered out.
+                
+                The filtering process is governed by the following equation:
+                $$
+                \\text{FFT\\_filtered}(k) = \\begin{cases} 
+                \\text{FFT}(\\text{signal})(k) & \\text{if } |\\text{freq}(k)| \\leq \\text{cutoff} \\\\ 
+                0 & \\text{otherwise}
+                \\end{cases}
+                $$
+                
+                '''
+                st.session_state.smoothening_act_FFT_threshold = st.number_input(label="FFT threshold",
+                                                                min_value = 0.001, max_value = 10.000, value = 0.100
+                                                                , placeholder="Insert a number", help=help_txt)
 
-            help_txt2 = '''
-            The padding_method parameter specifies the method used to pad the signal before applying the FFT. Padding helps to reduce edge effects and minimize artifacts introduced by the filtering process.
-            
-            **Mirror Padding ('mirror'):** Reflects the signal at its edges, creating a smooth transition.
-            
-            **Edge Padding ('edge'):** Repeats the edge values of the signal.
-            
-            **Zero Padding ('zero'):** Adds zeros to the edges of the signal. May introduce artifacts at the edges.
-            '''
-            smoothening_act_FFT_padding = st.sidebar.selectbox(label="Select your FFT Padding method",  options=["mirror",
-                                                                                                                "edge",
-                                                                                                                "zero"],
-                                                            key = "smoothening_act_FFT_padding",
-                                                            help = help_txt2)
-    # Baseline removal
-    # st.sidebar.markdown("**Baseline Removal**")
-    
-    if 'baselineremoval_act' not in st.session_state:
-        st.session_state.baselineremoval_act = False
-    
-    baselineremoval_act = st.sidebar.toggle("Baseline Removal", 
-                                            value=False, 
-                                            help="Remove baselines (or backgrounds) from data by either by including a baseline function when fitting a sum of functions to the data, or by actually subtracting a baseline estimate from the data.", 
-                                            key='baselineremoval_act')
-    
-    if baselineremoval_act:
-        # Add more functions to this selectbox if needed
-        baselineremoval_function = st.sidebar.selectbox(label="Select your Baseline Removal Function",  options=["airPLS", "ModPoly"])
+                help_txt2 = '''
+                The padding_method parameter specifies the method used to pad the signal before applying the FFT. Padding helps to reduce edge effects and minimize artifacts introduced by the filtering process.
+                
+                **Mirror Padding ('mirror'):** Reflects the signal at its edges, creating a smooth transition.
+                
+                **Edge Padding ('edge'):** Repeats the edge values of the signal.
+                
+                **Zero Padding ('zero'):** Adds zeros to the edges of the signal. May introduce artifacts at the edges.
+                '''
+                smoothening_act_FFT_padding = st.selectbox(label="Select your FFT Padding method",  options=["mirror",
+                                                                                                                    "edge",
+                                                                                                                    "zero"],
+                                                                key = "smoothening_act_FFT_padding",
+                                                                help = help_txt2)
+        # Baseline removal
+        # st.markdown("**Baseline Removal**")
         
-        if baselineremoval_function == "airPLS":
-            baselineremoval_airPLS_lambda = st.sidebar.number_input(label="AirPLS lambda", help="The larger lambda is,  the smoother the resulting background, z.",
-                                                                    min_value = 1, max_value = 1000000, value = 100,
-                                                                    step = 1, placeholder="Insert a number")
-            
-            baselineremoval_airPLS_porder = st.sidebar.number_input(label="AirPLS p order", help="Adaptive iteratively reweighted penalized least squares for baseline fitting.",
-                                                                    min_value=1, max_value = 10, value = 1, 
-                                                                    step = 1, placeholder="Insert a number")
-            
-            baselineremoval_airPLS_itermax = st.sidebar.number_input(label="AirPLS max iteration",
-                                                                    min_value=5, max_value = 1000, value = 15, 
-                                                                    step = 5, placeholder="Insert a number")
-            
-            baselineremoval_airPLS_tau = st.sidebar.number_input(label="AirPLS tolerance",
-                                                                    min_value=0.0000000001, max_value = 0.100000000, value = 0.001000000, 
-                                                                    step = 0.0000000001, placeholder="Insert a number",format="%.10f") 
-            
-        elif baselineremoval_function == "ModPoly":
-            baselineremoval_ModPoly_degree = st.sidebar.number_input(label="ModPoly Polynomial degree",
-                                                                    min_value=1, max_value = 20, value = 5, 
-                                                                    step = 1, placeholder="Insert a number") 
-    # Normalization
-    # st.sidebar.markdown("**Normalization**")
-    
-    if 'normalization_act' not in st.session_state:
-        st.session_state.normalization_act = False
-    
-    normalization_act = st.sidebar.toggle("Normalization", 
-                                            value=False, 
-                                            help="Normalize By Area(Area) simply divides each spectra's values by the area under the spectra then multiplies by the (Area) value. ie: It sets the area under each spectra equal to (Area)", 
-                                            key='normalization_act')
-    
-    if normalization_act:
-        # Add more functions to this selectbox if needed
-        normalization_function = st.sidebar.selectbox(label="Select your Normalization Function",  options=["Normalize by area", 
-                                                                                                            "Normalize by peak",
-                                                                                                            "Min max normalize"])
-    
-    # Outlier Removal
-    if 'outlierremoval_act' not in st.session_state:
-        st.session_state.outlierremoval_act = False
-    
-    outlierremoval_act = st.sidebar.toggle("Outlier Removal", 
-                                    value=False, 
-                                    help="The function removes outlier spectra from a dataframe based on single threshold, distance, and correlation criteria.", 
-                                    key='outlierremoval_act')
-    
-    if outlierremoval_act:
-        # Add more functions to this selectbox if needed
-        outlierremoval_act_single_threshold = st.sidebar.number_input(label="Outlier Removal Single Threshold",
-                                                        min_value = 1, max_value = 20, value = 4,
-                                                        step = 1, placeholder="Insert a number")
+        if 'baselineremoval_act' not in st.session_state:
+            st.session_state.baselineremoval_act = False
         
-        outlierremoval_act_distance_threshold = st.sidebar.number_input(label="Outlier Removal Distance Threshold",
-                                                        min_value = 1, max_value = 20, value = 6,
-                                                        step = 1, placeholder="Insert a number")
+        baselineremoval_act = st.toggle("Baseline Removal", 
+                                                value=False, 
+                                                help="Remove baselines (or backgrounds) from data by either by including a baseline function when fitting a sum of functions to the data, or by actually subtracting a baseline estimate from the data.", 
+                                                key='baselineremoval_act')
         
-        outlierremoval_act_correlation_threshold = st.sidebar.number_input(label="Outlier Removal correlation Threshold",
-                                                        min_value = 1, max_value = 20, value = 4,
-                                                        step = 1, placeholder="Insert a number")
+        if baselineremoval_act:
+            # Add more functions to this selectbox if needed
+            st.session_state.baselineremoval_function = st.selectbox(label="Select your Baseline Removal Function",  options=["airPLS", "ModPoly"])
+            
+            if st.session_state.baselineremoval_function == "airPLS":
+                st.session_state.baselineremoval_airPLS_lambda = st.number_input(label="AirPLS lambda", help="The larger lambda is,  the smoother the resulting background, z.",
+                                                                        min_value = 1, max_value = 1000000, value = 100,
+                                                                        step = 1, placeholder="Insert a number")
+                
+                st.session_state.baselineremoval_airPLS_porder = st.number_input(label="AirPLS p order", help="Adaptive iteratively reweighted penalized least squares for baseline fitting.",
+                                                                        min_value=1, max_value = 10, value = 1, 
+                                                                        step = 1, placeholder="Insert a number")
+                
+                st.session_state.baselineremoval_airPLS_itermax = st.number_input(label="AirPLS max iteration",
+                                                                        min_value=5, max_value = 1000, value = 15, 
+                                                                        step = 5, placeholder="Insert a number")
+                
+                st.session_state.baselineremoval_airPLS_tau = st.number_input(label="AirPLS tolerance",
+                                                                        min_value=0.0000000001, max_value = 0.100000000, value = 0.001000000, 
+                                                                        step = 0.0000000001, placeholder="Insert a number",format="%.10f") 
+                
+            elif st.session_state.baselineremoval_function == "ModPoly":
+                st.session_state.baselineremoval_ModPoly_degree = st.number_input(label="ModPoly Polynomial degree",
+                                                                        min_value=1, max_value = 20, value = 5, 
+                                                                        step = 1, placeholder="Insert a number") 
+        # Normalization
+        # st.markdown("**Normalization**")
+        
+        if 'normalization_act' not in st.session_state:
+            normalization_act = False
+        
+        normalization_act = st.toggle("Normalization", 
+                                                value=False, 
+                                                help="Normalize By Area(Area) simply divides each spectra's values by the area under the spectra then multiplies by the (Area) value. ie: It sets the area under each spectra equal to (Area)", 
+                                                key='normalization_act')
+        
+        if normalization_act:
+            # Add more functions to this selectbox if needed
+            st.session_state.normalization_function = st.selectbox(label="Select your Normalization Function",  options=["Normalize by area", 
+                                                                                                                "Normalize by peak",
+                                                                                                                "Min max normalize"])
+        
+        # Outlier Removal
+        if 'outlierremoval_act' not in st.session_state:
+            outlierremoval_act = False
+        
+        outlierremoval_act = st.toggle("Outlier Removal", 
+                                        value=False, 
+                                        help="The function removes outlier spectra from a dataframe based on single threshold, distance, and correlation criteria.", 
+                                        key='outlierremoval_act')
+        
+        if outlierremoval_act:
+            # Add more functions to this selectbox if needed
+            st.session_state.outlierremoval_act_single_threshold = st.number_input(label="Outlier Removal Single Threshold",
+                                                            min_value = 1, max_value = 20, value = 4,
+                                                            step = 1, placeholder="Insert a number")
+            
+            st.session_state.outlierremoval_act_distance_threshold = st.number_input(label="Outlier Removal Distance Threshold",
+                                                            min_value = 1, max_value = 20, value = 6,
+                                                            step = 1, placeholder="Insert a number")
+            
+            st.session_state.outlierremoval_act_correlation_threshold = st.number_input(label="Outlier Removal correlation Threshold",
+                                                            min_value = 1, max_value = 20, value = 4,
+                                                            step = 1, placeholder="Insert a number")
+    with st.sidebar:
+        pre_processing()
+            
     # Processing button and reaction
     if st.sidebar.button("Process", type='primary', key = 'process'):        
         function.log_spectra_processed_count(st.session_state.log_file_path)
         # interpolation act
-        if interpolation_act:
-            interpolated_df = pd.DataFrame(interpolation_ref_x, columns=[st.session_state.df.columns[0]])
+        if st.session_state.interpolation_act:
+            interpolated_df = pd.DataFrame(st.session_state.interpolation_ref_x, columns=[st.session_state.df.columns[0]])
             for col in st.session_state.df[1:]:
                 f = interp1d(st.session_state.df.iloc[:, 0], st.session_state.df[col], kind='linear',bounds_error=False,fill_value="extrapolate")
-                interpolated_values = f(interpolation_ref_x)
+                interpolated_values = f(st.session_state.interpolation_ref_x)
                 interpolated_df[col] = interpolated_values
             interpolated_df = interpolated_df.drop_duplicates()
-            # st.sidebar.write(interpolated_df)
+            # st.write(interpolated_df)
             st.session_state.df = interpolated_df
             
         # crop act
-        st.session_state.df = st.session_state.df[(st.session_state.df.iloc[:, 0] >= cropping[0]) & (st.session_state.df.iloc[:, 0] <= cropping[1])]
+        if st.session_state.crop_act:
+            st.session_state.df = st.session_state.df[(st.session_state.df.iloc[:, 0] >= st.session_state.cropping[0]) & (st.session_state.df.iloc[:, 0] <= st.session_state.cropping[1])]
         
         # despike_act
-        if despike_act:
+        if st.session_state.despike_act:
             st.session_state.df.iloc[:, 1:] = function.despikeSpec(spectra = st.session_state.df.iloc[:, 1:],
                                                                     ramanshift = st.session_state.df.iloc[:, 0],
-                                                                    threshold = despike_act_threshold,
-                                                                    zap_length = despike_act_zap_length)
+                                                                    threshold = st.session_state.despike_act_threshold,
+                                                                    zap_length = st.session_state.despike_act_zap_length)
         
         
         # smoothening_act
-        if smoothening_act:
-            if smoothening_function == "Savitzky-Golay filter":
+        if st.session_state.smoothening_act:
+            if st.session_state.smoothening_function == "Savitzky-Golay filter":
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply( lambda col: function.savgol_filter_spectra(col, 
-                                                                                                                                window_length = smoothening_act_window_length,
-                                                                                                                                polyorder = smoothening_act_polyorder))
+                                                                                                                                window_length = st.session_state.smoothening_act_window_length,
+                                                                                                                                polyorder = st.session_state.smoothening_act_polyorder))
         
-            elif smoothening_function == "1D Fast Fourier Transform filter": 
+            elif st.session_state.smoothening_function == "1D Fast Fourier Transform filter": 
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply( lambda col: function.FFT_spectra(col, 
-                                                                                                                        FFT_threshold = smoothening_act_FFT_threshold,
-                                                                                                                        padding_method = smoothening_act_FFT_padding))
+                                                                                                                        FFT_threshold = st.session_state.smoothening_act_FFT_threshold,
+                                                                                                                        padding_method = st.session_state.smoothening_act_FFT_padding))
             
         # baselineremoval_act
-        if baselineremoval_act:
-            if baselineremoval_function == "airPLS":
+        if st.session_state.baselineremoval_act:
+            if st.session_state.baselineremoval_function == "airPLS":
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:] - st.session_state.df.iloc[:, 1:].apply( lambda col: function.airPLS(col.values, 
-                                                                                                                            lambda_=baselineremoval_airPLS_lambda, 
-                                                                                                                            porder=baselineremoval_airPLS_porder, 
-                                                                                                                            itermax=baselineremoval_airPLS_itermax,
-                                                                                                                            tau=baselineremoval_airPLS_tau))
-            if baselineremoval_function == "ModPoly":
+                                                                                                                            lambda_=st.session_state.baselineremoval_airPLS_lambda, 
+                                                                                                                            porder=st.session_state.baselineremoval_airPLS_porder, 
+                                                                                                                            itermax=st.session_state.baselineremoval_airPLS_itermax,
+                                                                                                                            tau=st.session_state.baselineremoval_airPLS_tau))
+            if st.session_state.baselineremoval_function == "ModPoly":
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:] - st.session_state.df.iloc[:, 1:].apply( lambda col: function.ModPoly(col.values, 
-                                                                                                                            degree=baselineremoval_ModPoly_degree))
+                                                                                                                            degree=st.session_state.baselineremoval_ModPoly_degree))
         # normalization act
-        if normalization_act:
-            if normalization_function == "Normalize by area":
+        if st.session_state.normalization_act:
+            if st.session_state.normalization_function == "Normalize by area":
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply(function.normalize_by_area, ramanshift =st.session_state.df.iloc[:, 0], axis = 0)        
-            elif normalization_function == "Normalize by peak":
+            elif st.session_state.normalization_function == "Normalize by peak":
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply(function.normalize_by_peak, axis = 0)
-            elif normalization_function == "Min max normalize":
+            elif st.session_state.normalization_function == "Min max normalize":
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply(function.min_max_normalize, axis = 0)
                 
 
         # outlier removal act
-        if outlierremoval_act:
+        if st.session_state.outlierremoval_act:
             df_cleaned, st.session_state.remove_outliers_log = function.remove_outliers(st.session_state.df)
             st.session_state.df = pd.concat([st.session_state.df.iloc[:, 0], df_cleaned], axis=1)
         
@@ -304,19 +310,12 @@ else:
     #     st.session_state.interpolation_act = False
     
     # Reset button and reaction
-    if st.sidebar.button("Reset", type='secondary', on_click=function.reset_processing, key = 'reset'):
-        st.session_state.df = st.session_state.backup
-    # except:
-    #     pass
-    
-    @st.fragment()
-    def toggle_and_text():
-        cols = st.columns(2)
-        cols[0].toggle("Toggle")
-        cols[1].text_area("Enter text")
-    with st.sidebar:
-        toggle_and_text()
 
+    if st.sidebar.button("Reset", type='secondary', on_click=function.reset_processing, key = 'reset'):
+            # st.session_state.df = st.session_state.backup
+            pass
+
+    # st.write(st.session_state.backup)
 """"""""
 # Main Page
 st.write("## Visualization and Processing")

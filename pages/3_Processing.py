@@ -55,8 +55,8 @@ else:
         
         # crop
         # st.sidebar.markdown("**Crop**")
-        c_crop_min = st.session_state.df.iloc[:, 0].min()
-        c_crop_max = st.session_state.df.iloc[:, 0].max()
+        c_crop_min = float(st.session_state.df.iloc[:, 0].min())
+        c_crop_max = float(st.session_state.df.iloc[:, 0].max())
         if 'crop_act' not in st.session_state:
             st.session_state.crop_act = False
         crop_act = st.toggle("Crop", value=False, help="Use Crop to select range.", key='crop_act')
@@ -76,7 +76,7 @@ else:
                                     value=c_crop_max,
                                     step=1.00,
                                     key="crop_max")
-            st.session_state.cropping  = st.slider("Select range for Spectra",st.session_state.df.iloc[:, 0].min(), st.session_state.df.iloc[:, 0].max(),
+            st.session_state.cropping  = st.slider("Select range for Spectra",float(st.session_state.df.iloc[:, 0].min()), float(st.session_state.df.iloc[:, 0].max()),
                     (st.session_state.crop_min, st.session_state.crop_max), help="Crop spectra to the desired step size.")
         
         # cropping  = st.sidebar.slider("Select range for Spectra",st.session_state.df.iloc[:, 0].min(), st.session_state.df.iloc[:, 0].max(),
@@ -174,7 +174,7 @@ else:
         
         if baselineremoval_act:
             # Add more functions to this selectbox if needed
-            st.session_state.baselineremoval_function = st.selectbox(label="Select your Baseline Removal Function",  options=["airPLS", "ModPoly"])
+            st.session_state.baselineremoval_function = st.selectbox(label="Select your Baseline Removal Function",  options=["airPLS", "ModPoly","Gaussian-Lorentzian Fitting"])
             
             if st.session_state.baselineremoval_function == "airPLS":
                 st.session_state.baselineremoval_airPLS_lambda = st.number_input(label="AirPLS lambda", help="The larger lambda is,  the smoother the resulting background, z.",
@@ -197,6 +197,75 @@ else:
                 st.session_state.baselineremoval_ModPoly_degree = st.number_input(label="ModPoly Polynomial degree",
                                                                         min_value=1, max_value = 20, value = 5, 
                                                                         step = 1, placeholder="Insert a number") 
+            elif st.session_state.baselineremoval_function == "Gaussian-Lorentzian Fitting":
+                st.session_state.baselineremoval_GLF_num_range = st.number_input(label="Number of fitting range",
+                                                                        min_value=2, max_value = 10, value = 2, 
+                                                                        step = 1, placeholder="Insert a number") 
+                wavenumber_min = float(st.session_state.df.iloc[:, 0].min())
+                wavenumber_max = float(st.session_state.df.iloc[:, 0].max())
+                fitting_ranges = []
+                with st.form("glf_fitting_range_form"):
+                    for i in range(st.session_state.baselineremoval_GLF_num_range):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            start = st.number_input(f"Start of range {i+1}", key=f"glf_start_{i}", step=1.0, format="%.2f")
+                        with col2:
+                            end = st.number_input(f"End of range {i+1}", key=f"glf_end_{i}", step=1.0, format="%.2f")
+                        fitting_ranges.append((start, end))
+
+                    submitted = st.form_submit_button("Save fitting ranges")
+
+                    if submitted:
+                        valid = True
+                        cleaned_ranges = []
+
+                        for i, (start, end) in enumerate(fitting_ranges):
+                            try:
+                                start = float(start)
+                                end = float(end)
+                            except ValueError:
+                                st.warning(f"Range {i+1}: Start or End is not a number.")
+                                valid = False
+                                continue
+
+                            # Sort each range to ensure start < end
+                            start, end = min(start, end), max(start, end)
+
+                            # Clip to dataset bounds and warn
+                            clipped = False
+
+                            if start < wavenumber_min:
+                                st.warning(f"Range {i+1}: Start value clipped from {start:.2f} to {wavenumber_min:.2f}")
+                                start = wavenumber_min
+                                clipped = True
+                            if end > wavenumber_max:
+                                st.warning(f"Range {i+1}: End value clipped from {end:.2f} to {wavenumber_max:.2f}")
+                                end = wavenumber_max
+                                clipped = True
+
+                            # 🛑 Additional check: range is still valid after clipping
+                            if start >= end:
+                                st.warning(f"Range {i+1}: Invalid after clipping (start {start:.2f} >= end {end:.2f}). Skipping this range.")
+                                valid = False
+                                continue
+
+                            cleaned_ranges.append((start, end))
+
+                            # Sort all ranges by start value
+                            cleaned_ranges.sort(key=lambda x: x[0])
+
+                            # Check for overlap
+                            for i in range(len(cleaned_ranges) - 1):
+                                current_end = cleaned_ranges[i][1]
+                                next_start = cleaned_ranges[i+1][0]
+                                if next_start <= current_end:
+                                    st.warning(f"Range {i+1} and {i+2} are overlapping ({cleaned_ranges[i]} and {cleaned_ranges[i+1]})")
+                                    valid = False
+
+                            if valid:
+                                st.session_state.fitting_ranges = cleaned_ranges
+                                # st.write(st.session_state.fitting_ranges)
+                                st.success(f"Saved {len(cleaned_ranges)} valid fitting ranges.")
         # Normalization
         # st.markdown("**Normalization**")
         
@@ -288,6 +357,10 @@ else:
             if st.session_state.baselineremoval_function == "ModPoly":
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:] - st.session_state.df.iloc[:, 1:].apply( lambda col: function.ModPoly(col.values, 
                                                                                                                             degree=st.session_state.baselineremoval_ModPoly_degree))
+            if st.session_state.baselineremoval_function == "Gaussian-Lorentzian Fitting":
+                st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:] - st.session_state.df.iloc[:, 1:].apply( lambda col: function.GLF(col.values, 
+                                                                                                                                                    wavenumber=st.session_state.df.iloc[:, 0].values,
+                                                                                                                                                    fitting_ranges=st.session_state.fitting_ranges))
         # normalization act
         if st.session_state.normalization_act:
             if st.session_state.normalization_function == "Normalize by area":

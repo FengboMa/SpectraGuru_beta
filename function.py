@@ -840,3 +840,64 @@ def tsne(df, perplexity=5, n_iter=500):
 
     # Step 5: Return t-SNE results and visualization
     return tsne_df, tsne_plot
+
+def mixed_gauss_lorentz(x, A, v_g, sigma_g, L, v_l, sigma_l, I_0):
+    '''
+    A mixture of Gaussian and Lorentzian function for GLF fitting.
+
+    input
+        x: input wavenumber
+        A: amplitude of the Gaussian function
+        v_g: center of the Gaussian peak
+        sigma_g: standard deviation of the Gaussian function
+        L: area of the Lorentzian function
+        v_l: center of the Lorentzian peak
+        sigma_l: width of the Lorentzian peak
+        I_0: “ground” level of the SERS spectrum at wavenumber x
+
+    output
+        the value of the gaussian-lorentzian function at wavenumber x
+    '''
+    import numpy as np
+    gaussian = A * np.exp(-(x - v_g) ** 2 / (2 * sigma_g ** 2))
+    lorentzian = (2 * L * sigma_l) / (4 * np.pi * ((x - v_l) ** 2) + sigma_l ** 2)
+    return gaussian + lorentzian + I_0
+
+def GLF(spectra_col, wavenumber, fitting_ranges, max_iteration=1000000, gtol=1e-5):
+    """
+    Fits a mixed Gaussian-Lorentzian baseline to a single spectrum column.
+    
+    Parameters:
+        spectra_col: 1D np.array of spectral intensities
+        wavenumber: 1D np.array of wavenumbers (same length as spectra_col)
+        fitting_ranges: list of (start, end) tuples
+        max_iteration: max function evaluations
+        gtol: gradient tolerance
+
+    Returns:
+        corrected_spectrum: spectra_col - fitted_baseline
+    """
+    import numpy as np
+    from scipy.optimize import curve_fit
+
+    # Collect data from fitting ranges
+    x_data = []
+    y_data = []
+    for start, end in fitting_ranges:
+        mask = (wavenumber >= start) & (wavenumber <= end)
+        x_data.extend(wavenumber[mask])
+        y_data.extend(spectra_col[mask])
+    
+    x_data = np.array(x_data)
+    y_data = np.array(y_data)
+
+    # Initial guess
+    initial_guess = [1, np.mean(x_data), np.std(x_data), 1, np.mean(x_data), np.std(x_data), np.min(y_data)]
+
+    # Fit
+    popt, _ = curve_fit(mixed_gauss_lorentz, x_data, y_data, p0=initial_guess,
+                        maxfev=max_iteration, method='trf', gtol=gtol)
+
+    # Predict baseline and subtract
+    baseline = mixed_gauss_lorentz(wavenumber, *popt)
+    return baseline

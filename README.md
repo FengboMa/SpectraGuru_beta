@@ -13,6 +13,9 @@ Find our documentation page: [here](https://fengboma.github.io/docs.spectraguru/
 ## What is SpectraGuru?
 SpectraGuru is a spectra analysis application designed to provide user-friendly tools for processing and visualizing spectra, aimed at accelerating your research. It functions as a dashboard or a specialized tool within a Python environment, organized with various modular functions that allow users to process spectroscopy data in a pipeline. SpectraGuru is based on the Python streamlit framework. 
 
+![Demo](element/demo.gif)
+
+
 ---
 
 ## Quick start

@@ -92,82 +92,157 @@ upload_file_format = st.selectbox(label="Select data format you wish to upload",
                                 placeholder="Please choose a format",
                                 index = None)
 
-loaded = False
+# if upload_file_format is None:
+#     st.error("Please select a data format first!")
+#     st.stop()
 
-if upload_file_format == None:
-    if 'df' not in st.session_state:
-        st.error("Please select a data format and upload your data")
+multi_class = st.checkbox("Upload multiple classes?", value=False)
+
+if multi_class:
+    # Ask how many classes (2 to 10)
+    n_classes = st.number_input(
+        "How many classes?",
+        min_value=2,
+        max_value=10,
+        value=2,
+        step=1
+    )
+    
+    # We'll collect each class’s upload into a list
+    class_uploads = []
+    
+    for i in range(int(n_classes)):
+        label = f"Class #{i+1} upload"
         
-        #Sample data
-        st.write("")
-        st.write('Don\'t have data? Try with sample data.' )
+        # Mirror the format choice when building each uploader:
+        if upload_file_format.startswith("Multi files: .txt"):
+            files = st.file_uploader(
+                label, type=["txt"],
+                accept_multiple_files=True,
+                key=f"class_{i}"
+            )
+            class_uploads.append(("txt", files))
         
-        if st.button(label='Load sample data'):
-            df = load_data(r'element/sampledata.csv')
+        elif upload_file_format.startswith("Multi files: .csv"):
+            files = st.file_uploader(
+                label, type=["csv"],
+                accept_multiple_files=True,
+                key=f"class_{i}"
+            )
+            class_uploads.append(("csv_multi", files))
+        
+        elif "tab-separated" in upload_file_format:
+            f = st.file_uploader(
+                label, type=["csv"],  # TSVs are still .csv
+                key=f"class_{i}"
+            )
+            class_uploads.append(("tsv", f))
+        
+        elif "comma-separated" in upload_file_format:
+            f = st.file_uploader(
+                label, type=["csv"],
+                key=f"class_{i}"
+            )
+            class_uploads.append(("csv", f))
+    
+    # Only once *all* classes have files uploaded do we process:
+    if all(upload for fmt, upload in class_uploads):
+        data_per_class = []
+        for fmt, upload in class_uploads:
+            if fmt == "txt":
+                # multi‑txt loader expects a list of files
+                df = load_multi_data(upload)
+            elif fmt == "csv_multi":
+                df = load_multi_data(upload)
+            elif fmt == "tsv":
+                df = load_tab_data(upload)
+            else:  # "csv"
+                df = load_data(upload)
             
-            st.session_state.df = df
-            st.session_state.backup = df
+            data_per_class.append(df)
+        
+        # e.g. stash in session_state or move on to analysis
+        st.session_state.class_data = data_per_class
+        st.success(f"Loaded {len(data_per_class)} classes.")
+
+else:
+
+    loaded = False
+
+    if upload_file_format == None:
+        if 'df' not in st.session_state:
+            st.error("Please select a data format and upload your data")
+            
+            #Sample data
+            st.write("")
+            st.write('Don\'t have data? Try with sample data.' )
+            
+            if st.button(label='Load sample data'):
+                df = load_data(r'element/sampledata.csv')
+                
+                st.session_state.df = df
+                st.session_state.backup = df
 
 
-elif upload_file_format == "Multi files: .txt files (two-column single spectrum files, common x)":
-    uploaded_multi_file = st.file_uploader("", type=["txt"], key='multi_file_uploader', accept_multiple_files=True)
-    # file_loaded = True
-    try:
-        if uploaded_multi_file is not None:
-            # loaded = True
-            # df = load_multi_data(uploaded_multi_file)
-            
-            # st.session_state.df = df
-            # st.session_state.backup = df
-            loaded = True
-            # df = load_multi_data(uploaded_multi_file)
-            
-            # st.session_state.df = load_multi_data(uploaded_multi_file)
-            # st.session_state.backup = load_multi_data(uploaded_multi_file)
-            
-            df = load_multi_data(uploaded_multi_file)
-            
-            st.session_state.df = df
-            st.session_state.backup = df
-            
-    except:
-        pass
-elif upload_file_format == "Multi files: .csv files (two-column single spectrum files, common x)":
-    uploaded_multi_file = st.file_uploader("", type=["csv"], key='multi_file_uploader', accept_multiple_files=True)
-    # file_loaded = True
-    try:
-        if uploaded_multi_file is not None:
-            loaded = True
-            df = load_multi_data(uploaded_multi_file)
-            
-            st.session_state.df = df
-            st.session_state.backup = df
-    except:
-        pass
-elif upload_file_format == "Single file: .csv file (A tab-separated csv (tsv) file)":
-    uploaded_file = st.file_uploader("", type="csv", key='file_uploader')
-    # file_loaded = True
-    try: 
-        if uploaded_file is not None:
-            loaded = True
-            df = load_tab_data(uploaded_file)
+    elif upload_file_format == "Multi files: .txt files (two-column single spectrum files, common x)":
+        uploaded_multi_file = st.file_uploader("", type=["txt"], key='multi_file_uploader', accept_multiple_files=True)
+        # file_loaded = True
+        try:
+            if uploaded_multi_file is not None:
+                # loaded = True
+                # df = load_multi_data(uploaded_multi_file)
+                
+                # st.session_state.df = df
+                # st.session_state.backup = df
+                loaded = True
+                # df = load_multi_data(uploaded_multi_file)
+                
+                # st.session_state.df = load_multi_data(uploaded_multi_file)
+                # st.session_state.backup = load_multi_data(uploaded_multi_file)
+                
+                df = load_multi_data(uploaded_multi_file)
+                
+                st.session_state.df = df
+                st.session_state.backup = df
+                
+        except:
+            pass
+    elif upload_file_format == "Multi files: .csv files (two-column single spectrum files, common x)":
+        uploaded_multi_file = st.file_uploader("", type=["csv"], key='multi_file_uploader', accept_multiple_files=True)
+        # file_loaded = True
+        try:
+            if uploaded_multi_file is not None:
+                loaded = True
+                df = load_multi_data(uploaded_multi_file)
+                
+                st.session_state.df = df
+                st.session_state.backup = df
+        except:
+            pass
+    elif upload_file_format == "Single file: .csv file (A tab-separated csv (tsv) file)":
+        uploaded_file = st.file_uploader("", type="csv", key='file_uploader')
+        # file_loaded = True
+        try: 
+            if uploaded_file is not None:
+                loaded = True
+                df = load_tab_data(uploaded_file)
 
-            st.session_state.df = df
-            st.session_state.backup = df
-    except:
-        pass
-elif upload_file_format == "Single file: .csv file (A comma-separated csv (csv) file)":
-    uploaded_file = st.file_uploader("", type="csv", key='file_uploader')
-    # file_loaded = True
-    try: 
-        if uploaded_file is not None:
-            loaded = True
-            df = load_data(uploaded_file)
+                st.session_state.df = df
+                st.session_state.backup = df
+        except:
+            pass
+    elif upload_file_format == "Single file: .csv file (A comma-separated csv (csv) file)":
+        uploaded_file = st.file_uploader("", type="csv", key='file_uploader')
+        # file_loaded = True
+        try: 
+            if uploaded_file is not None:
+                loaded = True
+                df = load_data(uploaded_file)
 
-            st.session_state.df = df
-            st.session_state.backup = df
-    except:
-        pass
+                st.session_state.df = df
+                st.session_state.backup = df
+        except:
+            pass
 
 
 # multi_file = st.checkbox("Uploading Multiple Files", 

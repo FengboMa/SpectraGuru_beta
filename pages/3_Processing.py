@@ -96,15 +96,60 @@ else:
                                         key='despike_act')
         
         if despike_act:
-            # Add more functions to this selectbox if needed
-            st.session_state.despike_act_threshold = st.number_input(label="Despike threshold",
-                                                            min_value = 0, max_value = 1000, value = 300,
-                                                            step = 1, placeholder="Insert a number")
             
-            st.session_state.despike_act_zap_length = st.number_input(label="Despike zap length / window size",
-                                                            min_value = 0, max_value = 100, value = 11,
-                                                            step = 1, placeholder="Insert a number")
-        
+            st.session_state.despike_function = st.selectbox(label="Select your despike Function",  options=["old method","new method"])
+            
+            if st.session_state.despike_function == "old method":
+                # Add more functions to this selectbox if needed
+                st.session_state.despike_act_threshold = st.number_input(label="Despike threshold",
+                                                                min_value = 0, max_value = 1000, value = 300,
+                                                                step = 1, placeholder="Insert a number")
+                
+                st.session_state.despike_act_zap_length = st.number_input(label="Despike zap length / window size",
+                                                                min_value = 0, max_value = 100, value = 11,
+                                                                step = 1, placeholder="Insert a number")
+            elif st.session_state.despike_function == "new method":
+                # Add more functions to this selectbox if needed
+                st.session_state.despike_act_threshold = st.number_input(label="Despike threshold",
+                                                                min_value = 0, max_value = 1000, value = 300,
+                                                                step = 1, placeholder="Insert a number")
+                
+                st.session_state.despike_act_zap_length = st.number_input(label="Despike zap length / window size",
+                                                                min_value = 0, max_value = 100, value = 11,
+                                                                step = 1, placeholder="Insert a number")
+                wavenumber_min = float(st.session_state.df.iloc[:, 0].min())
+                wavenumber_max = float(st.session_state.df.iloc[:, 0].max())
+                st.session_state.despike_fitting_ranges = []
+                with st.form("despike_fitting_range_form"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        start = st.number_input(f"Start of range", key=f"despike_start", step=1.0, format="%.2f",value=wavenumber_min)
+                    with col2:
+                        end = st.number_input(f"End of range", key=f"despike_end", step=1.0, format="%.2f", value=wavenumber_max)
+                    st.session_state.despike_fitting_ranges.append((start, end))
+
+                    submitted = st.form_submit_button("Apply fitting ranges")
+                    if submitted:
+                        clipped = False
+
+                        # Clip start if needed
+                        if start < wavenumber_min:
+                            st.warning(f"Start value clipped from {start:.2f} to {wavenumber_min:.2f}")
+                            start = wavenumber_min
+                            clipped = True
+
+                        # Clip end if needed
+                        if end > wavenumber_max:
+                            st.warning(f"End value clipped from {end:.2f} to {wavenumber_max:.2f}")
+                            end = wavenumber_max
+                            clipped = True
+
+                        # Validate order
+                        if start >= end:
+                            st.error("Start value must be less than End value.")
+                        else:
+                            st.session_state.despike_fitting_ranges.append((start, end))
+                            st.success(f"Fitting range ({start:.2f}, {end:.2f}) applied.")
         
         # Smoothening
         # st.sidebar.markdown("**Smoothening**")
@@ -213,7 +258,7 @@ else:
                             end = st.number_input(f"End of range {i+1}", key=f"glf_end_{i}", step=1.0, format="%.2f")
                         fitting_ranges.append((start, end))
 
-                    submitted = st.form_submit_button("Save fitting ranges")
+                    submitted = st.form_submit_button("Apply fitting ranges")
 
                     if submitted:
                         valid = True
@@ -243,7 +288,7 @@ else:
                                 end = wavenumber_max
                                 clipped = True
 
-                            # 🛑 Additional check: range is still valid after clipping
+                            # Additional check: range is still valid after clipping
                             if start >= end:
                                 st.warning(f"Range {i+1}: Invalid after clipping (start {start:.2f} >= end {end:.2f}). Skipping this range.")
                                 valid = False
@@ -263,8 +308,8 @@ else:
                                     valid = False
 
                             if valid:
-                                st.session_state.fitting_ranges = cleaned_ranges
-                                # st.write(st.session_state.fitting_ranges)
+                                st.session_state.fitting_ranges =cleaned_ranges
+                                # st.write(st.session_state.despike_fitting_ranges)
                                 st.success(f"Saved {len(cleaned_ranges)} valid fitting ranges.")
         # Normalization
         # st.markdown("**Normalization**")
@@ -328,10 +373,16 @@ else:
         
         # despike_act
         if st.session_state.despike_act:
-            st.session_state.df.iloc[:, 1:] = function.despikeSpec(spectra = st.session_state.df.iloc[:, 1:],
+            if st.session_state.despike_function == "old method":
+                st.session_state.df.iloc[:, 1:] = function.despikeSpec(spectra = st.session_state.df.iloc[:, 1:],
                                                                     ramanshift = st.session_state.df.iloc[:, 0],
                                                                     threshold = st.session_state.despike_act_threshold,
                                                                     zap_length = st.session_state.despike_act_zap_length)
+            elif st.session_state.despike_function == "new method":
+                st.session_state.df.iloc[:, 1:] = function.despikeSpec_v2(spectra = st.session_state.df.iloc[:, 1:],
+                                                                        ramanshift = st.session_state.df.iloc[:, 0],
+                                                                        threshold = st.session_state.despike_act_threshold,
+                                                                        zap_length = st.session_state.despike_act_zap_length,window_start=st.session_state.despike_fitting_ranges[0][0],window_end=st.session_state.despike_fitting_ranges[0][1])
         
         
         # smoothening_act

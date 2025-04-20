@@ -155,6 +155,35 @@ def despikeSpec(spectra, ramanshift, threshold=100, zap_length=11):
 
     return new_spectra
 
+def despikeSpec_v2(spectra, ramanshift, threshold=100, zap_length=11, window_start=None, window_end=None):
+    import numpy as np
+    import pandas as pd
+
+    new_spectra = pd.DataFrame(np.ones_like(spectra.values), columns=spectra.columns, index=spectra.index)
+    looprange = np.arange(len(ramanshift) - zap_length)
+    comprange = np.arange(zap_length)
+
+    for i in range(len(spectra.columns)):
+        spec = spectra.iloc[:, i].values
+        for j in looprange:
+            # Get current Raman shift at start of window
+            rs_val = ramanshift[j]
+
+            # Apply despiking only if current Raman shift is within the window
+            if window_start is not None and window_end is not None:
+                if not (window_start <= rs_val <= window_end):
+                    continue  # Skip this point if outside the window
+
+            scn = np.array([spec[j + k] for k in comprange])
+            line = np.array([k * (scn[-1] - scn[0]) / zap_length + scn[0] for k in comprange])
+            resid = scn - line
+            for k in comprange:
+                if resid[k] > threshold:
+                    spec[j + k] = line[k]
+
+        new_spectra.iloc[:, i] = spec
+
+    return new_spectra
 # Smoothening
 def savgol_filter_spectra (spectra, window_length = 15, polyorder = 2):
     from scipy.signal import savgol_filter

@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import function
+import psycopg2
 
 function.wide_space_default()
 st.session_state.log_file_path = r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v14\element\user_count.txt"
@@ -76,225 +77,518 @@ st.write("## Data Upload")
 
 # st.write("### Setting and upload")
 
-st.markdown("""
-            *Upload your spectra data here*
-            
-            Notice that: The file must follow certain formatting at this current version.
-            
-            """)
+option_map = {
+    0: "Manually Upload",
+    1: "Query from Database"
+}
 
-upload_file_format = st.selectbox(label="Select data format you wish to upload", 
-                                options=("Multi files: .txt files (two-column single spectrum files, common x)",
-                                        "Multi files: .csv files (two-column single spectrum files, common x)",
-                                        "Single file: .csv file (A tab-separated csv (tsv) file)",
-                                        "Single file: .csv file (A comma-separated csv (csv) file)"),
-                                help="See documentation for detailed description on supported format.",
-                                placeholder="Please choose a format",
-                                index = None)
+# Create the segmented control widget
+selection = st.segmented_control(
+    "Data Source",
+    options=option_map.keys(),
+    format_func=lambda option: option_map[option],
+    selection_mode="single",
+    default=0,
+    help="Select how you want to upload your data."
+)
 
-# if upload_file_format is None:
-#     st.error("Please select a data format first!")
-#     st.stop()
+# Display the selected option
+st.write(
+    "Your selected option:",
+    f"{None if selection is None else option_map[selection]}"
+)
 
-multi_class = st.checkbox("Upload multiple classes?", value=False)
+# Conditional logic based on the selected option
+if selection == 0:
 
-if multi_class:
-    # Ask how many classes (2 to 10)
-    n_classes = st.number_input(
-        "How many classes?",
-        min_value=2,
-        max_value=10,
-        value=2,
-        step=1
-    )
-    
-    # We'll collect each class’s upload into a list
-    class_uploads = []
-    
-    for i in range(int(n_classes)):
-        label = f"Class #{i+1} upload"
-        
-        # Mirror the format choice when building each uploader:
-        if upload_file_format.startswith("Multi files: .txt"):
-            files = st.file_uploader(
-                label, type=["txt"],
-                accept_multiple_files=True,
-                key=f"class_{i}"
-            )
-            class_uploads.append(("txt", files))
-        
-        elif upload_file_format.startswith("Multi files: .csv"):
-            files = st.file_uploader(
-                label, type=["csv"],
-                accept_multiple_files=True,
-                key=f"class_{i}"
-            )
-            class_uploads.append(("csv_multi", files))
-        
-        elif "tab-separated" in upload_file_format:
-            f = st.file_uploader(
-                label, type=["csv"],  # TSVs are still .csv
-                key=f"class_{i}"
-            )
-            class_uploads.append(("tsv", f))
-        
-        elif "comma-separated" in upload_file_format:
-            f = st.file_uploader(
-                label, type=["csv"],
-                key=f"class_{i}"
-            )
-            class_uploads.append(("csv", f))
-    
-    # Only once *all* classes have files uploaded do we process:
-    if all(upload for fmt, upload in class_uploads):
-        data_per_class = []
-        for fmt, upload in class_uploads:
-            if fmt == "txt":
-                # multi‑txt loader expects a list of files
-                df = load_multi_data(upload)
-            elif fmt == "csv_multi":
-                df = load_multi_data(upload)
-            elif fmt == "tsv":
-                df = load_tab_data(upload)
-            else:  # "csv"
-                df = load_data(upload)
-            
-            data_per_class.append(df)
-        
-        # e.g. stash in session_state or move on to analysis
-        st.session_state.class_data = data_per_class
-        st.success(f"Loaded {len(data_per_class)} classes.")
-
-else:
-
-    loaded = False
-
-    if upload_file_format == None:
-        if 'df' not in st.session_state:
-            st.error("Please select a data format and upload your data")
-            
-            #Sample data
-            st.write("")
-            st.write('Don\'t have data? Try with sample data.' )
-            
-            if st.button(label='Load sample data'):
-                df = load_data(r'element/sampledata.csv')
+    st.markdown("""
+                *Upload your spectra data here*
                 
-                st.session_state.df = df
-                st.session_state.backup = df
+                Notice that: The file must follow certain formatting at this current version.
+                
+                """)
+
+    upload_file_format = st.selectbox(label="Select data format you wish to upload", 
+                                    options=("Multi files: .txt files (two-column single spectrum files, common x)",
+                                            "Multi files: .csv files (two-column single spectrum files, common x)",
+                                            "Single file: .csv file (A tab-separated csv (tsv) file)",
+                                            "Single file: .csv file (A comma-separated csv (csv) file)"),
+                                    help="See documentation for detailed description on supported format.",
+                                    placeholder="Please choose a format",
+                                    index = None)
+
+    # if upload_file_format is None:
+    #     st.error("Please select a data format first!")
+    #     st.stop()
+
+    multi_class = st.checkbox("Upload multiple classes?", value=False)
+
+    if multi_class:
+        # Ask how many classes (2 to 10)
+        n_classes = st.number_input(
+            "How many classes?",
+            min_value=2,
+            max_value=10,
+            value=2,
+            step=1
+        )
+        
+        # We'll collect each class’s upload into a list
+        class_uploads = []
+        
+        for i in range(int(n_classes)):
+            label = f"Class #{i+1} upload"
+            
+            # Mirror the format choice when building each uploader:
+            if upload_file_format.startswith("Multi files: .txt"):
+                files = st.file_uploader(
+                    label, type=["txt"],
+                    accept_multiple_files=True,
+                    key=f"class_{i}"
+                )
+                class_uploads.append(("txt", files))
+            
+            elif upload_file_format.startswith("Multi files: .csv"):
+                files = st.file_uploader(
+                    label, type=["csv"],
+                    accept_multiple_files=True,
+                    key=f"class_{i}"
+                )
+                class_uploads.append(("csv_multi", files))
+            
+            elif "tab-separated" in upload_file_format:
+                f = st.file_uploader(
+                    label, type=["csv"],  # TSVs are still .csv
+                    key=f"class_{i}"
+                )
+                class_uploads.append(("tsv", f))
+            
+            elif "comma-separated" in upload_file_format:
+                f = st.file_uploader(
+                    label, type=["csv"],
+                    key=f"class_{i}"
+                )
+                class_uploads.append(("csv", f))
+        
+        # Only once *all* classes have files uploaded do we process:
+        if all(upload for fmt, upload in class_uploads):
+            data_per_class = []
+            for fmt, upload in class_uploads:
+                if fmt == "txt":
+                    # multi‑txt loader expects a list of files
+                    df = load_multi_data(upload)
+                elif fmt == "csv_multi":
+                    df = load_multi_data(upload)
+                elif fmt == "tsv":
+                    df = load_tab_data(upload)
+                else:  # "csv"
+                    df = load_data(upload)
+                
+                data_per_class.append(df)
+            
+            # e.g. stash in session_state or move on to analysis
+            st.session_state.class_data = data_per_class
+            st.success(f"Loaded {len(data_per_class)} classes.")
+
+    else:
+
+        loaded = False
+
+        if upload_file_format == None:
+            if 'df' not in st.session_state:
+                st.error("Please select a data format and upload your data")
+                
+                #Sample data
+                st.write("")
+                st.write('Don\'t have data? Try with sample data.' )
+                
+                if st.button(label='Load sample data'):
+                    df = load_data(r'element/sampledata.csv')
+                    
+                    st.session_state.df = df
+                    st.session_state.backup = df
 
 
-    elif upload_file_format == "Multi files: .txt files (two-column single spectrum files, common x)":
-        uploaded_multi_file = st.file_uploader("", type=["txt"], key='multi_file_uploader', accept_multiple_files=True)
-        # file_loaded = True
+        elif upload_file_format == "Multi files: .txt files (two-column single spectrum files, common x)":
+            uploaded_multi_file = st.file_uploader("", type=["txt"], key='multi_file_uploader', accept_multiple_files=True)
+            # file_loaded = True
+            try:
+                if uploaded_multi_file is not None:
+                    # loaded = True
+                    # df = load_multi_data(uploaded_multi_file)
+                    
+                    # st.session_state.df = df
+                    # st.session_state.backup = df
+                    loaded = True
+                    # df = load_multi_data(uploaded_multi_file)
+                    
+                    # st.session_state.df = load_multi_data(uploaded_multi_file)
+                    # st.session_state.backup = load_multi_data(uploaded_multi_file)
+                    
+                    df = load_multi_data(uploaded_multi_file)
+                    
+                    st.session_state.df = df
+                    st.session_state.backup = df
+                    
+            except:
+                pass
+        elif upload_file_format == "Multi files: .csv files (two-column single spectrum files, common x)":
+            uploaded_multi_file = st.file_uploader("", type=["csv"], key='multi_file_uploader', accept_multiple_files=True)
+            # file_loaded = True
+            try:
+                if uploaded_multi_file is not None:
+                    loaded = True
+                    df = load_multi_data(uploaded_multi_file)
+                    
+                    st.session_state.df = df
+                    st.session_state.backup = df
+            except:
+                pass
+        elif upload_file_format == "Single file: .csv file (A tab-separated csv (tsv) file)":
+            uploaded_file = st.file_uploader("", type="csv", key='file_uploader')
+            # file_loaded = True
+            try: 
+                if uploaded_file is not None:
+                    loaded = True
+                    df = load_tab_data(uploaded_file)
+
+                    st.session_state.df = df
+                    st.session_state.backup = df
+            except:
+                pass
+        elif upload_file_format == "Single file: .csv file (A comma-separated csv (csv) file)":
+            uploaded_file = st.file_uploader("", type="csv", key='file_uploader')
+            # file_loaded = True
+            try: 
+                if uploaded_file is not None:
+                    loaded = True
+                    df = load_data(uploaded_file)
+
+                    st.session_state.df = df
+                    st.session_state.backup = df
+            except:
+                pass
+
+
+    # multi_file = st.checkbox("Uploading Multiple Files", 
+    #                     value=True, 
+    #                     help = """
+    #                     Check box if the files are sharing common X-axis and for the same sample. The csv or txt file should be separated by tab.
+    #                     """)
+
+    # if multi_file is True:
+    #     st.write("#### Upload Multiple Files")
+    #     # Multi file uploader
+    #     uploaded_multi_file = st.file_uploader("", type=["csv","txt"], key='multi_file_uploader', accept_multiple_files=True)
+    #     try:
+    #         if uploaded_multi_file is not None:
+    #             df = load_multi_data(uploaded_multi_file)
+                
+    #             st.session_state.df = df
+    #             st.session_state.backup = df
+    #         # if 'df' in st.session_state:
+                
+    #         #     st.write("#### Preview")
+    #         #     st.write(st.session_state.df)
+    #             # st.write(st.session_state.df_original)
+    #     except:
+    #         print("Load your data")
+
+    # else: 
+    #     st.write("#### Upload a Single File")
+        
+    #     st.write("Check the box if it is a tab-separated csv file")
+        
+    #     tab_csv = st.checkbox("This is a tab separated csv file", 
+    #                         value=True, 
+    #                         help = """
+    #                         Check box if the file is a tab-separated csv (tsv).                                                        
+    #                         A tab-separated csv (tsv) file is a type of text file used
+    #                         to store data in a tabular format, similar to a standard csv file, but 
+    #                         with tab characters ("/t") used as the delimiter instead of commas. This format 
+    #                         is useful for ensuring that data containing commas remains correctly parsed.""")
+        
+    #     uploaded_file = st.file_uploader("", type="csv", key='file_uploader')
+
+    #     if uploaded_file is not None:
+            
+    #         if tab_csv == False:
+    #             df = load_data(uploaded_file)
+    #         elif tab_csv == True:
+    #             df = load_tab_data(uploaded_file)
+            
+    #         st.session_state.df = df
+    #         st.session_state.backup = df
+elif selection == 1:
+    # st.session_state.connection = None
+
+    with st.form("DB_login"):
+        st.write("Log in to DB")
+        st.session_state.user = st.text_input("User")
+        st.session_state.passkey = st.text_input("Passkey")
+
+        # Every form must have a submit button.
+        submitted = st.form_submit_button("Log in")
+        if submitted:
+            try:
+                conn = psycopg2.connect(
+                    dbname="SpectraGuruDB",
+                    user=st.session_state.user,
+                    password=st.session_state.passkey,
+                    host="localhost",  # Use "localhost" for local database
+                    port="5432"  # Default PostgreSQL port
+                )
+                cur = conn.cursor()
+                
+                st.info("Connection to the database was successful.")
+                st.session_state.connection = True
+
+            except:
+                # If an error occurs, print the error
+                st.warning(f"The error occurred")
+
+    def get_db_connection():
+        return psycopg2.connect(
+            dbname="SpectraGuruDB",
+            user=st.session_state.user,
+            password=st.session_state.passkey,
+            host="localhost",
+            port="5432"
+        )
+
+    def compute_relevance(row, keywords):
+        return sum(
+            any(str(keyword).lower() in str(cell).lower() for cell in row)
+            for keyword in keywords
+        )
+
+    # Search Function
+    def search_database(search_term, data_type_filter="Both"):
         try:
-            if uploaded_multi_file is not None:
-                # loaded = True
-                # df = load_multi_data(uploaded_multi_file)
-                
-                # st.session_state.df = df
-                # st.session_state.backup = df
-                loaded = True
-                # df = load_multi_data(uploaded_multi_file)
-                
-                # st.session_state.df = load_multi_data(uploaded_multi_file)
-                # st.session_state.backup = load_multi_data(uploaded_multi_file)
-                
-                df = load_multi_data(uploaded_multi_file)
-                
-                st.session_state.df = df
-                st.session_state.backup = df
-                
-        except:
-            pass
-    elif upload_file_format == "Multi files: .csv files (two-column single spectrum files, common x)":
-        uploaded_multi_file = st.file_uploader("", type=["csv"], key='multi_file_uploader', accept_multiple_files=True)
-        # file_loaded = True
-        try:
-            if uploaded_multi_file is not None:
-                loaded = True
-                df = load_multi_data(uploaded_multi_file)
-                
-                st.session_state.df = df
-                st.session_state.backup = df
-        except:
-            pass
-    elif upload_file_format == "Single file: .csv file (A tab-separated csv (tsv) file)":
-        uploaded_file = st.file_uploader("", type="csv", key='file_uploader')
-        # file_loaded = True
-        try: 
-            if uploaded_file is not None:
-                loaded = True
-                df = load_tab_data(uploaded_file)
+            conn = get_db_connection()
+            cur = conn.cursor()
 
-                st.session_state.df = df
-                st.session_state.backup = df
-        except:
-            pass
-    elif upload_file_format == "Single file: .csv file (A comma-separated csv (csv) file)":
-        uploaded_file = st.file_uploader("", type="csv", key='file_uploader')
-        # file_loaded = True
-        try: 
-            if uploaded_file is not None:
-                loaded = True
-                df = load_data(uploaded_file)
+            search_pattern = f"%{search_term}%"
 
-                st.session_state.df = df
-                st.session_state.backup = df
-        except:
-            pass
+            # Query 1 (Search in Raw Data)
+            query1 = """
+            SELECT 
+                u.user_id AS user_id,
+                u.name AS user_name,
+                u.location AS user_location,
+                u.institution AS user_institution,
+                p.project_id AS project_id,
+                p.project_name AS project_name,
+                p.start_date AS project_start_date,
+                p.source AS project_source,
+                db.batch_id AS batch_id,  -- Keep consistent column names
+                db.upload_date AS batch_upload_date,
+                db.analyte_name AS batch_analyte_name,
+                db.buffer_solution AS batch_buffer_solution,
+                db.instrument_details AS batch_instrument_details,
+                db.wavelength AS batch_wavelength,
+                db.power AS batch_power,
+                db.concentration AS batch_concentration,
+                db.concentration_units AS batch_concentration_units,
+                db.accumulation_time AS batch_accumulation_time,
+                db.experimental_procedure AS batch_experimental_procedure,
+                db.substrate_type AS batch_substrate_type,
+                db.substrate_material AS batch_substrate_material,
+                db.preparation_conditions AS batch_preparation_conditions,
+                db.data_type AS batch_data_type,
+                db.notes AS batch_notes
+            FROM
+                "user" u
+            JOIN
+                project_user pu ON u.user_id = pu.user_id
+            JOIN
+                "project" p ON p.project_id = pu.project_id
+            JOIN
+                project_batch pb ON p.project_id = pb.project_id
+            JOIN
+                "databatch" db ON db.batch_id = pb.batch_id
+            WHERE 
+                COALESCE(u.name, '') ILIKE %s OR 
+                COALESCE(u.location, '') ILIKE %s OR 
+                COALESCE(u.institution, '') ILIKE %s OR 
+                COALESCE(p.project_name, '') ILIKE %s OR
+                COALESCE(p.source, '') ILIKE %s OR 
+                COALESCE(db.analyte_name, '') ILIKE %s OR
+                COALESCE(db.buffer_solution, '') ILIKE %s OR
+                COALESCE(db.instrument_details, '') ILIKE %s OR
+                COALESCE(db.experimental_procedure, '') ILIKE %s OR
+                COALESCE(db.substrate_type, '') ILIKE %s OR
+                COALESCE(db.substrate_material, '') ILIKE %s OR
+                COALESCE(db.preparation_conditions, '') ILIKE %s OR
+                COALESCE(db.data_type, '') ILIKE %s OR
+                COALESCE(db.notes, '') ILIKE %s;
+            """
 
+            # Query 2 (Search in Standard Data)
+            query2 = """
+            SELECT 
+                u.user_id AS user_id,
+                u.name AS user_name,
+                u.location AS user_location,
+                u.institution AS user_institution,
+                p.project_id AS project_id,
+                p.project_name AS project_name,
+                p.start_date AS project_start_date,
+                p.source AS project_source,
+                db.batch_standard_id AS batch_id,  -- Keep column names same as Query 1
+                db.upload_date AS batch_upload_date,
+                db.analyte_name AS batch_analyte_name,
+                db.buffer_solution AS batch_buffer_solution,
+                db.instrument_details AS batch_instrument_details,
+                db.wavelength AS batch_wavelength,
+                db.power AS batch_power,
+                db.concentration AS batch_concentration,
+                db.concentration_units AS batch_concentration_units,
+                db.accumulation_time AS batch_accumulation_time,
+                db.experimental_procedure AS batch_experimental_procedure,
+                db.substrate_type AS batch_substrate_type,
+                db.substrate_material AS batch_substrate_material,
+                db.preparation_conditions AS batch_preparation_conditions,
+                db.data_type AS batch_data_type,
+                db.notes AS batch_notes
+            FROM
+                "user" u
+            JOIN
+                project_user pu ON u.user_id = pu.user_id
+            JOIN
+                "project" p ON p.project_id = pu.project_id
+            JOIN
+                project_batch_standard pb ON p.project_id = pb.project_id
+            JOIN
+                "databatch_standard" db ON db.batch_standard_id = pb.batch_standard_id
+            WHERE 
+                COALESCE(u.name, '') ILIKE %s OR 
+                COALESCE(u.location, '') ILIKE %s OR 
+                COALESCE(u.institution, '') ILIKE %s OR 
+                COALESCE(p.project_name, '') ILIKE %s OR
+                COALESCE(p.source, '') ILIKE %s OR 
+                COALESCE(db.analyte_name, '') ILIKE %s OR
+                COALESCE(db.buffer_solution, '') ILIKE %s OR
+                COALESCE(db.instrument_details, '') ILIKE %s OR
+                COALESCE(db.experimental_procedure, '') ILIKE %s OR
+                COALESCE(db.substrate_type, '') ILIKE %s OR
+                COALESCE(db.substrate_material, '') ILIKE %s OR
+                COALESCE(db.preparation_conditions, '') ILIKE %s OR
+                COALESCE(db.data_type, '') ILIKE %s OR
+                COALESCE(db.notes, '') ILIKE %s;
+            """
+            results = []
 
-# multi_file = st.checkbox("Uploading Multiple Files", 
-#                     value=True, 
-#                     help = """
-#                     Check box if the files are sharing common X-axis and for the same sample. The csv or txt file should be separated by tab.
-#                     """)
+            keywords = search_term.strip().split()
+            if not keywords:
+                return pd.DataFrame()
 
-# if multi_file is True:
-#     st.write("#### Upload Multiple Files")
-#     # Multi file uploader
-#     uploaded_multi_file = st.file_uploader("", type=["csv","txt"], key='multi_file_uploader', accept_multiple_files=True)
-#     try:
-#         if uploaded_multi_file is not None:
-#             df = load_multi_data(uploaded_multi_file)
+            # Get full OR pattern
+            like_patterns = [f"%{k}%" for k in keywords]
+
+            # Set of results
+            results = []
+
+            for pattern in like_patterns:
+                params = (pattern,) * 14
+
+                if data_type_filter in ["Both", "Raw Data Only"]:
+                    cur.execute(query1, params)
+                    rows1 = cur.fetchall()
+                    columns1 = [desc[0] for desc in cur.description]
+                    df1 = pd.DataFrame(rows1, columns=columns1)
+                    results.append(df1)
+
+                if data_type_filter in ["Both", "Standard Data Only"]:
+                    cur.execute(query2, params)
+                    rows2 = cur.fetchall()
+                    columns2 = [desc[0] for desc in cur.description]
+                    df2 = pd.DataFrame(rows2, columns=columns2)
+                    results.append(df2)
+
+            if results:
+                result_df = pd.concat(results, ignore_index=True).drop_duplicates()
+
+                # Add a relevance score column
+                result_df["relevance"] = result_df.apply(lambda row: compute_relevance(row, keywords), axis=1)
+
+                # Sort by relevance descending
+                result_df = result_df.sort_values(by="relevance", ascending=False)
+            else:
+                result_df = pd.DataFrame()
+
             
-#             st.session_state.df = df
-#             st.session_state.backup = df
-#         # if 'df' in st.session_state:
-            
-#         #     st.write("#### Preview")
-#         #     st.write(st.session_state.df)
-#             # st.write(st.session_state.df_original)
-#     except:
-#         print("Load your data")
+            return result_df
+            # # Execute Query 1
+            # cur.execute(query1, (search_pattern,) * 14)  # Pass correct number of parameters
+            # rows1 = cur.fetchall()
+            # columns1 = [desc[0] for desc in cur.description]
+            # df1 = pd.DataFrame(rows1, columns=columns1)
 
-# else: 
-#     st.write("#### Upload a Single File")
-    
-#     st.write("Check the box if it is a tab-separated csv file")
-    
-#     tab_csv = st.checkbox("This is a tab separated csv file", 
-#                         value=True, 
-#                         help = """
-#                         Check box if the file is a tab-separated csv (tsv).                                                        
-#                         A tab-separated csv (tsv) file is a type of text file used
-#                         to store data in a tabular format, similar to a standard csv file, but 
-#                         with tab characters ("/t") used as the delimiter instead of commas. This format 
-#                         is useful for ensuring that data containing commas remains correctly parsed.""")
-    
-#     uploaded_file = st.file_uploader("", type="csv", key='file_uploader')
+            # # Execute Query 2
+            # cur.execute(query2, (search_pattern,) * 14)  # Pass correct number of parameters
+            # rows2 = cur.fetchall()
+            # columns2 = [desc[0] for desc in cur.description]
+            # df2 = pd.DataFrame(rows2, columns=columns2)
 
-#     if uploaded_file is not None:
-        
-#         if tab_csv == False:
-#             df = load_data(uploaded_file)
-#         elif tab_csv == True:
-#             df = load_tab_data(uploaded_file)
-        
-#         st.session_state.df = df
-#         st.session_state.backup = df
-        
+            # # Merge results into one DataFrame
+            # result_df = pd.concat([df1, df2], ignore_index=True)
+
+            # conn.close()
+            # return result_df
+        except Exception as e:
+            conn.close()
+            st.error(f"Error fetching search results: {e}")
+            return pd.DataFrame()
+    # st.write(st.session_state.connection)
+    try:
+        if st.session_state.connection:
+            st.write("## Database Search")
+
+            advanced_search = st.checkbox("Advanced Search")
+
+            # If advanced search is selected, show additional filters
+            if advanced_search:
+                data_type_filter = st.radio(
+                    "Select Data Type to Search:",
+                    options=["Both", "Raw Data Only", "Standard Data Only"],
+                    index=0,
+                    horizontal=True
+                )
+            else:
+                data_type_filter = "Both"
+
+            search_query = st.text_input("Enter a keyword to search in the database:", "")
+
+
+
+            if search_query:
+                results = search_database(search_query, data_type_filter)
+                if not results.empty:
+                    st.write("### Search Results")
+                    
+                    # Step 1: Add 'select' column (default to False)
+                    results['Select'] = False
+
+                    # Step 2: Reorder columns - Move 'select' to the very front
+                    columns_order = ['Select', 'batch_id', 'batch_analyte_name', 'batch_data_type'] + [col for col in results.columns if col not in ['Select', 'batch_id', 'batch_analyte_name', 'batch_data_type']]
+                    results = results[columns_order]
+
+                    # Step 3: Display editable dataframe with a checkbox for 'select' column
+                    edited_results = st.data_editor(results, column_config={"select": st.column_config.CheckboxColumn()})
+                    
+                    st.button("Get Data")
+
+                    # st.dataframe(results)
+                else:
+                    st.warning("No results found.")
+            st.divider()
+    except:
+        st.warning("Please log in to the database first.")
+
+
+############
+
 if 'df' in st.session_state:
     st.divider()
     col1, col2 = st.columns([2, 12])

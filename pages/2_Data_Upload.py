@@ -567,24 +567,127 @@ elif selection == 1:
                 if not results.empty:
                     st.write("### Search Results")
                     
-                    # Step 1: Add 'select' column (default to False)
+                    # Step 1: Add 'Select' column (default to False)
                     results['Select'] = False
 
-                    # Step 2: Reorder columns - Move 'select' to the very front
-                    columns_order = ['Select', 'batch_id', 'batch_analyte_name', 'batch_data_type'] + [col for col in results.columns if col not in ['Select', 'batch_id', 'batch_analyte_name', 'batch_data_type']]
+                    # Step 2: Reorder columns
+                    columns_order = ['Select', 'batch_id', 'batch_analyte_name', 'batch_data_type'] + \
+                                    [col for col in results.columns if col not in ['Select', 'batch_id', 'batch_analyte_name', 'batch_data_type']]
                     results = results[columns_order]
 
-                    # Step 3: Display editable dataframe with a checkbox for 'select' column
-                    edited_results = st.data_editor(results, column_config={"select": st.column_config.CheckboxColumn()})
+                    # Step 3: Display editable dataframe with checkbox
+                    edited_results = st.data_editor(results, column_config={"Select": st.column_config.CheckboxColumn()})
                     
-                    st.button("Get Data")
+                    
 
-                    # st.dataframe(results)
+                    # Step 4: Filter selected rows and print
+                    selected_rows = edited_results[edited_results['Select'] == True]
+                    if not selected_rows.empty:
+                        selected_strings = [
+                            f"{row['batch_analyte_name']}_{row['batch_data_type']}_{row['batch_id']}"
+                            for _, row in selected_rows.iterrows()
+                        ]
+                        selection_output = "; ".join(selected_strings)
+                        st.write(f"You selected: {selection_output}")
+                    else:
+                        st.write("No rows selected.")
+                    
+                    # if st.button("Get Data"):
+                    if len(selected_rows) == 1:
+                        selected_row = selected_rows.iloc[0]
+                        batch_id = selected_row['batch_id']
+                        batch_data_type = selected_row['batch_data_type']  # Assume you store this info
+
+                        # Connect to the database
+                        conn = get_db_connection()
+                        cur = conn.cursor()
+
+                        if batch_data_type.lower() == 'raw':
+                            query = """
+                                SELECT sd.*
+                                FROM spectrum s
+                                JOIN spectrum_data sd ON s.spectrum_id = sd.spectrum_id
+                                WHERE s.batch_id = %s
+                            """
+                            # st.write(batch_data_type)
+                            # st.write('xxxx')
+                        elif batch_data_type.lower() == 'standard':
+                            query = """
+                                SELECT sds.*
+                                FROM spectrum_standard ss
+                                JOIN spectrum_data_standard sds ON ss.spectrum_standard_id = sds.spectrum_standard_id
+                                WHERE ss.batch_standard_id = %s
+                            """
+                            # st.write(batch_data_type)
+                            # st.write('yyyy')
+                        else:
+                            st.warning("Unknown batch data type selected.")
+                            query = None
+                        if st.button("Get Data"):
+                            try:
+                                if query:
+                                    with st.status("Fetching spectrum data from SpectraGuru Database...", expanded=True) as status:
+                                        cur.execute(query, (int(batch_id),))
+                                        spectrum_data = cur.fetchall()
+                                        column_names = [desc[0] for desc in cur.description]
+                                        spectrum_df = pd.DataFrame(spectrum_data, columns=column_names)
+                                        # st.write('zzzz')
+                                    if not spectrum_df.empty:
+                                        # st.write('111')
+                                        # st.write("### Spectrum Data")
+                                        # st.dataframe(spectrum_df)
+                                        # st.divider()
+                                        spectrum_id_col = spectrum_df.columns[1]  # Second column
+
+                                        # Step 2: Check required columns
+                                        required_cols = ['wavenumber', 'intensity']
+                                        missing_cols = [col for col in required_cols if col not in spectrum_df.columns]
+                                        if missing_cols:
+                                            raise ValueError(f"Missing columns in spectrum_df: {missing_cols}")
+
+                                        # Step 3: Build the unique column name from selected_row
+                                        unique_col_name = (
+                                            f"{selected_row['batch_analyte_name']}_"
+                                            f"{selected_row['batch_data_type']}_"
+                                            f"{selected_row['batch_id']}_"
+                                        )
+
+                                        # Step 4: Append the spectrum ID from the dynamic column
+                                        spectrum_df['spectrum_column'] = unique_col_name + spectrum_df[spectrum_id_col].astype(str)
+
+                                        # Step 5: Pivot
+                                        pivot_df = spectrum_df.pivot_table(
+                                            index='wavenumber',
+                                            columns='spectrum_column',
+                                            values='intensity'
+                                        ).reset_index()
+
+                                        # Step 6: Rename 'wavenumber' to 'RamanShift'
+                                        pivot_df = pivot_df.rename(columns={'wavenumber': 'RamanShift'})
+
+
+                                        # st.write("### Pivoted Spectrum Data")
+                                        # st.dataframe(pivot_df)
+                                        st.session_state.df = pivot_df
+                                        st.session_state.backup = pivot_df
+                                else:
+                                        st.warning("No spectrum data found for this batch.")
+                            except Exception as e:
+                                st.error(f"Error executing query: {e}")
+                            finally:
+                                cur.close()
+                                conn.close()
+                    else:
+                        st.info("Please select exactly one row to view spectrum data.")
+                        
                 else:
                     st.warning("No results found.")
-            st.divider()
-    except:
-        st.warning("Please log in to the database first.")
+
+                    st.divider()
+    # except:
+    #     st.warning("Please log in to the database first.")
+    except Exception as e:
+        print("An error occurred:", e)
 
 
 ############

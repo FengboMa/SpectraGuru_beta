@@ -408,10 +408,24 @@ else:
             if st.session_state.baselineremoval_function == "ModPoly":
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:] - st.session_state.df.iloc[:, 1:].apply( lambda col: function.ModPoly(col.values, 
                                                                                                                             degree=st.session_state.baselineremoval_ModPoly_degree))
-            if st.session_state.baselineremoval_function == "Gaussian-Lorentzian Fitting":
-                st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:] - st.session_state.df.iloc[:, 1:].apply( lambda col: function.GLF(col.values, 
-                                                                                                                                                    wavenumber=st.session_state.df.iloc[:, 0].values,
-                                                                                                                                                    fitting_ranges=st.session_state.fitting_ranges))
+            # if st.session_state.baselineremoval_function == "Gaussian-Lorentzian Fitting":
+            #     st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:] - st.session_state.df.iloc[:, 1:].apply( lambda col: function.GLF(col.values, 
+            #                                                                                                                                         wavenumber=st.session_state.df.iloc[:, 0].values,
+            #                                                                                                                                         fitting_ranges=st.session_state.fitting_ranges))
+            try:
+                if st.session_state.baselineremoval_function == "Gaussian-Lorentzian Fitting":
+                    st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:] - st.session_state.df.iloc[:, 1:].apply(
+                        lambda col: function.GLF(
+                            col.values,
+                            wavenumber=st.session_state.df.iloc[:, 0].values,
+                            fitting_ranges=st.session_state.fitting_ranges
+                        )
+                    )
+            except AttributeError as e:
+                if "fitting_ranges" in str(e):
+                    st.error("⚠️ Please go to the sidebar and apply your fitting ranges before applying the Gaussian-Lorentzian Fitting.")
+                else:
+                    raise e
         # normalization act
         if st.session_state.normalization_act:
             if st.session_state.normalization_function == "Normalize by area":

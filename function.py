@@ -167,7 +167,7 @@ def despikeSpec_v2(spectra, ramanshift, threshold=100, zap_length=11, window_sta
         spec = spectra.iloc[:, i].values
         for j in looprange:
             # Get current Raman shift at start of window
-            rs_val = ramanshift[j]
+            rs_val = ramanshift.iloc[j]
 
             # Apply despiking only if current Raman shift is within the window
             if window_start is not None and window_end is not None:
@@ -930,3 +930,5 @@ def GLF(spectra_col, wavenumber, fitting_ranges, max_iteration=1000000, gtol=1e-
     # Predict baseline and subtract
     baseline = mixed_gauss_lorentz(wavenumber, *popt)
     return baseline
+
+#####

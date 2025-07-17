@@ -150,6 +150,7 @@ else:
                             height=600,
                             title='Spectra Data Plot'
                         )
+                # avg_stats_base = function.style_altair_chart(avg_stats_base)
                 # st.altair_chart(avg_stats_base, use_container_width=False)  
                 show_plot = avg_stats_base
                 function.log_plot_generated_count(st.session_state.log_file_path)
@@ -169,7 +170,7 @@ else:
                         )
                 
                 # st.altair_chart(avg_stats_base2, use_container_width=False)   
-                show_plot = avg_stats_base2 
+                show_plot = avg_stats_base2
                 function.log_plot_generated_count(st.session_state.log_file_path)
             
             if st.session_state.stats_avg_std_act:
@@ -201,9 +202,11 @@ else:
                 combined_plot = alt.vconcat(show_plot, std_plot).resolve_scale(
                                                 x='shared'  # Share the x-axis between the plots
                                             )
+                combined_plot = function.style_altair_chart(combined_plot)
                 st.altair_chart(combined_plot, use_container_width=False)
                 function.log_plot_generated_count(st.session_state.log_file_path)
-            else:    
+            else:
+                show_plot = function.style_altair_chart(show_plot)    
                 st.altair_chart(show_plot, use_container_width=False)
             
             stats_download_df = st.session_state.df_stats
@@ -277,7 +280,7 @@ else:
 
             # Combine the plots
             confidence_plot = confidence_interval + mean_line
-            
+            confidence_plot = function.style_altair_chart(confidence_plot)
             st.altair_chart(confidence_plot, use_container_width=False)
             function.log_plot_generated_count(st.session_state.log_file_path)
 
@@ -417,6 +420,7 @@ else:
                     )
 
             # Display the heatmap
+            combined = function.style_altair_chart(combined)
             st.altair_chart(combined, use_container_width=False)
             function.log_plot_generated_count(st.session_state.log_file_path)
             
@@ -590,16 +594,21 @@ else:
                 y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
                 tooltip=[alt.Tooltip('Ramanshift', title='Raman shift/cm^-1'),
                         alt.Tooltip('Intensity', title='Intensity/a.u.')]
+            ).properties(
+                width=1300,
+                height=600,
+                title='Spectra Average Data Plot'
             )
 
             # Step 5: Combine the base plot and peak markers
-            interactive_plot = avg_stats_base2 + peak_markers
-
-            # Step 6: Enable interactive features
-            interactive_plot = interactive_plot.interactive()
+            interactive_plot = (avg_stats_base2 + peak_markers).properties(
+                width=1300,
+                height=600
+            ).interactive()
+            interactive_plot = function.style_altair_chart(interactive_plot)
 
             # Display the plot in Streamlit (if using Streamlit)
-            st.altair_chart(interactive_plot)
+            st.altair_chart(interactive_plot, use_container_width=False)
             
             
             st.write("**Peak property**")
@@ -673,11 +682,11 @@ else:
                                                                                                 horizontal_pc=st.session_state.PCA_horizontal,
                                                                                                 vertical_pc=st.session_state.PCA_vertical)
             
-            st.altair_chart(pc1_vs_pc2_plot)
+            st.altair_chart(function.style_altair_chart(pc1_vs_pc2_plot), use_container_width=False)
             function.log_plot_generated_count(st.session_state.log_file_path)
-            st.altair_chart(cumulative_variance_plot)
+            st.altair_chart(function.style_altair_chart(cumulative_variance_plot),use_container_width=False)
             function.log_plot_generated_count(st.session_state.log_file_path)
-            st.altair_chart(loading_plot)
+            st.altair_chart(function.style_altair_chart(loading_plot), use_container_width=False)   
             function.log_plot_generated_count(st.session_state.log_file_path)
             
             st.write(pca_result_df)

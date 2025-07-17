@@ -932,3 +932,18 @@ def GLF(spectra_col, wavenumber, fitting_ranges, max_iteration=1000000, gtol=1e-
     return baseline
 
 #####
+def style_altair_chart(chart):
+    return chart.configure_axis(
+        labelFontSize=16,
+        titleFontSize=16,
+        labelColor='#31333F',
+        titleColor='#31333F'
+    ).configure_legend(
+        labelFontSize=16,
+        titleFontSize=16,
+        labelColor='#31333F',
+        titleColor='#31333F'
+    ).configure_title(
+        fontSize=18,
+        color='#31333F'
+    )

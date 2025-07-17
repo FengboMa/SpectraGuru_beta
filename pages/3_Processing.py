@@ -683,18 +683,19 @@ else:
                     height=600,
                     title='Spectra Data Plot'
                 ).interactive()
+                base = function.style_altair_chart(base)
                 return base
             
-            st.write("xxxxx")
+            # st.write("xxxxx")
             
             if "temp" in st.session_state:
                 data_melted = melt_and_filter_data(st.session_state.temp, x_axis)
             
             cached_plot = generate_altair_plot(data_melted)
-            st.write("yyyyy")
+            # st.write("yyyyy")
             # Display Plot
             st.altair_chart(cached_plot, use_container_width=False)
-            st.write("zzzzz")
+            # st.write("zzzzz")
             function.log_plot_generated_count(st.session_state.log_file_path)
             
         elif mode_option == True:
@@ -722,16 +723,17 @@ else:
                     height=600,
                     title='Spectra Data Plot'
                 )
+                base = function.style_altair_chart(base)
                 return base
             
             if "temp" in st.session_state:
                 data_melted = melt_and_filter_data(st.session_state.temp, x_axis)
             
             cached_plot = generate_altair_plot_fastmode(data_melted)
-            st.write("1111")
+            # st.write("1111")
             # Display Plot
             st.altair_chart(cached_plot, use_container_width=False)
-            st.write("2222")
+            # st.write("2222")
             function.log_plot_generated_count(st.session_state.log_file_path)
             # # Define the nearest selection
             # # click = alt.selection_single(nearest=True, on='click')

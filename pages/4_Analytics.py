@@ -632,76 +632,77 @@ else:
         
         elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)-Beta":
             
-            st.write("**Principal Components Analysis (PCA)-Beta**")
-            
             temp = st.session_state.temp.drop(columns=['Average'])
-            
-            # st.write(temp)
-            
-            if st.session_state.PCA_label:
-                
-                st.write("""
-                         **Please use the following dataframe editor to insert labels**
-                        
-                         *Note:* 
-                        
-                        - The first column is the Raman shift name.                        
-                        - Please modify the second column (Label) to set the label for each Raman shift.                         
-                        - Double click on the cell to edit the value.                        
-                        - Drag bottom right corner of the cell to copy the value to other cells.                        
-                        - Only accept integer value.
-                        
-                        """)
-                label_df =  pd.DataFrame({
-                                temp.columns[0]: temp.columns[1:],
-                                'Label': 1,
-                                'Note': ' '
-                            })
-                
-                column_config = {
-                    'Label': st.column_config.NumberColumn(
-                        label='Label',
-                        format='%d',  # Display as integer
-                        step=1,       # Increment step
-                    )
-                }
+            label_df = st.session_state.get('label_df')
 
-                # Display the data editor with configurations
-                edit_label = st.data_editor(
-                    label_df,
-                    column_config=column_config,
-                    disabled=[label_df.columns[0]],  # Disable editing for the first column
-                    num_rows='fixed'  # Prevent adding or deleting rows
+            if label_df is None:
+                st.warning(
+                    "No label table found in session. "
+                    "Proceeding with default label = 1 for every spectrum."
                 )
-            else:
-                edit_label = None
-            
-            pca_result_df, pc1_vs_pc2_plot, cumulative_variance_plot,loading_plot = function.pca(temp, 
-                                                                                                is_label=st.session_state.PCA_label,
-                                                                                                label_df=edit_label, 
-                                                                                                horizontal_pc=st.session_state.PCA_horizontal,
-                                                                                                vertical_pc=st.session_state.PCA_vertical)
-            
+                label_df = pd.DataFrame({
+                    'Spectrum': temp.columns[1:],   # skip RamanShift column
+                    'Label':    1,
+                    'Note':     ' '
+                })
+
+            # ------------------------------------------------------------------
+            # Ensure the first column is named exactly 'Ramanshift'
+            # ------------------------------------------------------------------
+            first_col = label_df.columns[0]
+            if first_col != 'Ramanshift':
+                label_df = label_df.rename(columns={first_col: 'Ramanshift'})
+            # ------------------------------------------------------------------
+            # 2.  Run PCA (function.pca expects label_df and a flag)
+            # ------------------------------------------------------------------
+            pca_result_df, pc1_vs_pc2_plot, cumulative_variance_plot, loading_plot = (
+                function.pca(
+                    temp,
+                    is_label=True,                 # always True now – we supply label_df
+                    label_df=label_df,
+                    horizontal_pc=st.session_state.PCA_horizontal,
+                    vertical_pc=st.session_state.PCA_vertical
+                )
+            )
+            # Re‑order columns for display
+            desired_first = ['Ramanshift', 'Label']
+            pc_cols = [c for c in pca_result_df.columns if c.upper().startswith('PC')]
+            other_cols = [c for c in pca_result_df.columns
+                        if c not in desired_first + pc_cols]
+
+            new_order = [c for c in desired_first if c in pca_result_df.columns] + pc_cols + other_cols
+            pca_result_df = pca_result_df[new_order]
+
+            # ------------------------------------------------------------------
+            # 3.  Display results
+            # ------------------------------------------------------------------
             st.altair_chart(function.style_altair_chart(pc1_vs_pc2_plot), use_container_width=False)
             function.log_plot_generated_count(st.session_state.log_file_path)
-            st.altair_chart(function.style_altair_chart(cumulative_variance_plot),use_container_width=False)
+
+            st.altair_chart(function.style_altair_chart(cumulative_variance_plot), use_container_width=False)
             function.log_plot_generated_count(st.session_state.log_file_path)
-            st.altair_chart(function.style_altair_chart(loading_plot), use_container_width=False)   
+
+            st.altair_chart(function.style_altair_chart(loading_plot), use_container_width=False)
             function.log_plot_generated_count(st.session_state.log_file_path)
-            
+            st.write("### PCA Scores Table")
             st.write(pca_result_df)
         
         elif st.session_state.stats_plot_select == "T-SNE Dimensionality Reduction-Beta":
             
-            st.write("**T-distributed Stochastic Neighbor Embedding (t-SNE) Dimensionality Reduction - Beta**")
-            
+            st.write("**T‑Distributed Stochastic Neighbor Embedding (t‑SNE) ‑ Beta**")
+
             temp = st.session_state.temp.drop(columns=['Average'])
-            
-            # st.write(temp.set_index('Ramanshift').T)
-            
-            tsne_df, tsne_plot = function.tsne(temp, perplexity=st.session_state.tSNE_perplexity,n_iter=st.session_state.tSNE_n_iter)
-            
-            st.altair_chart(tsne_plot)
+
+            label_df = st.session_state.get('label_df')   # could be None
+
+            tsne_df, tsne_plot = function.tsne(
+                temp,
+                perplexity=st.session_state.tSNE_perplexity,
+                n_iter=st.session_state.tSNE_n_iter,
+                label_df=label_df
+            )
+            st.altair_chart(function.style_altair_chart(tsne_plot), use_container_width=False)
+
             function.log_plot_generated_count(st.session_state.log_file_path)
-            
+
             st.write(tsne_df)

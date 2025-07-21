@@ -774,7 +774,7 @@ def pca(df, label_df=None, is_label=False, horizontal_pc='PC1', vertical_pc='PC2
 
     # Step 6: Generate the Altair plots
     # Conditional color encoding based on is_label flag
-    color_encoding = alt.Color('Label:N', title='Group Label') if is_label else alt.value('blue')
+    color_encoding = alt.Color('Label:N', title='Class Label') if is_label else alt.value('blue')
 
     pc1_vs_pc2_plot = alt.Chart(pca_df).mark_circle(size=60).encode(
         x=horizontal_pc,
@@ -835,39 +835,80 @@ def pca(df, label_df=None, is_label=False, horizontal_pc='PC1', vertical_pc='PC2
     return pca_df, pc1_vs_pc2_plot, cumulative_variance_plot, loading_plot
 
 
-def tsne(df, perplexity=5, n_iter=500):
+def tsne(df, perplexity=5, n_iter=500, label_df=None):
+    """
+    df         : wide table with first column 'Ramanshift' and spectra columns
+    label_df   : DataFrame with columns ['Ramanshift', 'Label', ...]
+                 (spectrum names in col‑0, integer labels in 'Label')
+    """
     import altair as alt
     from sklearn.manifold import TSNE
     from sklearn.preprocessing import StandardScaler
     import pandas as pd
-    
-    random_state=42
-    
-    # Step 1: Transpose and standardize the data
-    df_transposed = df.set_index('Ramanshift').T
-    scaler = StandardScaler()
-    df_standardized = scaler.fit_transform(df_transposed)
-    
-    # Step 2: Apply t-SNE
-    tsne = TSNE(n_components=2, perplexity=perplexity, n_iter=n_iter,random_state=random_state)
-    tsne_components = tsne.fit_transform(df_standardized)
-    
-    # Step 3: Create a DataFrame for t-SNE results
-    tsne_df = pd.DataFrame(tsne_components, columns=['TSNE1', 'TSNE2'])
-    tsne_df['Ramanshift'] = df_transposed.index
+    import numpy as np
 
-    # Step 4: Generate the Altair plot
-    tsne_plot = alt.Chart(tsne_df).mark_circle(size=60).encode(
-        x='TSNE1',
-        y='TSNE2',
-        tooltip=['Ramanshift', 'TSNE1', 'TSNE2']
-    ).properties(
-        title='t-SNE Visualization',
-        width=1000,
-        height=500
+    random_state = 42
+
+    # ------------------------------------------------------------------
+    # 1.  Transpose and standardize (rows = spectra, cols = shift bins)
+    # ------------------------------------------------------------------
+    df_t = df.set_index('Ramanshift').T           # rows are spectra
+    scaler = StandardScaler()
+    X_std = scaler.fit_transform(df_t)
+
+    # ------------------------------------------------------------------
+    # 2.  t‑SNE
+    # ------------------------------------------------------------------
+    tsne = TSNE(
+        n_components=2,
+        perplexity=perplexity,
+        n_iter=n_iter,
+        random_state=random_state
+    )
+    tsne_components = tsne.fit_transform(X_std)
+
+    tsne_df = pd.DataFrame(
+        tsne_components,
+        columns=['TSNE1', 'TSNE2']
+    )
+    tsne_df['Ramanshift'] = df_t.index            # spectrum names
+
+    # ------------------------------------------------------------------
+    # 3.  Attach labels
+    # ------------------------------------------------------------------
+    if label_df is not None:
+        # Ensure join key is named exactly 'Ramanshift'
+        first_col = label_df.columns[0]
+        if first_col != 'Ramanshift':
+            label_df = label_df.rename(columns={first_col: 'Ramanshift'})
+
+        tsne_df = tsne_df.merge(
+            label_df[['Ramanshift', 'Label']],
+            on='Ramanshift',
+            how='left'
+        )
+    else:
+        tsne_df['Label'] = 1
+
+    # ------------------------------------------------------------------
+    # 4.  Altair plot with color by Label
+    # ------------------------------------------------------------------
+    tsne_plot = (
+        alt.Chart(tsne_df)
+        .mark_circle(size=60)
+        .encode(
+            x='TSNE1',
+            y='TSNE2',
+            color=alt.Color('Label:N', legend=alt.Legend(title='Class Label')),
+            tooltip=['Ramanshift', 'TSNE1', 'TSNE2', 'Label']
+        )
+        .properties(
+            title='t‑SNE Visualization',
+            width=1000,
+            height=500
+        )
     )
 
-    # Step 5: Return t-SNE results and visualization
     return tsne_df, tsne_plot
 
 def mixed_gauss_lorentz(x, A, v_g, sigma_g, L, v_l, sigma_l, I_0):

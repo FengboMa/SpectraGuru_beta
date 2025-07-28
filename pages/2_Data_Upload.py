@@ -594,199 +594,9 @@ elif selection == 1:
                 # If an error occurs, print the error
                 st.warning(f"The error occurred")
 
-    def get_db_connection():
-        return psycopg2.connect(
-            dbname="SpectraGuruDB",
-            user=st.session_state.user,
-            password=st.session_state.passkey,
-            host="localhost",
-            port="5432"
-        )
 
-    def compute_relevance(row, keywords):
-        return sum(
-            any(str(keyword).lower() in str(cell).lower() for cell in row)
-            for keyword in keywords
-        )
 
-    # Search Function
-    def search_database(search_term, data_type_filter="Both"):
-        try:
-            conn = get_db_connection()
-            cur = conn.cursor()
-
-            search_pattern = f"%{search_term}%"
-
-            # Query 1 (Search in Raw Data)
-            query1 = """
-            SELECT 
-                u.user_id AS user_id,
-                u.name AS user_name,
-                u.location AS user_location,
-                u.institution AS user_institution,
-                p.project_id AS project_id,
-                p.project_name AS project_name,
-                p.start_date AS project_start_date,
-                p.source AS project_source,
-                db.batch_id AS batch_id,  -- Keep consistent column names
-                db.upload_date AS batch_upload_date,
-                db.analyte_name AS batch_analyte_name,
-                db.buffer_solution AS batch_buffer_solution,
-                db.instrument_details AS batch_instrument_details,
-                db.wavelength AS batch_wavelength,
-                db.power AS batch_power,
-                db.concentration AS batch_concentration,
-                db.concentration_units AS batch_concentration_units,
-                db.accumulation_time AS batch_accumulation_time,
-                db.experimental_procedure AS batch_experimental_procedure,
-                db.substrate_type AS batch_substrate_type,
-                db.substrate_material AS batch_substrate_material,
-                db.preparation_conditions AS batch_preparation_conditions,
-                db.data_type AS batch_data_type,
-                db.notes AS batch_notes
-            FROM
-                "user" u
-            JOIN
-                project_user pu ON u.user_id = pu.user_id
-            JOIN
-                "project" p ON p.project_id = pu.project_id
-            JOIN
-                project_batch pb ON p.project_id = pb.project_id
-            JOIN
-                "databatch" db ON db.batch_id = pb.batch_id
-            WHERE 
-                COALESCE(u.name, '') ILIKE %s OR 
-                COALESCE(u.location, '') ILIKE %s OR 
-                COALESCE(u.institution, '') ILIKE %s OR 
-                COALESCE(p.project_name, '') ILIKE %s OR
-                COALESCE(p.source, '') ILIKE %s OR 
-                COALESCE(db.analyte_name, '') ILIKE %s OR
-                COALESCE(db.buffer_solution, '') ILIKE %s OR
-                COALESCE(db.instrument_details, '') ILIKE %s OR
-                COALESCE(db.experimental_procedure, '') ILIKE %s OR
-                COALESCE(db.substrate_type, '') ILIKE %s OR
-                COALESCE(db.substrate_material, '') ILIKE %s OR
-                COALESCE(db.preparation_conditions, '') ILIKE %s OR
-                COALESCE(db.data_type, '') ILIKE %s OR
-                COALESCE(db.notes, '') ILIKE %s;
-            """
-
-            # Query 2 (Search in Standard Data)
-            query2 = """
-            SELECT 
-                u.user_id AS user_id,
-                u.name AS user_name,
-                u.location AS user_location,
-                u.institution AS user_institution,
-                p.project_id AS project_id,
-                p.project_name AS project_name,
-                p.start_date AS project_start_date,
-                p.source AS project_source,
-                db.batch_standard_id AS batch_id,  -- Keep column names same as Query 1
-                db.upload_date AS batch_upload_date,
-                db.analyte_name AS batch_analyte_name,
-                db.buffer_solution AS batch_buffer_solution,
-                db.instrument_details AS batch_instrument_details,
-                db.wavelength AS batch_wavelength,
-                db.power AS batch_power,
-                db.concentration AS batch_concentration,
-                db.concentration_units AS batch_concentration_units,
-                db.accumulation_time AS batch_accumulation_time,
-                db.experimental_procedure AS batch_experimental_procedure,
-                db.substrate_type AS batch_substrate_type,
-                db.substrate_material AS batch_substrate_material,
-                db.preparation_conditions AS batch_preparation_conditions,
-                db.data_type AS batch_data_type,
-                db.notes AS batch_notes
-            FROM
-                "user" u
-            JOIN
-                project_user pu ON u.user_id = pu.user_id
-            JOIN
-                "project" p ON p.project_id = pu.project_id
-            JOIN
-                project_batch_standard pb ON p.project_id = pb.project_id
-            JOIN
-                "databatch_standard" db ON db.batch_standard_id = pb.batch_standard_id
-            WHERE 
-                COALESCE(u.name, '') ILIKE %s OR 
-                COALESCE(u.location, '') ILIKE %s OR 
-                COALESCE(u.institution, '') ILIKE %s OR 
-                COALESCE(p.project_name, '') ILIKE %s OR
-                COALESCE(p.source, '') ILIKE %s OR 
-                COALESCE(db.analyte_name, '') ILIKE %s OR
-                COALESCE(db.buffer_solution, '') ILIKE %s OR
-                COALESCE(db.instrument_details, '') ILIKE %s OR
-                COALESCE(db.experimental_procedure, '') ILIKE %s OR
-                COALESCE(db.substrate_type, '') ILIKE %s OR
-                COALESCE(db.substrate_material, '') ILIKE %s OR
-                COALESCE(db.preparation_conditions, '') ILIKE %s OR
-                COALESCE(db.data_type, '') ILIKE %s OR
-                COALESCE(db.notes, '') ILIKE %s;
-            """
-            results = []
-
-            keywords = search_term.strip().split()
-            if not keywords:
-                return pd.DataFrame()
-
-            # Get full OR pattern
-            like_patterns = [f"%{k}%" for k in keywords]
-
-            # Set of results
-            results = []
-
-            for pattern in like_patterns:
-                params = (pattern,) * 14
-
-                if data_type_filter in ["Both", "Raw Data Only"]:
-                    cur.execute(query1, params)
-                    rows1 = cur.fetchall()
-                    columns1 = [desc[0] for desc in cur.description]
-                    df1 = pd.DataFrame(rows1, columns=columns1)
-                    results.append(df1)
-
-                if data_type_filter in ["Both", "Standard Data Only"]:
-                    cur.execute(query2, params)
-                    rows2 = cur.fetchall()
-                    columns2 = [desc[0] for desc in cur.description]
-                    df2 = pd.DataFrame(rows2, columns=columns2)
-                    results.append(df2)
-
-            if results:
-                result_df = pd.concat(results, ignore_index=True).drop_duplicates()
-
-                # Add a relevance score column
-                result_df["relevance"] = result_df.apply(lambda row: compute_relevance(row, keywords), axis=1)
-
-                # Sort by relevance descending
-                result_df = result_df.sort_values(by="relevance", ascending=False)
-            else:
-                result_df = pd.DataFrame()
-
-            
-            return result_df
-            # # Execute Query 1
-            # cur.execute(query1, (search_pattern,) * 14)  # Pass correct number of parameters
-            # rows1 = cur.fetchall()
-            # columns1 = [desc[0] for desc in cur.description]
-            # df1 = pd.DataFrame(rows1, columns=columns1)
-
-            # # Execute Query 2
-            # cur.execute(query2, (search_pattern,) * 14)  # Pass correct number of parameters
-            # rows2 = cur.fetchall()
-            # columns2 = [desc[0] for desc in cur.description]
-            # df2 = pd.DataFrame(rows2, columns=columns2)
-
-            # # Merge results into one DataFrame
-            # result_df = pd.concat([df1, df2], ignore_index=True)
-
-            # conn.close()
-            # return result_df
-        except Exception as e:
-            conn.close()
-            st.error(f"Error fetching search results: {e}")
-            return pd.DataFrame()
+    
     # st.write(st.session_state.connection)
     try:
         if st.session_state.connection:
@@ -806,11 +616,12 @@ elif selection == 1:
                 data_type_filter = "Both"
 
             search_query = st.text_input("Enter a keyword to search in the database:", "")
-
+            st.write("### Search Results")
 
 
             if search_query:
-                results = search_database(search_query, data_type_filter)
+                results = function.search_database(search_query, data_type_filter)
+                
                 if not results.empty:
                     st.write("### Search Results")
                     
@@ -846,7 +657,7 @@ elif selection == 1:
                         batch_data_type = selected_row['batch_data_type']  # Assume you store this info
 
                         # Connect to the database
-                        conn = get_db_connection()
+                        conn = function.get_db_connection()
                         cur = conn.cursor()
 
                         if batch_data_type.lower() == 'raw':

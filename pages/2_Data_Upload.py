@@ -574,7 +574,6 @@ elif selection == 1:
         st.session_state.user = st.text_input("User")
         st.session_state.passkey = st.text_input("Passkey")
 
-        # Every form must have a submit button.
         submitted = st.form_submit_button("Log in")
         if submitted:
             try:
@@ -582,168 +581,173 @@ elif selection == 1:
                     dbname="SpectraGuruDB",
                     user=st.session_state.user,
                     password=st.session_state.passkey,
-                    host="localhost",  # Use "localhost" for local database
-                    port="5432"  # Default PostgreSQL port
+                    host="localhost",
+                    port="5432"
                 )
                 cur = conn.cursor()
-                
                 st.info("Connection to the database was successful.")
                 st.session_state.connection = True
+            except Exception as e:
+                st.warning(f"Database connection error: {e}")
 
-            except:
-                # If an error occurs, print the error
-                st.warning(f"The error occurred")
-
-
-
-    
-    # st.write(st.session_state.connection)
     try:
         if st.session_state.connection:
             st.write("## Database Search")
 
             advanced_search = st.checkbox("Advanced Search")
-
-            # If advanced search is selected, show additional filters
-            if advanced_search:
-                data_type_filter = st.radio(
-                    "Select Data Type to Search:",
-                    options=["Both", "Raw Data Only", "Standard Data Only"],
-                    index=0,
-                    horizontal=True
-                )
-            else:
-                data_type_filter = "Both"
+            data_type_filter = (
+                st.radio("Select Data Type to Search:", ["Both", "Raw Data Only", "Standard Data Only"], index=0, horizontal=True)
+                if advanced_search else "Both"
+            )
 
             search_query = st.text_input("Enter a keyword to search in the database:", "")
             st.write("### Search Results")
 
-
             if search_query:
                 results = function.search_database(search_query, data_type_filter)
-                
+
                 if not results.empty:
                     st.write("### Search Results")
-                    
-                    # Step 1: Add 'Select' column (default to False)
                     results['Select'] = False
-
-                    # Step 2: Reorder columns
                     columns_order = ['Select', 'batch_id', 'batch_analyte_name', 'batch_data_type'] + \
                                     [col for col in results.columns if col not in ['Select', 'batch_id', 'batch_analyte_name', 'batch_data_type']]
                     results = results[columns_order]
 
-                    # Step 3: Display editable dataframe with checkbox
                     edited_results = st.data_editor(results, column_config={"Select": st.column_config.CheckboxColumn()})
-                    
-                    
-
-                    # Step 4: Filter selected rows and print
                     selected_rows = edited_results[edited_results['Select'] == True]
+
                     if not selected_rows.empty:
                         selected_strings = [
                             f"{row['batch_analyte_name']}_{row['batch_data_type']}_{row['batch_id']}"
                             for _, row in selected_rows.iterrows()
                         ]
-                        selection_output = "; ".join(selected_strings)
-                        st.write(f"You selected: {selection_output}")
+                        st.write(f"You selected: {'; '.join(selected_strings)}")
+
+                        if len(selected_rows) > 10:
+                            st.error("You selected too many records. Please select no more than 10.")
+                            st.stop()
+                        elif len(selected_rows) > 5:
+                            st.warning("Selecting more than 5 records may result in slower performance.")
+
+                        st.warning(
+                            "All selected spectra will be **automatically interpolated** to a "
+                            "common 1 cm⁻¹ Raman‑shift grid and then **cropped** to the shared "
+                            "overlap range before further analysis. "
+                            "This ensures every spectrum has identical x‑axis values."
+                        )
                     else:
                         st.write("No rows selected.")
-                    
-                    # if st.button("Get Data"):
-                    if len(selected_rows) == 1:
-                        selected_row = selected_rows.iloc[0]
-                        batch_id = selected_row['batch_id']
-                        batch_data_type = selected_row['batch_data_type']  # Assume you store this info
 
-                        # Connect to the database
-                        conn = function.get_db_connection()
-                        cur = conn.cursor()
-
-                        if batch_data_type.lower() == 'raw':
-                            query = """
-                                SELECT sd.*
-                                FROM spectrum s
-                                JOIN spectrum_data sd ON s.spectrum_id = sd.spectrum_id
-                                WHERE s.batch_id = %s
-                            """
-                            # st.write(batch_data_type)
-                            # st.write('xxxx')
-                        elif batch_data_type.lower() == 'standard':
-                            query = """
-                                SELECT sds.*
-                                FROM spectrum_standard ss
-                                JOIN spectrum_data_standard sds ON ss.spectrum_standard_id = sds.spectrum_standard_id
-                                WHERE ss.batch_standard_id = %s
-                            """
-                            # st.write(batch_data_type)
-                            # st.write('yyyy')
-                        else:
-                            st.warning("Unknown batch data type selected.")
-                            query = None
-                        if st.button("Get Data"):
+                    if not selected_rows.empty and st.button("Get Data"):
+                        with st.spinner("Fetching and processing spectrum data..."):
                             try:
-                                if query:
-                                    with st.status("Fetching spectrum data from SpectraGuru Database...", expanded=True) as status:
-                                        cur.execute(query, (int(batch_id),))
-                                        spectrum_data = cur.fetchall()
-                                        column_names = [desc[0] for desc in cur.description]
-                                        spectrum_df = pd.DataFrame(spectrum_data, columns=column_names)
-                                        # st.write('zzzz')
-                                    if not spectrum_df.empty:
-                                        # st.write('111')
-                                        # st.write("### Spectrum Data")
-                                        # st.dataframe(spectrum_df)
-                                        # st.divider()
-                                        spectrum_id_col = spectrum_df.columns[1]  # Second column
+                                conn = function.get_db_connection()
+                                cur = conn.cursor()
+                                class_dfs = []
 
-                                        # Step 2: Check required columns
-                                        required_cols = ['wavenumber', 'intensity']
-                                        missing_cols = [col for col in required_cols if col not in spectrum_df.columns]
-                                        if missing_cols:
-                                            raise ValueError(f"Missing columns in spectrum_df: {missing_cols}")
+                                for _, selected_row in selected_rows.iterrows():
+                                    batch_id = selected_row['batch_id']
+                                    batch_data_type = selected_row['batch_data_type'].lower()
 
-                                        # Step 3: Build the unique column name from selected_row
-                                        unique_col_name = (
-                                            f"{selected_row['batch_analyte_name']}_"
-                                            f"{selected_row['batch_data_type']}_"
-                                            f"{selected_row['batch_id']}_"
+                                    if batch_data_type == 'raw':
+                                        query = """
+                                            SELECT sd.*
+                                            FROM spectrum s
+                                            JOIN spectrum_data sd ON s.spectrum_id = sd.spectrum_id
+                                            WHERE s.batch_id = %s
+                                        """
+                                    elif batch_data_type == 'standard':
+                                        query = """
+                                            SELECT sds.*
+                                            FROM spectrum_standard ss
+                                            JOIN spectrum_data_standard sds ON ss.spectrum_standard_id = sds.spectrum_standard_id
+                                            WHERE ss.batch_standard_id = %s
+                                        """
+                                    else:
+                                        st.warning(f"Unknown data type: {batch_data_type} for batch {batch_id}")
+                                        continue
+
+                                    cur.execute(query, (int(batch_id),))
+                                    data = cur.fetchall()
+                                    if not data:
+                                        continue
+
+                                    col_names = [desc[0] for desc in cur.description]
+                                    df = pd.DataFrame(data, columns=col_names)
+
+                                    spectrum_id_col = df.columns[1]
+                                    unique_label = (
+                                        f"{selected_row['batch_analyte_name']}_"
+                                        f"{selected_row['batch_data_type']}_"
+                                        f"{selected_row['batch_id']}_"
+                                    )
+                                    df['spectrum_column'] = unique_label + df[spectrum_id_col].astype(str)
+
+                                    pivot_df = df.pivot_table(
+                                        index='wavenumber',
+                                        columns='spectrum_column',
+                                        values='intensity'
+                                    ).reset_index()
+                                    pivot_df = pivot_df.rename(columns={'wavenumber': 'RamanShift'})
+
+                                    class_dfs.append((unique_label.rstrip("_"), pivot_df))
+
+                                import numpy as np
+                                from scipy.interpolate import interp1d
+
+                                mins = []
+                                maxs = []
+                                for _, df in class_dfs:
+                                    x = pd.to_numeric(df['RamanShift'], errors='coerce')
+                                    mins.append(x.min())
+                                    maxs.append(x.max())
+                                common_min = int(np.ceil(max(mins)))
+                                common_max = int(np.floor(min(maxs)))
+
+                                if common_min >= common_max:
+                                    st.error("Selected spectra have no overlapping Raman‑shift range.")
+                                    st.stop()
+
+                                ref_x = np.arange(common_min, common_max + 1, 1)
+                                st.session_state.interpolation_ref_x = ref_x
+
+                                interpolated_class_dfs = []
+                                for label, df in class_dfs:
+                                    x_orig = pd.to_numeric(df['RamanShift'], errors='coerce')
+                                    interp_df = pd.DataFrame({'RamanShift': ref_x})
+
+                                    for col in df.columns[1:]:
+                                        f = interp1d(
+                                            x_orig,
+                                            pd.to_numeric(df[col], errors='coerce'),
+                                            kind='linear',
+                                            bounds_error=False,
+                                            fill_value="extrapolate"
                                         )
+                                        interp_df[col] = f(ref_x)
 
-                                        # Step 4: Append the spectrum ID from the dynamic column
-                                        spectrum_df['spectrum_column'] = unique_col_name + spectrum_df[spectrum_id_col].astype(str)
+                                    rename_map = {c: f"{label}__{c}" for c in interp_df.columns[1:]}
+                                    interp_df.rename(columns=rename_map, inplace=True)
+                                    interpolated_class_dfs.append(interp_df)
 
-                                        # Step 5: Pivot
-                                        pivot_df = spectrum_df.pivot_table(
-                                            index='wavenumber',
-                                            columns='spectrum_column',
-                                            values='intensity'
-                                        ).reset_index()
+                                combined_df = (
+                                    pd.concat([df.set_index('RamanShift') for df in interpolated_class_dfs], axis=1)
+                                    .reset_index()
+                                    .drop_duplicates()
+                                )
 
-                                        # Step 6: Rename 'wavenumber' to 'RamanShift'
-                                        pivot_df = pivot_df.rename(columns={'wavenumber': 'RamanShift'})
+                                st.session_state.df = combined_df
+                                st.session_state.backup = combined_df
+                                st.success(f"{len(class_dfs)} spectra sets loaded and merged.")
 
-
-                                        # st.write("### Pivoted Spectrum Data")
-                                        # st.dataframe(pivot_df)
-                                        st.session_state.df = pivot_df
-                                        st.session_state.backup = pivot_df
-                                else:
-                                        st.warning("No spectrum data found for this batch.")
                             except Exception as e:
                                 st.error(f"Error executing query: {e}")
                             finally:
                                 cur.close()
                                 conn.close()
-                    else:
-                        st.info("Please select exactly one row to view spectrum data.")
-                        
                 else:
                     st.warning("No results found.")
-
                     st.divider()
-    # except:
-    #     st.warning("Please log in to the database first.")
     except Exception as e:
         print("An error occurred:", e)
 

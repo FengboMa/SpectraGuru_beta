@@ -1013,6 +1013,8 @@ def search_database(search_term, data_type_filter="Both"):
     # import psycopg2
     import streamlit as st
     # import numpy as np
+    conn = None
+    cur  = None
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -1170,6 +1172,12 @@ def search_database(search_term, data_type_filter="Both"):
         return result_df
 
     except Exception as e:
-        conn.close()
         st.error(f"Error fetching search results: {e}")
         return pd.DataFrame()
+
+    finally:
+        # Always close what *was* successfully opened
+        if cur is not None:
+            cur.close()
+        if conn is not None:
+            conn.close()

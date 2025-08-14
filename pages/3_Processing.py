@@ -749,6 +749,7 @@ else:
         csv = download_df(st.session_state.df)
         current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
         download_file_name = f"data_{current_time}.csv"
+        download_plot_name = f"spectra_plot_{current_time}.png"
 
         st.download_button(
             label="Download data as CSV",
@@ -756,6 +757,15 @@ else:
             file_name=download_file_name,
             mime="text/csv",
         )
+        
+        png_bytes = function.make_matplotlib_png(data_melted, x_axis)
+        st.download_button(
+            "Download plot (PNG, 600 dpi)",
+            data=png_bytes,
+            file_name=download_plot_name,
+            mime="image/png",
+            use_container_width=False,
+    )
         
         if st.session_state.outlierremoval_act:
             st.write("**Following spectra has been detect and removed by outlier removal function**")

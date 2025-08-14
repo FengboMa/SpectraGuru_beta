@@ -1047,7 +1047,8 @@ def search_database(search_term, data_type_filter="Both"):
             db.substrate_material AS batch_substrate_material,
             db.preparation_conditions AS batch_preparation_conditions,
             db.data_type AS batch_data_type,
-            db.notes AS batch_notes
+            db.notes AS batch_notes,
+            db.spectrum_count AS batch_spectrum_count
         FROM
             "user" u
         JOIN
@@ -1101,7 +1102,8 @@ def search_database(search_term, data_type_filter="Both"):
             db.substrate_material AS batch_substrate_material,
             db.preparation_conditions AS batch_preparation_conditions,
             db.data_type AS batch_data_type,
-            db.notes AS batch_notes
+            db.notes AS batch_notes,
+            db.spectrum_count AS batch_spectrum_count
         FROM
             "user" u
         JOIN
@@ -1181,3 +1183,97 @@ def search_database(search_term, data_type_filter="Both"):
             cur.close()
         if conn is not None:
             conn.close()
+
+# Better plot downloading
+def make_matplotlib_png(data, x_col,
+                        plot_width_in=8.0, legend_width_in=4.5, height_in=6.0,
+                        legend_fontsize=11):
+    import io
+    import matplotlib.pyplot as plt
+    from matplotlib.ticker import AutoMinorLocator
+    import streamlit as st
+    """
+    Return a publication-ready PNG (bytes) from `data`.
+    Expects columns: [x_col, 'Intensity', 'Sample ID'].
+    Style: Times New Roman, no title, inward ticks + minors, boxed axes,
+    rainbow colors; 'Average' plotted last as dashed black.
+    """
+    # set + later restore rcParams so we don't leak styles
+    old_rc = plt.rcParams.copy()
+    try:
+        plt.rcParams.update({
+            "font.family": "Times New Roman",
+            "font.size": 14,
+            "axes.labelsize": 18,
+            "xtick.labelsize": 16,
+            "ytick.labelsize": 16,
+            "axes.linewidth": 1.2,
+            "xtick.direction": "in",
+            "ytick.direction": "in",
+            "xtick.major.size": 6,
+            "xtick.minor.size": 3,
+            "ytick.major.size": 6,
+            "ytick.minor.size": 3,
+            "legend.frameon": False,
+            "savefig.dpi": 600,
+        })
+
+        # --- figure with two columns: left=plot (fixed width), right=legend (extra width)
+        fig = plt.figure(figsize=(plot_width_in + legend_width_in, height_in), constrained_layout=False)
+        gs = fig.add_gridspec(nrows=1, ncols=2, width_ratios=[plot_width_in, legend_width_in])
+        ax = fig.add_subplot(gs[0, 0])
+        ax_leg = fig.add_subplot(gs[0, 1])
+        ax_leg.axis("off")  # legend-only area
+
+        # Spines & ticks: boxed spines; ticks only bottom/left
+        for s in ("top", "right", "left", "bottom"):
+            ax.spines[s].set_visible(True)
+            ax.spines[s].set_linewidth(1.2)
+        ax.tick_params(axis="both", which="both",
+                       bottom=True, left=True, top=False, right=False,
+                       direction="in")
+
+        # Order samples so 'Average' is plotted last
+        sids = list(dict.fromkeys(data["Sample ID"].astype(str)))
+        sids = [s for s in sids if s != "Average"] + (["Average"] if "Average" in sids else [])
+
+        # Rainbow colors for non-average lines
+        n_nonavg = max(1, len([s for s in sids if s != "Average"]))
+        cmap = plt.get_cmap("rainbow")
+        ci = 0
+
+        for sid in sids:
+            d = data[data["Sample ID"].astype(str) == sid].sort_values(by=x_col)
+            if d.empty:
+                continue
+            if sid == "Average":
+                ax.plot(d[x_col], d["Intensity"], "--", linewidth=2.4, color="black", label=sid, zorder=3)
+            else:
+                ax.plot(d[x_col], d["Intensity"], "-", linewidth=1.6, alpha=0.98,
+                        color=cmap(ci / (n_nonavg - 1 if n_nonavg > 1 else 1)), label=sid)
+                ci += 1
+
+        # Labels (no title)
+        ax.set_xlabel("Raman shift (cm$^{-1}$)")
+        ax.set_ylabel("Intensity (a.u.)")
+
+        # Minor ticks
+        ax.xaxis.set_minor_locator(AutoMinorLocator())
+        ax.yaxis.set_minor_locator(AutoMinorLocator())
+
+        # Build legend in the dedicated right panel (so it doesn't push the plot)
+        handles, labels = ax.get_legend_handles_labels()
+        if handles:
+            ax_leg.legend(handles, labels, loc="center left", fontsize=legend_fontsize,
+                          ncol=1, handlelength=2.5, borderaxespad=0.0, frameon=False)
+
+        # Keep margins tidy, leave small gap between plot and legend column
+        fig.subplots_adjust(left=0.10, right=0.98, bottom=0.12, top=0.98, wspace=0.05)
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight")
+        plt.close(fig)
+        buf.seek(0)
+        return buf.getvalue()
+    finally:
+        plt.rcParams.update(old_rc)

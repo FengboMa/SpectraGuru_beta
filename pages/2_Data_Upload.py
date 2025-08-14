@@ -151,6 +151,10 @@ n_classes = st.number_input(
 )
 st.divider()
 
+# === NEW: initialize global selection counters (total spectra across expanders)
+if 'selected_counts' not in st.session_state:
+    st.session_state.selected_counts = {}   # {class_idx: total_spectra_in_that_class}
+
 # --- Data format options ---
 FORMAT_OPTIONS = {
     "Multi TXT (two-column, common x)": {"kind": "multi_txt", "multi": True,  "types": ["txt"]},
@@ -196,6 +200,13 @@ for idx in range(int(n_classes)):
         if df_cached is not None:
             st.success(f"{class_label} already loaded. Shape: {df_cached.shape}")
             st.dataframe(df_cached.head())
+
+            # NEW: count spectra columns for cached data and store for this class
+            manual_count = max(0, df_cached.shape[1] - 1)  # minus RamanShift
+            st.session_state.selected_counts[idx] = manual_count
+            total_selected_preview = sum(st.session_state.selected_counts.values())
+            st.caption(f"This class: **{manual_count}** spectra · Total: **{total_selected_preview} / 1000**")
+
             class_labels.append(class_label)
             class_dfs.append((class_label, df_cached))
             continue
@@ -268,14 +279,28 @@ for idx in range(int(n_classes)):
                 st.success(f"{class_label} loaded. Shape: {df_this.shape}")
                 st.dataframe(df_this.head())
                 st.session_state[cache_key] = df_this
+
+                # NEW: manual uploads contribute to the global total
+                manual_count = max(0, df_this.shape[1] - 1)  # minus RamanShift
+                st.session_state.selected_counts[idx] = manual_count
+                prospective_total = sum(st.session_state.selected_counts.values())
+                st.caption(f"This class: **{manual_count}** spectra · Total (all classes): **{prospective_total} / 1000**")
+                if prospective_total > 1000:
+                    st.error("Total selected spectra exceed **1000**. Remove data to proceed.")
+                    all_ready = False
+                elif prospective_total > 500:
+                    st.warning("Total selected spectra exceed **500**. Processing may be slow.")
             else:
                 st.info("Waiting for format & upload." if fmt else "Select a format.")
+                # ensure this class doesn't count yet
+                st.session_state.selected_counts[idx] = 0
 
         # ======================= 2-B. DATABASE QUERY ======================
         else:
             if not st.session_state.db_logged_in:
                 st.warning("Please log in to the database above before querying.")
                 all_ready = False
+                st.session_state.selected_counts[idx] = 0
             else:
                 advanced_search = st.checkbox("Advanced Search", key=pkey(f"adv_{idx}"))
                 data_type_filter = (
@@ -294,25 +319,47 @@ for idx in range(int(n_classes)):
                     results = function.search_database(search_query, data_type_filter)
                     if not results.empty:
                         results['Select'] = False
-                        cols = ['Select', 'batch_id', 'batch_analyte_name', 'batch_data_type']
+                        cols = ['Select', 'batch_id', 'batch_analyte_name', 'batch_data_type', 'batch_spectrum_count', 'batch_concentration', 'batch_concentration_units']
                         results = results[cols + [c for c in results.columns if c not in cols]]
                         edited_results = st.data_editor(
                             results,
                             column_config={"Select": st.column_config.CheckboxColumn()}
                         )
                         selected_rows = edited_results[edited_results['Select']]
-                        if len(selected_rows) > 5:
-                            st.error("Please select **no more than 5** records for this class.")
-                            all_ready = False
-                        elif len(selected_rows) == 0:
-                            st.info("Tick up to 5 rows for this class, then click Get Data.")
+
+                        # NEW: compute spectra count for this class from DB selection
+                        if 'batch_spectrum_count' in selected_rows.columns:
+                            class_sel_count = int(selected_rows['batch_spectrum_count'].fillna(0).sum())
+                        else:
+                            class_sel_count = int(len(selected_rows))
+
+                        # Compute the prospective global total (include this class’s current selection)
+                        other_total = sum(v for k, v in st.session_state.selected_counts.items() if k != idx)
+                        prospective_total = other_total + class_sel_count
+
+                        # Store/update this class’s current selection count
+                        st.session_state.selected_counts[idx] = class_sel_count
+
+                        if class_sel_count == 0:
+                            st.info("Select at least one batch for this class.")
                             all_ready = False
                         else:
-                            sel_preview = ", ".join(
-                                f"{r['batch_analyte_name']}_{r['batch_id']}" for _, r in selected_rows.iterrows()
-                            )
+                            sel_preview = ", ".join(f"{r['batch_analyte_name']}_{r['batch_id']}" for _, r in selected_rows.iterrows())
                             st.write(f"Selected: {sel_preview}")
-                            if st.button("Get Data", key=pkey(f"getdata_{idx}")):
+                            st.caption(f"This class: **{class_sel_count}** spectra · Total (all classes): **{prospective_total} / 1000**")
+
+                            # Global safeguards
+                            if prospective_total > 1000:
+                                st.error("Total selected spectra exceed **1000**. Reduce your selection to enable **Get Data**.")
+                                allow_get = False
+                                all_ready = False
+                            else:
+                                if prospective_total > 500:
+                                    st.warning("Total selected spectra exceed **500**. Processing may be slow.")
+                                allow_get = True
+
+                            # Only show the button if allowed under the global rule
+                            if allow_get and st.button("Get Data", key=pkey(f"getdata_{idx}")):
                                 with st.spinner("Fetching and processing spectrum data..."):
                                     try:
                                         conn = st.session_state.connection
@@ -320,7 +367,6 @@ for idx in range(int(n_classes)):
 
                                         for _, sel in selected_rows.iterrows():
                                             cur = conn.cursor()
-
                                             batch_id   = sel['batch_id']
                                             batch_type = sel['batch_data_type'].lower()
 
@@ -331,6 +377,7 @@ for idx in range(int(n_classes)):
                                                     WHERE s.batch_id = %s
                                                 """
                                             else:  # standard
+                                            # NOTE: use the standard tables
                                                 query = """
                                                     SELECT sds.* FROM spectrum_standard ss
                                                     JOIN spectrum_data_standard sds
@@ -338,10 +385,8 @@ for idx in range(int(n_classes)):
                                                     WHERE ss.batch_standard_id = %s
                                                 """
 
-                                            # ---------------- fetch & build dataframe ----------------
                                             cur.execute(query, (int(batch_id),))
-
-                                            col_names = [d[0] for d in cur.description]   # ← grab BEFORE closing
+                                            col_names = [d[0] for d in cur.description]
                                             data      = cur.fetchall()
                                             cur.close()
 
@@ -350,7 +395,7 @@ for idx in range(int(n_classes)):
                                                 continue
 
                                             df_raw          = pd.DataFrame(data, columns=col_names)
-                                            spectrum_id_col = df_raw.columns[1]           # second col is id
+                                            spectrum_id_col = df_raw.columns[1]
                                             prefix = f"{sel['batch_analyte_name']}_{batch_id}_"
                                             df_raw['spectrum_column'] = prefix + df_raw[spectrum_id_col].astype(str)
 
@@ -368,7 +413,6 @@ for idx in range(int(n_classes)):
                                             x_vals = pd.to_numeric(pivot_df['RamanShift'])
                                             mins.append(x_vals.min())
                                             maxs.append(x_vals.max())
-
 
                                         if not data_dfs:
                                             st.warning("No usable spectra fetched.")
@@ -397,20 +441,22 @@ for idx in range(int(n_classes)):
                                                     interp_dfs.append(interp_df.set_index('RamanShift'))
                                                 df_this = (
                                                     pd.concat(interp_dfs, axis=1)
-                                                      .reset_index().drop_duplicates()
+                                                    .reset_index().drop_duplicates()
                                                 )
                                                 st.success(f"Fetched {len(data_dfs)} batch(es) for {class_label}.")
                                                 st.dataframe(df_this.head())
                                                 st.session_state[cache_key] = df_this
                                     except Exception as e:
-                                        st.error(f"Database error: {e}")
+                                        st.error(f"Error fetching data: {e}")
                                         all_ready = False
                     else:
                         st.warning("No search results found.")
                         all_ready = False
+                        st.session_state.selected_counts[idx] = 0
                 else:
                     st.info("Enter a keyword to search the database.")
                     all_ready = False
+                    st.session_state.selected_counts[idx] = 0
 
         # 3. Book-keeping -------------------------------------------------
         class_labels.append(class_label)
@@ -418,7 +464,19 @@ for idx in range(int(n_classes)):
         if df_this is None:
             all_ready = False
 
+# --- Global selection summary (after loop) -----------------------------------
+total_selected = sum(st.session_state.selected_counts.values()) if 'selected_counts' in st.session_state else 0
+st.markdown(f"**Total selected spectra across all classes:** {total_selected} / 1000")
+if total_selected > 1000:
+    st.error("Reduce your total below **1000** to proceed.")
+elif total_selected > 500:
+    st.warning("Total exceeds **500**; processing may be slow.")
+
 # --- Interpolate and combine classes ----------------------------------------
+# Guard against proceeding if total over 1000
+if total_selected > 1000:
+    all_ready = False
+
 if all_ready and all(df is not None for _, df in class_dfs):
     st.success(f"All {n_classes} classes loaded successfully.")
     mins, maxs = [], []

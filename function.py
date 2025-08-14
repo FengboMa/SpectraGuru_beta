@@ -16,7 +16,7 @@ def wide_space_default():
 # Reset button function
 def reset_processing():
     import streamlit as st
-    st.session_state.df = st.session_state.backup
+    st.session_state.df = st.session_state.backup.copy()
     st.session_state.interpolation_act = False
     st.session_state.crop_act = False
     st.session_state.smoothening_act = False
@@ -155,6 +155,35 @@ def despikeSpec(spectra, ramanshift, threshold=100, zap_length=11):
 
     return new_spectra
 
+def despikeSpec_v2(spectra, ramanshift, threshold=100, zap_length=11, window_start=None, window_end=None):
+    import numpy as np
+    import pandas as pd
+
+    new_spectra = pd.DataFrame(np.ones_like(spectra.values), columns=spectra.columns, index=spectra.index)
+    looprange = np.arange(len(ramanshift) - zap_length)
+    comprange = np.arange(zap_length)
+
+    for i in range(len(spectra.columns)):
+        spec = spectra.iloc[:, i].values
+        for j in looprange:
+            # Get current Raman shift at start of window
+            rs_val = ramanshift.iloc[j]
+
+            # Apply despiking only if current Raman shift is within the window
+            if window_start is not None and window_end is not None:
+                if not (window_start <= rs_val <= window_end):
+                    continue  # Skip this point if outside the window
+
+            scn = np.array([spec[j + k] for k in comprange])
+            line = np.array([k * (scn[-1] - scn[0]) / zap_length + scn[0] for k in comprange])
+            resid = scn - line
+            for k in comprange:
+                if resid[k] > threshold:
+                    spec[j + k] = line[k]
+
+        new_spectra.iloc[:, i] = spec
+
+    return new_spectra
 # Smoothening
 def savgol_filter_spectra (spectra, window_length = 15, polyorder = 2):
     from scipy.signal import savgol_filter
@@ -633,55 +662,143 @@ def hierarchical_clustering_tree(df):
     # Return the figure
     return fig
 
-def pca(df, horizontal_pc='PC1', vertical_pc='PC2'):
+# def pca1(df, horizontal_pc='PC1', vertical_pc='PC2'):
     
+#     import altair as alt
+#     from sklearn.preprocessing import StandardScaler
+#     from sklearn.decomposition import PCA
+#     import pandas as pd
+#     # Step 1: Drop non-numeric or irrelevant columns
+#     df_transposed = df.set_index('Ramanshift').T
+
+    
+#     scaler = StandardScaler()
+#     df_standardized = scaler.fit_transform(df_transposed)
+    
+#     # Step 3: Apply PCA
+#     pca = PCA()
+#     pca_components = pca.fit_transform(df_standardized)
+#     explained_variance = pca.explained_variance_ratio_.cumsum()
+    
+#     # Create a DataFrame for PCA results
+#     pca_df = pd.DataFrame(pca_components, columns=[f'PC{i+1}' for i in range(pca_components.shape[1])])
+#     pca_df['Ramanshift'] = df_transposed.index
+
+#     # Step 4: Generate the Altair plots
+#     # Plot 1: PC1 vs PC2
+#     pc1_vs_pc2_plot = alt.Chart(pca_df).mark_circle(size=60).encode(
+#         x=horizontal_pc,
+#         y=vertical_pc,
+#         tooltip=['Ramanshift', horizontal_pc, vertical_pc]
+#     ).properties(
+#         title=f'PCA: {horizontal_pc} vs {vertical_pc}',
+#         width=1000,
+#         height=500
+#     )
+
+#     # Plot 2: Cumulative Variance Explained
+
+#     explained_variance_df = pd.DataFrame({
+#         'Component': [f'PC{i+1}' for i in range(len(explained_variance))],
+#         'Cumulative Variance': explained_variance
+#     })
+
+#     # Convert the 'Component' column to a categorical type with the correct order
+#     explained_variance_df['Component'] = pd.Categorical(
+#         explained_variance_df['Component'],
+#         categories=[f'PC{i+1}' for i in range(len(explained_variance))],
+#         ordered=True
+#     )
+
+#     # Plot with Altair
+#     cumulative_variance_plot = alt.Chart(explained_variance_df).mark_line(point=True).encode(
+#         x=alt.X('Component', title='Principal Component'),
+#         y=alt.Y('Cumulative Variance', title='Cumulative Variance Explained')
+#     ).properties(
+#         title='Cumulative Variance Explained by Principal Components',
+#         width=1000,
+#         height=500
+#     )
+#     # Plot 3: Loading Plot for PC1 and PC2
+#     loadings = pca.components_[:3]
+#     feature_names = df_transposed.columns  # Original feature names
+
+#     # Create a DataFrame with the loadings
+#     loading_df = pd.DataFrame({
+#         'Feature': feature_names,
+#         'PC1': loadings[0],
+#         'PC2': loadings[1],
+#         'PC3': loadings[2]
+#     })
+        
+#     loading_df_melted = loading_df.melt(id_vars='Feature', var_name='Principal Component', value_name='Loading')
+    
+#     loading_plot = alt.Chart(loading_df_melted).mark_line(point=False).encode(
+#         x=alt.X('Feature', title='Original Features'),
+#         y=alt.Y('Loading', title='Loading Value'),
+#         color='Principal Component',  # Different colors for PC1, PC2, and PC3
+#     ).properties(
+#         title='Loadings on Principal Components 1, 2, and 3',
+#         width=1000,
+#         height=500
+#     )
+
+#     # Return PCA-transformed data and the plots
+#     return pca_df, pc1_vs_pc2_plot, cumulative_variance_plot, loading_plot
+
+def pca(df, label_df=None, is_label=False, horizontal_pc='PC1', vertical_pc='PC2'):
     import altair as alt
     from sklearn.preprocessing import StandardScaler
     from sklearn.decomposition import PCA
     import pandas as pd
+
     # Step 1: Drop non-numeric or irrelevant columns
     df_transposed = df.set_index('Ramanshift').T
 
-    
+    # Step 2: Standardize the data
     scaler = StandardScaler()
     df_standardized = scaler.fit_transform(df_transposed)
-    
+
     # Step 3: Apply PCA
     pca = PCA()
     pca_components = pca.fit_transform(df_standardized)
     explained_variance = pca.explained_variance_ratio_.cumsum()
-    
-    # Create a DataFrame for PCA results
-    pca_df = pd.DataFrame(pca_components, columns=[f'PC{i+1}' for i in range(pca_components.shape[1])])
-    pca_df['Ramanshift'] = df_transposed.index
 
-    # Step 4: Generate the Altair plots
-    # Plot 1: PC1 vs PC2
+    # Step 4: Create a DataFrame for PCA results
+    pca_df = pd.DataFrame(pca_components, columns=[f'PC{i+1}' for i in range(pca_components.shape[1])])
+    pca_df['Ramanshift'] = df_transposed.index  # Assign sample names
+
+    # Step 5: Merge with label_df if is_label is True
+    if is_label and label_df is not None:
+        pca_df = pca_df.merge(label_df, on='Ramanshift', how='left')
+
+    # Step 6: Generate the Altair plots
+    # Conditional color encoding based on is_label flag
+    color_encoding = alt.Color('Label:N', title='Class Label') if is_label else alt.value('blue')
+
     pc1_vs_pc2_plot = alt.Chart(pca_df).mark_circle(size=60).encode(
         x=horizontal_pc,
         y=vertical_pc,
-        tooltip=['Ramanshift', horizontal_pc, vertical_pc]
+        color=color_encoding,  # Apply conditional coloring
+        tooltip=['Ramanshift', horizontal_pc, vertical_pc] + (['Label'] if is_label else [])
     ).properties(
         title=f'PCA: {horizontal_pc} vs {vertical_pc}',
         width=1000,
         height=500
     )
 
-    # Plot 2: Cumulative Variance Explained
-
+    # Step 7: Cumulative Variance Explained Plot
     explained_variance_df = pd.DataFrame({
         'Component': [f'PC{i+1}' for i in range(len(explained_variance))],
         'Cumulative Variance': explained_variance
     })
 
-    # Convert the 'Component' column to a categorical type with the correct order
     explained_variance_df['Component'] = pd.Categorical(
         explained_variance_df['Component'],
         categories=[f'PC{i+1}' for i in range(len(explained_variance))],
         ordered=True
     )
 
-    # Plot with Altair
     cumulative_variance_plot = alt.Chart(explained_variance_df).mark_line(point=True).encode(
         x=alt.X('Component', title='Principal Component'),
         y=alt.Y('Cumulative Variance', title='Cumulative Variance Explained')
@@ -690,24 +807,24 @@ def pca(df, horizontal_pc='PC1', vertical_pc='PC2'):
         width=1000,
         height=500
     )
-    # Plot 3: Loading Plot for PC1 and PC2
+
+    # Step 8: Loading Plot for PC1, PC2, and PC3
     loadings = pca.components_[:3]
     feature_names = df_transposed.columns  # Original feature names
 
-    # Create a DataFrame with the loadings
     loading_df = pd.DataFrame({
         'Feature': feature_names,
         'PC1': loadings[0],
         'PC2': loadings[1],
         'PC3': loadings[2]
     })
-    
+
     loading_df_melted = loading_df.melt(id_vars='Feature', var_name='Principal Component', value_name='Loading')
-    
+
     loading_plot = alt.Chart(loading_df_melted).mark_line(point=False).encode(
         x=alt.X('Feature', title='Original Features'),
         y=alt.Y('Loading', title='Loading Value'),
-        color='Principal Component',  # Different colors for PC1, PC2, and PC3
+        color='Principal Component'
     ).properties(
         title='Loadings on Principal Components 1, 2, and 3',
         width=1000,
@@ -716,3 +833,447 @@ def pca(df, horizontal_pc='PC1', vertical_pc='PC2'):
 
     # Return PCA-transformed data and the plots
     return pca_df, pc1_vs_pc2_plot, cumulative_variance_plot, loading_plot
+
+
+def tsne(df, perplexity=5, n_iter=500, label_df=None):
+    """
+    df         : wide table with first column 'Ramanshift' and spectra columns
+    label_df   : DataFrame with columns ['Ramanshift', 'Label', ...]
+                 (spectrum names in col‑0, integer labels in 'Label')
+    """
+    import altair as alt
+    from sklearn.manifold import TSNE
+    from sklearn.preprocessing import StandardScaler
+    import pandas as pd
+    import numpy as np
+
+    random_state = 42
+
+    # ------------------------------------------------------------------
+    # 1.  Transpose and standardize (rows = spectra, cols = shift bins)
+    # ------------------------------------------------------------------
+    df_t = df.set_index('Ramanshift').T           # rows are spectra
+    scaler = StandardScaler()
+    X_std = scaler.fit_transform(df_t)
+
+    # ------------------------------------------------------------------
+    # 2.  t‑SNE
+    # ------------------------------------------------------------------
+    tsne = TSNE(
+        n_components=2,
+        perplexity=perplexity,
+        n_iter=n_iter,
+        random_state=random_state
+    )
+    tsne_components = tsne.fit_transform(X_std)
+
+    tsne_df = pd.DataFrame(
+        tsne_components,
+        columns=['TSNE1', 'TSNE2']
+    )
+    tsne_df['Ramanshift'] = df_t.index            # spectrum names
+
+    # ------------------------------------------------------------------
+    # 3.  Attach labels
+    # ------------------------------------------------------------------
+    if label_df is not None:
+        # Ensure join key is named exactly 'Ramanshift'
+        first_col = label_df.columns[0]
+        if first_col != 'Ramanshift':
+            label_df = label_df.rename(columns={first_col: 'Ramanshift'})
+
+        tsne_df = tsne_df.merge(
+            label_df[['Ramanshift', 'Label']],
+            on='Ramanshift',
+            how='left'
+        )
+    else:
+        tsne_df['Label'] = 1
+
+    # ------------------------------------------------------------------
+    # 4.  Altair plot with color by Label
+    # ------------------------------------------------------------------
+    tsne_plot = (
+        alt.Chart(tsne_df)
+        .mark_circle(size=60)
+        .encode(
+            x='TSNE1',
+            y='TSNE2',
+            color=alt.Color('Label:N', legend=alt.Legend(title='Class Label')),
+            tooltip=['Ramanshift', 'TSNE1', 'TSNE2', 'Label']
+        )
+        .properties(
+            title='t‑SNE Visualization',
+            width=1000,
+            height=500
+        )
+    )
+
+    return tsne_df, tsne_plot
+
+def mixed_gauss_lorentz(x, A, v_g, sigma_g, L, v_l, sigma_l, I_0):
+    '''
+    A mixture of Gaussian and Lorentzian function for GLF fitting.
+
+    input
+        x: input wavenumber
+        A: amplitude of the Gaussian function
+        v_g: center of the Gaussian peak
+        sigma_g: standard deviation of the Gaussian function
+        L: area of the Lorentzian function
+        v_l: center of the Lorentzian peak
+        sigma_l: width of the Lorentzian peak
+        I_0: “ground” level of the SERS spectrum at wavenumber x
+
+    output
+        the value of the gaussian-lorentzian function at wavenumber x
+    '''
+    import numpy as np
+    gaussian = A * np.exp(-(x - v_g) ** 2 / (2 * sigma_g ** 2))
+    lorentzian = (2 * L * sigma_l) / (4 * np.pi * ((x - v_l) ** 2) + sigma_l ** 2)
+    return gaussian + lorentzian + I_0
+
+def GLF(spectra_col, wavenumber, fitting_ranges, max_iteration=1000000, gtol=1e-5):
+    """
+    Fits a mixed Gaussian-Lorentzian baseline to a single spectrum column.
+    
+    Parameters:
+        spectra_col: 1D np.array of spectral intensities
+        wavenumber: 1D np.array of wavenumbers (same length as spectra_col)
+        fitting_ranges: list of (start, end) tuples
+        max_iteration: max function evaluations
+        gtol: gradient tolerance
+
+    Returns:
+        corrected_spectrum: spectra_col - fitted_baseline
+    """
+    import numpy as np
+    from scipy.optimize import curve_fit
+
+    # Collect data from fitting ranges
+    x_data = []
+    y_data = []
+    for start, end in fitting_ranges:
+        mask = (wavenumber >= start) & (wavenumber <= end)
+        x_data.extend(wavenumber[mask])
+        y_data.extend(spectra_col[mask])
+    
+    x_data = np.array(x_data)
+    y_data = np.array(y_data)
+
+    # Initial guess
+    initial_guess = [1, np.mean(x_data), np.std(x_data), 1, np.mean(x_data), np.std(x_data), np.min(y_data)]
+
+    # Fit
+    popt, _ = curve_fit(mixed_gauss_lorentz, x_data, y_data, p0=initial_guess,
+                        maxfev=max_iteration, method='trf', gtol=gtol)
+
+    # Predict baseline and subtract
+    baseline = mixed_gauss_lorentz(wavenumber, *popt)
+    return baseline
+
+#####
+def style_altair_chart(chart):
+    return chart.configure_axis(
+        labelFontSize=16,
+        titleFontSize=16,
+        labelColor='#31333F',
+        titleColor='#31333F'
+    ).configure_legend(
+        labelFontSize=16,
+        titleFontSize=16,
+        labelColor='#31333F',
+        titleColor='#31333F'
+    ).configure_title(
+        fontSize=18,
+        color='#31333F'
+    )
+
+# --------------------  DATA UPLOAD HELPER DISPATCHER  ----------------------
+def get_db_connection():
+    import psycopg2
+    import streamlit as st
+    return psycopg2.connect(
+        dbname="SpectraGuruDB",
+        user=st.session_state.user,
+        password=st.session_state.passkey,
+        host="localhost",
+        port="5432"
+    )
+
+def compute_relevance(row, keywords):
+    return sum(
+        any(str(keyword).lower() in str(cell).lower() for cell in row)
+        for keyword in keywords
+    )
+
+# Search Function
+def search_database(search_term, data_type_filter="Both"):
+    import pandas as pd
+    # import psycopg2
+    import streamlit as st
+    # import numpy as np
+    conn = None
+    cur  = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        search_pattern = f"%{search_term}%"
+
+        # Query 1 (Search in Raw Data)
+        query1 = """
+        SELECT 
+            u.user_id AS user_id,
+            u.name AS user_name,
+            u.location AS user_location,
+            u.institution AS user_institution,
+            p.project_id AS project_id,
+            p.project_name AS project_name,
+            p.start_date AS project_start_date,
+            p.source AS project_source,
+            db.batch_id AS batch_id,  -- Keep consistent column names
+            db.upload_date AS batch_upload_date,
+            db.analyte_name AS batch_analyte_name,
+            db.buffer_solution AS batch_buffer_solution,
+            db.instrument_details AS batch_instrument_details,
+            db.wavelength AS batch_wavelength,
+            db.power AS batch_power,
+            db.concentration AS batch_concentration,
+            db.concentration_units AS batch_concentration_units,
+            db.accumulation_time AS batch_accumulation_time,
+            db.experimental_procedure AS batch_experimental_procedure,
+            db.substrate_type AS batch_substrate_type,
+            db.substrate_material AS batch_substrate_material,
+            db.preparation_conditions AS batch_preparation_conditions,
+            db.data_type AS batch_data_type,
+            db.notes AS batch_notes,
+            db.spectrum_count AS batch_spectrum_count
+        FROM
+            "user" u
+        JOIN
+            project_user pu ON u.user_id = pu.user_id
+        JOIN
+            "project" p ON p.project_id = pu.project_id
+        JOIN
+            project_batch pb ON p.project_id = pb.project_id
+        JOIN
+            "databatch" db ON db.batch_id = pb.batch_id
+        WHERE 
+            COALESCE(u.name, '') ILIKE %s OR 
+            COALESCE(u.location, '') ILIKE %s OR 
+            COALESCE(u.institution, '') ILIKE %s OR 
+            COALESCE(p.project_name, '') ILIKE %s OR
+            COALESCE(p.source, '') ILIKE %s OR 
+            COALESCE(db.analyte_name, '') ILIKE %s OR
+            COALESCE(db.buffer_solution, '') ILIKE %s OR
+            COALESCE(db.instrument_details, '') ILIKE %s OR
+            COALESCE(db.experimental_procedure, '') ILIKE %s OR
+            COALESCE(db.substrate_type, '') ILIKE %s OR
+            COALESCE(db.substrate_material, '') ILIKE %s OR
+            COALESCE(db.preparation_conditions, '') ILIKE %s OR
+            COALESCE(db.data_type, '') ILIKE %s OR
+            COALESCE(db.notes, '') ILIKE %s;
+        """
+
+        # Query 2 (Search in Standard Data)
+        query2 = """
+        SELECT 
+            u.user_id AS user_id,
+            u.name AS user_name,
+            u.location AS user_location,
+            u.institution AS user_institution,
+            p.project_id AS project_id,
+            p.project_name AS project_name,
+            p.start_date AS project_start_date,
+            p.source AS project_source,
+            db.batch_standard_id AS batch_id,  -- Keep column names same as Query 1
+            db.upload_date AS batch_upload_date,
+            db.analyte_name AS batch_analyte_name,
+            db.buffer_solution AS batch_buffer_solution,
+            db.instrument_details AS batch_instrument_details,
+            db.wavelength AS batch_wavelength,
+            db.power AS batch_power,
+            db.concentration AS batch_concentration,
+            db.concentration_units AS batch_concentration_units,
+            db.accumulation_time AS batch_accumulation_time,
+            db.experimental_procedure AS batch_experimental_procedure,
+            db.substrate_type AS batch_substrate_type,
+            db.substrate_material AS batch_substrate_material,
+            db.preparation_conditions AS batch_preparation_conditions,
+            db.data_type AS batch_data_type,
+            db.notes AS batch_notes,
+            db.spectrum_count AS batch_spectrum_count
+        FROM
+            "user" u
+        JOIN
+            project_user pu ON u.user_id = pu.user_id
+        JOIN
+            "project" p ON p.project_id = pu.project_id
+        JOIN
+            project_batch_standard pb ON p.project_id = pb.project_id
+        JOIN
+            "databatch_standard" db ON db.batch_standard_id = pb.batch_standard_id
+        WHERE 
+            COALESCE(u.name, '') ILIKE %s OR 
+            COALESCE(u.location, '') ILIKE %s OR 
+            COALESCE(u.institution, '') ILIKE %s OR 
+            COALESCE(p.project_name, '') ILIKE %s OR
+            COALESCE(p.source, '') ILIKE %s OR 
+            COALESCE(db.analyte_name, '') ILIKE %s OR
+            COALESCE(db.buffer_solution, '') ILIKE %s OR
+            COALESCE(db.instrument_details, '') ILIKE %s OR
+            COALESCE(db.experimental_procedure, '') ILIKE %s OR
+            COALESCE(db.substrate_type, '') ILIKE %s OR
+            COALESCE(db.substrate_material, '') ILIKE %s OR
+            COALESCE(db.preparation_conditions, '') ILIKE %s OR
+            COALESCE(db.data_type, '') ILIKE %s OR
+            COALESCE(db.notes, '') ILIKE %s;
+        """
+        results = []
+
+        keywords = search_term.strip().split()
+        if not keywords:
+            return pd.DataFrame()
+
+        # Get full OR pattern
+        like_patterns = [f"%{k}%" for k in keywords]
+
+        # Set of results
+        results = []
+
+        for pattern in like_patterns:
+            params = (pattern,) * 14
+
+            if data_type_filter in ["Both", "Raw Data Only"]:
+                cur.execute(query1, params)
+                rows1 = cur.fetchall()
+                columns1 = [desc[0] for desc in cur.description]
+                df1 = pd.DataFrame(rows1, columns=columns1)
+                results.append(df1)
+
+            if data_type_filter in ["Both", "Standard Data Only"]:
+                cur.execute(query2, params)
+                rows2 = cur.fetchall()
+                columns2 = [desc[0] for desc in cur.description]
+                df2 = pd.DataFrame(rows2, columns=columns2)
+                results.append(df2)
+
+        if results:
+            result_df = pd.concat(results, ignore_index=True).drop_duplicates()
+
+            # Add a relevance score column
+            result_df["relevance"] = result_df.apply(lambda row: compute_relevance(row, keywords), axis=1)
+
+            # Sort by relevance descending
+            result_df = result_df.sort_values(by="relevance", ascending=False)
+        else:
+            result_df = pd.DataFrame()
+
+        
+        return result_df
+
+    except Exception as e:
+        st.error(f"Error fetching search results: {e}")
+        return pd.DataFrame()
+
+    finally:
+        # Always close what *was* successfully opened
+        if cur is not None:
+            cur.close()
+        if conn is not None:
+            conn.close()
+
+# Better plot downloading
+def make_matplotlib_png(data, x_col,
+                        plot_width_in=8.0, legend_width_in=4.5, height_in=6.0,
+                        legend_fontsize=11):
+    import io
+    import matplotlib.pyplot as plt
+    from matplotlib.ticker import AutoMinorLocator
+    import streamlit as st
+    """
+    Return a publication-ready PNG (bytes) from `data`.
+    Expects columns: [x_col, 'Intensity', 'Sample ID'].
+    Style: Times New Roman, no title, inward ticks + minors, boxed axes,
+    rainbow colors; 'Average' plotted last as dashed black.
+    """
+    # set + later restore rcParams so we don't leak styles
+    old_rc = plt.rcParams.copy()
+    try:
+        plt.rcParams.update({
+            "font.family": "Times New Roman",
+            "font.size": 14,
+            "axes.labelsize": 18,
+            "xtick.labelsize": 16,
+            "ytick.labelsize": 16,
+            "axes.linewidth": 1.2,
+            "xtick.direction": "in",
+            "ytick.direction": "in",
+            "xtick.major.size": 6,
+            "xtick.minor.size": 3,
+            "ytick.major.size": 6,
+            "ytick.minor.size": 3,
+            "legend.frameon": False,
+            "savefig.dpi": 600,
+        })
+
+        # --- figure with two columns: left=plot (fixed width), right=legend (extra width)
+        fig = plt.figure(figsize=(plot_width_in + legend_width_in, height_in), constrained_layout=False)
+        gs = fig.add_gridspec(nrows=1, ncols=2, width_ratios=[plot_width_in, legend_width_in])
+        ax = fig.add_subplot(gs[0, 0])
+        ax_leg = fig.add_subplot(gs[0, 1])
+        ax_leg.axis("off")  # legend-only area
+
+        # Spines & ticks: boxed spines; ticks only bottom/left
+        for s in ("top", "right", "left", "bottom"):
+            ax.spines[s].set_visible(True)
+            ax.spines[s].set_linewidth(1.2)
+        ax.tick_params(axis="both", which="both",
+                       bottom=True, left=True, top=False, right=False,
+                       direction="in")
+
+        # Order samples so 'Average' is plotted last
+        sids = list(dict.fromkeys(data["Sample ID"].astype(str)))
+        sids = [s for s in sids if s != "Average"] + (["Average"] if "Average" in sids else [])
+
+        # Rainbow colors for non-average lines
+        n_nonavg = max(1, len([s for s in sids if s != "Average"]))
+        cmap = plt.get_cmap("rainbow")
+        ci = 0
+
+        for sid in sids:
+            d = data[data["Sample ID"].astype(str) == sid].sort_values(by=x_col)
+            if d.empty:
+                continue
+            if sid == "Average":
+                ax.plot(d[x_col], d["Intensity"], "--", linewidth=2.4, color="black", label=sid, zorder=3)
+            else:
+                ax.plot(d[x_col], d["Intensity"], "-", linewidth=1.6, alpha=0.98,
+                        color=cmap(ci / (n_nonavg - 1 if n_nonavg > 1 else 1)), label=sid)
+                ci += 1
+
+        # Labels (no title)
+        ax.set_xlabel("Raman shift (cm$^{-1}$)")
+        ax.set_ylabel("Intensity (a.u.)")
+
+        # Minor ticks
+        ax.xaxis.set_minor_locator(AutoMinorLocator())
+        ax.yaxis.set_minor_locator(AutoMinorLocator())
+
+        # Build legend in the dedicated right panel (so it doesn't push the plot)
+        handles, labels = ax.get_legend_handles_labels()
+        if handles:
+            ax_leg.legend(handles, labels, loc="center left", fontsize=legend_fontsize,
+                          ncol=1, handlelength=2.5, borderaxespad=0.0, frameon=False)
+
+        # Keep margins tidy, leave small gap between plot and legend column
+        fig.subplots_adjust(left=0.10, right=0.98, bottom=0.12, top=0.98, wspace=0.05)
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight")
+        plt.close(fig)
+        buf.seek(0)
+        return buf.getvalue()
+    finally:
+        plt.rcParams.update(old_rc)

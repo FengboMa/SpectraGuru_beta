@@ -54,11 +54,11 @@ hide_close_button_css = """
 st.markdown(hide_close_button_css, unsafe_allow_html=True)
 modal = Modal(
     "Welcome to SpectraGuru", 
-    key="welcome_modal",
+    key="welcome_modal", 
     
     # Optional
-    padding=30, 
-    max_width=750 
+    padding=20, 
+    max_width=600 
 )
 
 st.html(
@@ -77,11 +77,8 @@ if 'popup_closed' not in st.session_state:
 if not st.session_state.popup_closed:
     with modal.container():
         st.info('SpectraGuru is still under development. Current version: SpectraGuru ver. 1.1.1')
-        
-        st.write("")
         st.write("Thanks for visiting SpectraGuru, a spectroscopy processing and visualization tool.")
         st.write("If you encounter a problem, please send an email to Fengbo.Ma@uga.edu")
-        st.divider()
         st.write("**:arrow_upper_left: After clicking Start button below, then navigate to Data Upload located at the top of the sidebar to begin!**")
         
         # check = st.button('Start', type='primary')

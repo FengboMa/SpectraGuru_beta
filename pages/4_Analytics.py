@@ -30,7 +30,8 @@ if 'df' in st.session_state:
                                 "Correlation Heatmap",
                                 "Peak Identification and Stats",
                                 "Hierarchically-clustered Heatmap",
-                                "Principal Components Analysis (PCA)"),
+                                "Principal Components Analysis (PCA)-Beta",
+                                "T-SNE Dimensionality Reduction-Beta"),
                         key="stats_plot_select")
 
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
@@ -92,14 +93,17 @@ if 'df' in st.session_state:
             st.session_state.peak_iden_width_p = st.session_state.peak_iden_width
     elif st.session_state.stats_plot_select == "Hierarchically-clustered Heatmap":
         st.sidebar.toggle(label="Show clustered heatmap", value=True, key="HCA_heatmap")
-    elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)":
+    elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)-Beta":
         num_rows = st.session_state.df.shape[1] - 1
         pc_list = [f"PC{i+1}" for i in range(num_rows)] 
         st.sidebar.selectbox(label="Select Horizontal PC", options=pc_list, index=0,key="PCA_horizontal")
         st.sidebar.selectbox(label="Select Vertical PC", options=pc_list, index=1,key="PCA_vertical")
-        st.sidebar.toggle(label="Coloring by Hierarchically-clustering", value=True, key="PCA_HCA")
-                
-# st.sidebar.button(label="Plot", key='stats_plot',  type='primary')
+        st.sidebar.toggle(label="Coloring by setting labels", value=True, key="PCA_label")
+    elif st.session_state.stats_plot_select == "T-SNE Dimensionality Reduction-Beta":
+        max_perplexity = st.session_state.df.shape[1] - 1
+        st.sidebar.select_slider(label="t-SNE Perplexity", options=list(range(1,max_perplexity)),value=2, key="tSNE_perplexity")
+        st.sidebar.select_slider(label="t-SNE Maximum number of iterations", options=list(range(200,1001)), value=500, key="tSNE_n_iter")
+
 # Stats section layout
 """"""""""""
 # Main Page
@@ -146,6 +150,7 @@ else:
                             height=600,
                             title='Spectra Data Plot'
                         )
+                # avg_stats_base = function.style_altair_chart(avg_stats_base)
                 # st.altair_chart(avg_stats_base, use_container_width=False)  
                 show_plot = avg_stats_base
                 function.log_plot_generated_count(st.session_state.log_file_path)
@@ -165,7 +170,7 @@ else:
                         )
                 
                 # st.altair_chart(avg_stats_base2, use_container_width=False)   
-                show_plot = avg_stats_base2 
+                show_plot = avg_stats_base2
                 function.log_plot_generated_count(st.session_state.log_file_path)
             
             if st.session_state.stats_avg_std_act:
@@ -197,9 +202,11 @@ else:
                 combined_plot = alt.vconcat(show_plot, std_plot).resolve_scale(
                                                 x='shared'  # Share the x-axis between the plots
                                             )
+                combined_plot = function.style_altair_chart(combined_plot)
                 st.altair_chart(combined_plot, use_container_width=False)
                 function.log_plot_generated_count(st.session_state.log_file_path)
-            else:    
+            else:
+                show_plot = function.style_altair_chart(show_plot)    
                 st.altair_chart(show_plot, use_container_width=False)
             
             stats_download_df = st.session_state.df_stats
@@ -273,7 +280,7 @@ else:
 
             # Combine the plots
             confidence_plot = confidence_interval + mean_line
-            
+            confidence_plot = function.style_altair_chart(confidence_plot)
             st.altair_chart(confidence_plot, use_container_width=False)
             function.log_plot_generated_count(st.session_state.log_file_path)
 
@@ -413,6 +420,7 @@ else:
                     )
 
             # Display the heatmap
+            combined = function.style_altair_chart(combined)
             st.altair_chart(combined, use_container_width=False)
             function.log_plot_generated_count(st.session_state.log_file_path)
             
@@ -555,10 +563,12 @@ else:
             
             peak_df = pd.concat([peak_df, properties_df], axis=1)
             
+            # st.write(peak_df)
+            
             if st.session_state.peak_iden_auto:
                 peak_df = peak_df.sort_values(by='prominences', ascending=False).head(st.session_state.peak_iden_auto_num)
             else:
-                peak_df = peak_df.sort_values(by='prominences', ascending=False)
+                peak_df = peak_df.sort_values(by='Intensity', ascending=False)
 
             
             # Step 3: Create the base interactive plot
@@ -584,16 +594,21 @@ else:
                 y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
                 tooltip=[alt.Tooltip('Ramanshift', title='Raman shift/cm^-1'),
                         alt.Tooltip('Intensity', title='Intensity/a.u.')]
+            ).properties(
+                width=1300,
+                height=600,
+                title='Spectra Average Data Plot'
             )
 
             # Step 5: Combine the base plot and peak markers
-            interactive_plot = avg_stats_base2 + peak_markers
-
-            # Step 6: Enable interactive features
-            interactive_plot = interactive_plot.interactive()
+            interactive_plot = (avg_stats_base2 + peak_markers).properties(
+                width=1300,
+                height=600
+            ).interactive()
+            interactive_plot = function.style_altair_chart(interactive_plot)
 
             # Display the plot in Streamlit (if using Streamlit)
-            st.altair_chart(interactive_plot)
+            st.altair_chart(interactive_plot, use_container_width=False)
             
             
             st.write("**Peak property**")
@@ -615,21 +630,79 @@ else:
         
             function.log_plot_generated_count(st.session_state.log_file_path)
         
-        elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)":
-            
-            st.write("**Principal Components Analysis (PCA)**")
+        elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)-Beta":
             
             temp = st.session_state.temp.drop(columns=['Average'])
-            
-            # st.write(temp.set_index('Ramanshift').T)
-            
-            pca_result_df, pc1_vs_pc2_plot, cumulative_variance_plot,loading_plot = function.pca(temp, horizontal_pc=st.session_state.PCA_horizontal,vertical_pc=st.session_state.PCA_vertical)
-            
-            st.altair_chart(pc1_vs_pc2_plot)
+            label_df = st.session_state.get('label_df')
+
+            if label_df is None:
+                st.warning(
+                    "No label table found in session. "
+                    "Proceeding with default label = 1 for every spectrum."
+                )
+                label_df = pd.DataFrame({
+                    'Spectrum': temp.columns[1:],   # skip RamanShift column
+                    'Label':    1,
+                    'Note':     ' '
+                })
+
+            # ------------------------------------------------------------------
+            # Ensure the first column is named exactly 'Ramanshift'
+            # ------------------------------------------------------------------
+            first_col = label_df.columns[0]
+            if first_col != 'Ramanshift':
+                label_df = label_df.rename(columns={first_col: 'Ramanshift'})
+            # ------------------------------------------------------------------
+            # 2.  Run PCA (function.pca expects label_df and a flag)
+            # ------------------------------------------------------------------
+            pca_result_df, pc1_vs_pc2_plot, cumulative_variance_plot, loading_plot = (
+                function.pca(
+                    temp,
+                    is_label=True,                 # always True now – we supply label_df
+                    label_df=label_df,
+                    horizontal_pc=st.session_state.PCA_horizontal,
+                    vertical_pc=st.session_state.PCA_vertical
+                )
+            )
+            # Re‑order columns for display
+            desired_first = ['Ramanshift', 'Label']
+            pc_cols = [c for c in pca_result_df.columns if c.upper().startswith('PC')]
+            other_cols = [c for c in pca_result_df.columns
+                        if c not in desired_first + pc_cols]
+
+            new_order = [c for c in desired_first if c in pca_result_df.columns] + pc_cols + other_cols
+            pca_result_df = pca_result_df[new_order]
+
+            # ------------------------------------------------------------------
+            # 3.  Display results
+            # ------------------------------------------------------------------
+            st.altair_chart(function.style_altair_chart(pc1_vs_pc2_plot), use_container_width=False)
             function.log_plot_generated_count(st.session_state.log_file_path)
-            st.altair_chart(cumulative_variance_plot)
+
+            st.altair_chart(function.style_altair_chart(cumulative_variance_plot), use_container_width=False)
             function.log_plot_generated_count(st.session_state.log_file_path)
-            st.altair_chart(loading_plot)
+
+            st.altair_chart(function.style_altair_chart(loading_plot), use_container_width=False)
             function.log_plot_generated_count(st.session_state.log_file_path)
-            
+            st.write("### PCA Scores Table")
             st.write(pca_result_df)
+        
+        elif st.session_state.stats_plot_select == "T-SNE Dimensionality Reduction-Beta":
+            
+            st.write("**T‑Distributed Stochastic Neighbor Embedding (t‑SNE) ‑ Beta**")
+
+            temp = st.session_state.temp.drop(columns=['Average'])
+
+            label_df = st.session_state.get('label_df')   # could be None
+
+            tsne_df, tsne_plot = function.tsne(
+                temp,
+                perplexity=st.session_state.tSNE_perplexity,
+                n_iter=st.session_state.tSNE_n_iter,
+                label_df=label_df
+            )
+            st.altair_chart(function.style_altair_chart(tsne_plot), use_container_width=False)
+
+            function.log_plot_generated_count(st.session_state.log_file_path)
+
+            st.write(tsne_df)

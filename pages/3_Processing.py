@@ -92,14 +92,14 @@ else:
         
         despike_act = st.toggle("Despike", 
                                         value=False, 
-                                        help="Despike(Threshold, Width) Auto-Despikes spectra with old despike script. Replaces regions of spectra which increase more than a (Threshold) over a specified (Scan Width) with a line.", 
+                                        help="**Auto-Despike Method** - Automatically detects and corrects spikes across the entire spectrum. Regions where the signal exceeds a defined threshold within a specified scan width are replaced with linear interpolation. This method  may slightly alter the overall spectrum. \n \n **Manual Despike Method** - Allows users to define a specific window  where despiking is applied. Only spikes within this region are corrected, minimizing unintended effects on the rest of the spectrum.", 
                                         key='despike_act')
         
         if despike_act:
             
-            st.session_state.despike_function = st.selectbox(label="Select your despike Function",  options=["old method","new method"])
+            st.session_state.despike_function = st.selectbox(label="Select your despike Function",  options=["Auto despike method","Manual despike method"])
             
-            if st.session_state.despike_function == "old method":
+            if st.session_state.despike_function == "Auto despike method":
                 # Add more functions to this selectbox if needed
                 st.session_state.despike_act_threshold = st.number_input(label="Despike threshold",
                                                                 min_value = 0, max_value = 1000, value = 300,
@@ -108,7 +108,7 @@ else:
                 st.session_state.despike_act_zap_length = st.number_input(label="Despike zap length / window size",
                                                                 min_value = 0, max_value = 100, value = 11,
                                                                 step = 1, placeholder="Insert a number")
-            elif st.session_state.despike_function == "new method":
+            elif st.session_state.despike_function == "Manual despike method":
                 # Add more functions to this selectbox if needed
                 st.session_state.despike_act_threshold = st.number_input(label="Despike threshold",
                                                                 min_value = 0, max_value = 1000, value = 300,

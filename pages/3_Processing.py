@@ -373,12 +373,12 @@ else:
         
         # despike_act
         if st.session_state.despike_act:
-            if st.session_state.despike_function == "old method":
+            if st.session_state.despike_function == "Auto despike method":
                 st.session_state.df.iloc[:, 1:] = function.despikeSpec(spectra = st.session_state.df.iloc[:, 1:],
                                                                     ramanshift = st.session_state.df.iloc[:, 0],
                                                                     threshold = st.session_state.despike_act_threshold,
                                                                     zap_length = st.session_state.despike_act_zap_length)
-            elif st.session_state.despike_function == "new method":
+            elif st.session_state.despike_function == "Manual despike method":
                 st.session_state.df.iloc[:, 1:] = function.despikeSpec_v2(spectra = st.session_state.df.iloc[:, 1:],
                                                                         ramanshift = st.session_state.df.iloc[:, 0],
                                                                         threshold = st.session_state.despike_act_threshold,

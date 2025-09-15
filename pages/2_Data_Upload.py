@@ -515,7 +515,7 @@ if all_ready and all(df is not None for _, df in class_dfs):
     )
     st.session_state.class_data = interpolated_class_dfs
     st.session_state.df        = combined_df
-    st.session_state.backup    = combined_df
+    st.session_state.backup    = combined_df.copy() 
 
     # --- Label editor ---
     default_lbls_multi = {}
@@ -527,7 +527,7 @@ if all_ready and all(df is not None for _, df in class_dfs):
 elif all_ready and all(df is not None for _, df in class_dfs) and n_classes == 1:
     _, df = class_dfs[0]
     st.session_state.df     = df
-    st.session_state.backup = df
+    st.session_state.backup = df.copy() 
     st.session_state.class_data = class_dfs
     default_lbls_single = {col: 1 for col in df.columns[1:]}
     show_label_editor(df, default_lbls_single)

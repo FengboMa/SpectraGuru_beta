@@ -340,16 +340,16 @@ else:
         if outlierremoval_act:
             # Add more functions to this selectbox if needed
             st.session_state.outlierremoval_act_single_threshold = st.number_input(label="Outlier Removal Single Threshold",
-                                                            min_value = 1, max_value = 20, value = 4,
-                                                            step = 1, placeholder="Insert a number")
+                                                            min_value = 0.01, max_value = 20.00, value = 4.00,
+                                                            step = 0.01, placeholder="Insert a number")
             
             st.session_state.outlierremoval_act_distance_threshold = st.number_input(label="Outlier Removal Distance Threshold",
-                                                            min_value = 1, max_value = 20, value = 6,
-                                                            step = 1, placeholder="Insert a number")
+                                                            min_value = 0.01, max_value = 20.00, value = 6.00,
+                                                            step = 0.01, placeholder="Insert a number")
             
             st.session_state.outlierremoval_act_correlation_threshold = st.number_input(label="Outlier Removal correlation Threshold",
-                                                            min_value = 1, max_value = 20, value = 4,
-                                                            step = 1, placeholder="Insert a number")
+                                                            min_value = 0.01, max_value = 20.00, value = 4.00,
+                                                            step = 0.01, placeholder="Insert a number")
     with st.sidebar:
         pre_processing()
             
@@ -438,7 +438,10 @@ else:
 
         # outlier removal act
         if st.session_state.outlierremoval_act:
-            df_cleaned, st.session_state.remove_outliers_log = function.remove_outliers(st.session_state.df)
+            df_cleaned, st.session_state.remove_outliers_log = function.remove_outliers(st.session_state.df,
+                single_thresh=st.session_state.outlierremoval_act_single_threshold,
+                distance_thresh=st.session_state.outlierremoval_act_distance_threshold,
+                coeff_thresh=st.session_state.outlierremoval_act_correlation_threshold)
             st.session_state.df = pd.concat([st.session_state.df.iloc[:, 0], df_cleaned], axis=1)
         
     
@@ -530,6 +533,7 @@ else:
         
     
     try:
+        st.toast("Processing...", icon="📍")
         # data_melted = st.session_state.temp.melt(id_vars=[x_axis], var_name='Sample ID', value_name='Intensity')
         # # st.session_state.data_melt = data_melted
         # if "Average" in data_melted['Sample ID'].values:

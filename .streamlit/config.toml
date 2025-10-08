@@ -6,4 +6,4 @@ primaryColor="#046307"
 gatherUsageStats = false
 
 [server]
-port = 80
+port = 8501

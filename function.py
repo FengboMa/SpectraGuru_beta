@@ -357,104 +357,57 @@ def ModPoly(input_array, degree=2, repetition=100, gradient=0.001):
 
     return corrected
 
-# User count function
-def log_user_count(log_file_path):
-    import os
-    # Initialize counts
-    counts = {
-        "User": 0,
-        "Plot_Generated": 0,
-        "Spectra_processed": 0
-    }
-    
-    # Read the current counts from the log file
-    if os.path.exists(log_file_path):
-        with open(log_file_path, "r") as file:
-            for line in file:
-                key, value = line.strip().split('\t')
-                counts[key] = int(value)
+# increments the counter for a specified metric in a given log file. Returns the new count and 
+# returns 0 if the keyname does not match any recognizable keyname in the log file.
+def increment_count(log_file_path, keyname, amount=1):
+    try:
+        counts = read_counts(log_file_path)
+        counts[keyname] += amount
+        write_counts(log_file_path, counts)
+        return counts[keyname]
+    except:
+        return 0
 
-    # Increment the user count
-    counts["User"] += 1
-
-    # Write the new counts back to the log file
-    with open(log_file_path, "w") as file:
-        for key, value in counts.items():
-            file.write(f"{key}\t{value}\n")
-    
-    return counts["User"]
-
+# returns a dictionary of all the key-value pairs expressed in a given log file. Log files must
+# take the form:
+#
+# Key_1:[\t]Value_1
+# Key_2:[\t]Value_2
+# ...
 def read_counts(log_file_path):
     import os
-    counts = {
-        "User": 0,
-        "Plot_Generated": 0,
-        "Spectra_processed": 0
-    }
-    
-    # Read the current counts from the log file
+
+    counts = {}
+
     if os.path.exists(log_file_path):
         with open(log_file_path, "r") as file:
             for line in file:
                 key, value = line.strip().split('\t')
-                counts[key] = int(value)
+                counts = {**counts, key: int(value)}
     
     return counts
 
+# writes a counts dictionary to a log file
+def write_counts(log_file_path, counts):
+    import os
+
+    with open(log_file_path, "w") as file:
+        for key, value in counts.items():
+            file.write(f"{key}\t{value}\n")
+
+
+# User count function
+def log_user_count(log_file_path):
+    return increment_count(log_file_path, "User")
+
 # Plot_Generated count function
 def log_plot_generated_count(log_file_path):
-    import os
-    # Initialize counts
-    counts = {
-        "User": 0,
-        "Plot_Generated": 0,
-        "Spectra_processed": 0
-    }
-    
-    # Read the current counts from the log file
-    if os.path.exists(log_file_path):
-        with open(log_file_path, "r") as file:
-            for line in file:
-                key, value = line.strip().split('\t')
-                counts[key] = int(value)
+    return increment_count(log_file_path, "Plot_Generated")
 
-    # Increment the user count
-    counts["Plot_Generated"] += 1
-
-    # Write the new counts back to the log file
-    with open(log_file_path, "w") as file:
-        for key, value in counts.items():
-            file.write(f"{key}\t{value}\n")
-    
-    return counts["Plot_Generated"]
-
-# Plot_Generated count function
+# Spectra_Processed count function
 def log_spectra_processed_count(log_file_path):
-    import os
     import streamlit as st
-    # Initialize counts
-    counts = {
-        "User": 0,
-        "Plot_Generated": 0,
-        "Spectra_Processed": 0
-    }
-    
-    # Read the current counts from the log file
-    if os.path.exists(log_file_path):
-        with open(log_file_path, "r") as file:
-            for line in file:
-                key, value = line.strip().split('\t')
-                counts[key] = int(value)
-
-    # Increment the user count
-    counts["Spectra_Processed"] += st.session_state.df[1:].shape[1]
-
-    # Write the new counts back to the log file
-    with open(log_file_path, "w") as file:
-        for key, value in counts.items():
-            file.write(f"{key}\t{value}\n")
-    
-    return counts["Spectra_Processed"]
+    return increment_count(log_file_path, "Spectra_Processed", st.session_state.df[1:].shape[1])
 
 # Peak finding function
 def peak_identification(spectra, height=None, threshold=None, distance=None, 

@@ -371,8 +371,8 @@ def increment_count(log_file_path, keyname, amount=1):
 # returns a dictionary of all the key-value pairs expressed in a given log file. Log files must
 # take the form:
 #
-# Key_1:[\t]Value_1
-# Key_2:[\t]Value_2
+# Key_1[\t]Value_1
+# Key_2[\t]Value_2
 # ...
 def read_counts(log_file_path):
     import os
@@ -398,16 +398,16 @@ def write_counts(log_file_path, counts):
 
 # User count function
 def log_user_count(log_file_path):
-    return increment_count(log_file_path, "User")
+    return increment_count(log_file_path, 'User')
 
 # Plot_Generated count function
 def log_plot_generated_count(log_file_path):
-    return increment_count(log_file_path, "Plot_Generated")
+    return increment_count(log_file_path, 'Plot_Generated')
 
 # Spectra_Processed count function
 def log_spectra_processed_count(log_file_path):
     import streamlit as st
-    return increment_count(log_file_path, "Spectra_Processed", st.session_state.df[1:].shape[1])
+    return increment_count(log_file_path, 'Spectra_Processed', st.session_state.df[1:].shape[1])
 
 # Peak finding function
 def peak_identification(spectra, height=None, threshold=None, distance=None, 

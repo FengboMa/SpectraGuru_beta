@@ -357,7 +357,7 @@ def ModPoly(input_array, degree=2, repetition=100, gradient=0.001):
 
     return corrected
 
-# increments the counter for a specified metric in a given log file. Returns the new count and 
+# Increments the counter for a specified metric in a given log file. Returns the new count and 
 # returns 0 if the keyname does not match any recognizable keyname in the log file.
 def increment_count(log_file_path, keyname, amount=1):
     try:
@@ -368,7 +368,7 @@ def increment_count(log_file_path, keyname, amount=1):
     except:
         return 0
 
-# returns a dictionary of all the key-value pairs expressed in a given log file. Log files must
+# Returns a dictionary of all the key-value pairs expressed in a given log file. Log files must
 # take the form:
 #
 # Key_1[\t]Value_1
@@ -387,7 +387,7 @@ def read_counts(log_file_path):
     
     return counts
 
-# writes a counts dictionary to a log file
+# Writes a counts dictionary to a log file
 def write_counts(log_file_path, counts):
     import os
 
@@ -408,6 +408,10 @@ def log_plot_generated_count(log_file_path):
 def log_spectra_processed_count(log_file_path):
     import streamlit as st
     return increment_count(log_file_path, 'Spectra_Processed', st.session_state.df[1:].shape[1])
+
+# Essentially a function rename for clarity
+def log_function_use_count(function_log_file_path, keyname, amount=1):
+    return increment_count(function_log_file_path, keyname, amount)
 
 # Peak finding function
 def peak_identification(spectra, height=None, threshold=None, distance=None, 
@@ -1257,6 +1261,7 @@ def spectra_derivation(
         'y1' (1st derivative), 'y2' (2nd derivative).
         If normalization is enabled, y1/y2 are min–max scaled per spectrum.
     """
+
     import numpy as np
     import pandas as pd
     from scipy.signal import savgol_filter

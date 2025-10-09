@@ -52,6 +52,7 @@ if st.button("Log out"):
 #             width = 1300)
 st.image(r"element/Application header picture-3.png")
 st.session_state.log_file_path = r"element/user_count.txt"
+st.session_state.function_log_file_path = r"element/user_count.txt" # switch this to a different file later
 
 hide_close_button_css = """
 <style>

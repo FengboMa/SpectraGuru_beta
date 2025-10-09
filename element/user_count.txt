@@ -1,5 +1,5 @@
-User	1677
-Plot_Generated	23726
+User	1678
+Plot_Generated	23730
 Spectra_Processed	418166
 Peak_Identification_Called	0
 Air_PLS Called	0
@@ -14,4 +14,4 @@ Clustering_Dendrograms_Drawn	0
 PCA_Used	0
 TSNE_Used	0
 Gaussian_Lorentzian_Filter_Called	0
-Spectra_Derived	0
+Spectra_Derived	6

@@ -819,7 +819,7 @@ def tsne(df, perplexity=5, n_iter=500, label_df=None):
     tsne = TSNE(
         n_components=2,
         perplexity=perplexity,
-        n_iter=n_iter,
+        max_iter=n_iter,
         random_state=random_state
     )
     tsne_components = tsne.fit_transform(X_std)

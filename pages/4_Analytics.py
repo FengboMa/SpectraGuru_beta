@@ -11,7 +11,7 @@ import function
 
 function.wide_space_default()
 st.session_state.log_file_path = r"element/user_count.txt"
-st.session_state.function_log_file_path = r"element/user_count.txt" # change later
+st.session_state.function_log_file_path = r"element/funct_count.txt"
 # hide_st_style = """
 #             <style>
 #             #MainMenu {visibility: hidden;}

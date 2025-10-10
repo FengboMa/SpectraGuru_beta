@@ -11,6 +11,7 @@ import function
 
 function.wide_space_default()
 st.session_state.log_file_path = r"element/user_count.txt"
+st.session_state.function_log_file_path = r"element/funct_count.txt"
 # hide_st_style = """
 #             <style>
 #             #MainMenu {visibility: hidden;}
@@ -425,6 +426,7 @@ else:
                     # )
                 # optional: your logger
                 try:
+                    function.log_function_use_count(st.session_state.function_log_file_path, "Spectra_Derived", st.session_state.df[1:].shape[1])
                     function.log_plot_generated_count(st.session_state.log_file_path)
                 except Exception:
                     pass
@@ -570,6 +572,7 @@ else:
             combined = function.style_altair_chart(combined)
             st.altair_chart(combined, use_container_width=False)
             function.log_plot_generated_count(st.session_state.log_file_path)
+            function.log_function_use_count(st.session_state.function_log_file_path, "Correlation_Heatmaps_Generated")
             
             @st.cache_data
             def download_df(df):
@@ -763,6 +766,7 @@ else:
             st.write(peak_df)
             
             function.log_plot_generated_count(st.session_state.log_file_path)
+            function.log_function_use_count(st.session_state.function_log_file_path, "Peak_Identification_Called")
         
         elif st.session_state.stats_plot_select == "Hierarchically-clustered Heatmap":
             
@@ -772,8 +776,10 @@ else:
             
             if st.session_state.HCA_heatmap:
                 st.pyplot(function.hierarchical_clustering_heatmap(temp))
+                function.log_function_use_count(st.session_state.function_log_file_path, "Clustermaps_Generated")
             else:
                 st.pyplot(function.hierarchical_clustering_tree(temp))
+                function.log_function_use_count(st.session_state.function_log_file_path, "Clustering_Dendrograms_Drawn")
         
             function.log_plot_generated_count(st.session_state.log_file_path)
         
@@ -831,6 +837,9 @@ else:
 
             st.altair_chart(function.style_altair_chart(loading_plot), use_container_width=False)
             function.log_plot_generated_count(st.session_state.log_file_path)
+
+            function.log_function_use_count(st.session_state.function_log_file_path, "PCA_Used")
+
             st.write("### PCA Scores Table")
             st.write(pca_result_df)
         
@@ -851,5 +860,6 @@ else:
             st.altair_chart(function.style_altair_chart(tsne_plot), use_container_width=False)
 
             function.log_plot_generated_count(st.session_state.log_file_path)
+            function.log_function_use_count(st.session_state.function_log_file_path, "TSNE_Used")
 
             st.write(tsne_df)

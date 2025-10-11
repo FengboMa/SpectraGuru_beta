@@ -15,7 +15,6 @@ os.chdir(current_dir)
 
 function.wide_space_default()
 
-# Request authentication
 if not st.user.is_logged_in:
     if st.button("Log in with Google"):
         st.login("google-oauth2")

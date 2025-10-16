@@ -18,9 +18,11 @@ function.wide_space_default()
 if not st.user.is_logged_in:
     st.warning("You are not logged in to SpectraGuru. Please log in below:")
     if st.button("Log in with Google"):
-        st.login("google-oauth2")
+        st.login("google")
+    if st.button("Log in with Microsoft"):
+        st.login("microsoft")
 else:
-    st.text("Hi " + st.user.name + "!")
+    st.text("Hi " + st.user.name + "! (" + st.user.email + ")")
     if st.button("Log out"):
         st.logout()
 

@@ -27,6 +27,7 @@ if 'df' in st.session_state:
     st.sidebar.selectbox('Select Analytics Plot', 
                         options= ("Average Plot with Original Spectra", 
                                 "Confidence Interval Plot",
+                                "Spectra Derivation",
                                 "Correlation Heatmap",
                                 "Peak Identification and Stats",
                                 "Hierarchically-clustered Heatmap",
@@ -37,6 +38,12 @@ if 'df' in st.session_state:
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
         st.sidebar.toggle(label='Show spectra you selected', value=True, key = 'stats_avg_act',help='Show or hide original selected spectra.')
         st.sidebar.toggle(label='Show Standard Deviation', value=True, key = 'stats_avg_std_act',help='Show or hide Standard Deviation.')
+    elif st.session_state.stats_plot_select == "Spectra Derivation":
+        st.sidebar.selectbox(label="Normalization Method",
+            options=("None", "Min-Max Normalization"),
+            index=0,
+            key="deriv_norm_method",
+            help="Apply per-spectrum Min–Max scaling before taking derivatives.")
     elif st.session_state.stats_plot_select == "Correlation Heatmap":
         
         if st.sidebar.toggle(label='Customize Heatmap scale', value=False, key = 'heatmap_scale',help='Customize heatmap scale manually.'):
@@ -233,7 +240,7 @@ else:
             download_file_name = f"data_Average_STD_{current_time}.csv"
 
             st.download_button(
-                label="Download Avg amd Std data as CSV",
+                label="Download Average and Standard deviation data as CSV",
                 data=stats_download_df,
                 file_name=download_file_name,
                 mime="text/csv",
@@ -284,6 +291,146 @@ else:
             st.altair_chart(confidence_plot, use_container_width=False)
             function.log_plot_generated_count(st.session_state.log_file_path)
 
+        elif st.session_state.stats_plot_select == "Spectra Derivation":
+            with st.sidebar:
+                
+                # Window length input
+                win = st.number_input(
+                    "Window length (odd, ≥ 5)",
+                    min_value=3,
+                    max_value=25,  # optional safeguard if df is defined
+                    step=2,
+                    value=11,
+                    help="Controls smoothing span. Must be odd and at least 5. "
+                        "Larger values = stronger smoothing but risk of oversmoothing peaks."
+                )
+
+                # Polynomial order input
+                poly = st.number_input(
+                    "Polynomial order (< window length)",
+                    min_value=2,
+                    max_value=7,  # practical upper bound; can raise if needed
+                    step=1,
+                    value=3,
+                    help="Controls local polynomial fitting. "
+                        "Order must be smaller than the window length. "
+                        "Typical choices: 2–3 for smooth baseline, 4–5 for sharper peaks."
+                )
+
+                # Richer tip for users
+                st.caption(
+                    "**Tips for tuning Savitzky–Golay parameters:**\n"
+                    "- Window length should be **odd**, typically between 3–25 for Raman/SERS spectra. "
+                    "Use larger values for noisy data, smaller for narrow/sharp peaks.\n"
+                    "- Polynomial order is usually **2 or 3**. "
+                    "Higher order can follow sharper features but may also fit noise.\n"
+                    "- Always ensure **poly < window length**. "
+                    "- Try starting with `win=11`, `poly=3` and adjust if peaks look oversmoothed or too noisy."
+                )
+
+            try:
+                # Expecting `stats_data_melted` with columns: 'Ramanshift', 'Intensity', 'Sample ID'
+                df = stats_data_melted.copy()
+
+                # Ensure numeric and sorted within each sample
+                df["Ramanshift"] = pd.to_numeric(df["Ramanshift"], errors="coerce")
+                df["Intensity"]  = pd.to_numeric(df["Intensity"],  errors="coerce")
+                df = df.dropna(subset=["Ramanshift", "Intensity"])
+
+                proc = df.groupby("Sample ID", group_keys=False).apply(function.spectra_derivation,    norm_method=st.session_state.deriv_norm_method,  # value from selectbox
+                sg_win=win,                  # from number_input
+                sg_poly=poly                 # from number_input
+            )
+
+                # --- Build Altair charts (two panels: 1st & 2nd derivative) ---
+                # highlight "Average" if present
+                highlight_cond = alt.datum["Sample ID"] == "Average"
+
+                first_deriv = (
+                    alt.Chart(proc)
+                    .mark_line()
+                    .encode(
+                        x=alt.X("Ramanshift:Q", title="Raman shift / cm⁻¹"),
+                        y=alt.Y("y1:Q", title="1st derivative (a.u./cm⁻¹)"),
+                        color=alt.condition(highlight_cond, alt.value("blue"), alt.Color("Sample ID:N", title="Sample")),
+                        # size=alt.condition(highlight_cond, alt.value(3), alt.value(1)),
+                        tooltip=alt.value(None),
+                    )
+                    .properties(width=1300, height=300, title="First Derivative")
+                )
+
+                second_deriv = (
+                    alt.Chart(proc)
+                    .mark_line()
+                    .encode(
+                        x=alt.X("Ramanshift:Q", title="Raman shift / cm⁻¹"),
+                        y=alt.Y("y2:Q", title="2nd derivative (a.u./cm⁻²)"),
+                        color=alt.condition(highlight_cond, alt.value("blue"), alt.Color("Sample ID:N", title="Sample")),
+                        # size=alt.condition(highlight_cond, alt.value(3), alt.value(1)),
+                        tooltip=alt.value(None),
+                    )
+                    .properties(width=1300, height=300, title="Second Derivative")
+                )
+
+                show_plot = first_deriv & second_deriv  # vertical concat
+                show_plot = function.style_altair_chart(show_plot)
+                st.altair_chart(show_plot, use_container_width=False)
+
+                # --- Build tidy DataFrames for export ---
+                # y1_df = (
+                #     proc_plus[["Ramanshift", "Sample ID", "y1"]]
+                #     .rename(columns={"y1": "FirstDerivative"})
+                #     .sort_values(["Sample ID", "Ramanshift"])
+                # )
+
+                # y2_df = (
+                #     proc_plus[["Ramanshift", "Sample ID", "y2"]]
+                #     .rename(columns={"y2": "SecondDerivative"})
+                #     .sort_values(["Sample ID", "Ramanshift"])
+                # )
+
+                # # (Optional) If you prefer wide format (each Sample ID = one column), uncomment:
+                # # y1_df = y1_df.pivot(index="Ramanshift", columns="Sample ID", values="FirstDerivative").reset_index()
+                # # y2_df = y2_df.pivot(index="Ramanshift", columns="Sample ID", values="SecondDerivative").reset_index()
+
+                # @st.cache_data
+                # def _to_csv_bytes(df: pd.DataFrame) -> bytes:
+                #     # utf-8 without BOM; change to "utf-8-sig" if Excel encoding is needed
+                #     return df.to_csv(index=False).encode("utf-8")
+
+                # y1_csv = _to_csv_bytes(y1_df)
+                # y2_csv = _to_csv_bytes(y2_df)
+
+                # # --- File names with timestamp & norm method (if available in your state) ---
+                # current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+                # norm_tag = str(st.session_state.get("deriv_norm_method", "None")).replace(" ", "")
+                # fname_y1 = f"SERS_FirstDerivative_{norm_tag}_{current_time}.csv"
+                # fname_y2 = f"SERS_SecondDerivative_{norm_tag}_{current_time}.csv"
+
+                # # --- Two side-by-side download buttons ---
+                # c1, c2 = st.columns(2)
+                # with c1:
+                #     st.download_button(
+                #         label="⬇️ Download 1st Derivative (CSV)",
+                #         data=y1_csv,
+                #         file_name=fname_y1,
+                #         mime="text/csv",
+                #     )
+                # with c2:
+                #     st.download_button(
+                #         label="⬇️ Download 2nd Derivative (CSV)",
+                #         data=y2_csv,
+                #         file_name=fname_y2,
+                #         mime="text/csv",
+                    # )
+                # optional: your logger
+                try:
+                    function.log_plot_generated_count(st.session_state.log_file_path)
+                except Exception:
+                    pass
+            except Exception as e:
+                st.error(f"Error during processing: {e}")
+        
         elif st.session_state.stats_plot_select == "Correlation Heatmap":
             # Select only the columns we need for standard deviation calculation
             # Filter out the columns

@@ -140,6 +140,48 @@ with st.expander("Database Login", expanded=False):
         st.error(f"Database connection failed: {st.session_state.get('db_error', 'unknown error')}")
 
 # ----------------------------------------
+def reset_application():
+    """
+    Clears all keys in st.session_state except for 'run_count'.
+    This is important to prevent the button from disappearing after a reset.
+    """
+    st.toast("Application has been reset!", icon="✅")
+    
+    # Keep track of the keys to delete
+    keys_to_delete = []
+    for key in st.session_state.keys():
+        if key != 'run_count': # We want to preserve the run_count
+            keys_to_delete.append(key)
+    
+    # Delete the keys
+    for key in keys_to_delete:
+        del st.session_state[key]
+
+    # No need to call st.rerun() here, as the button click that
+    # called this function already triggered a rerun.
+
+
+# --- 2. Initialize and Increment the Counter ---
+
+# Initialize the counter ONLY on the very first run.
+if 'run_count' not in st.session_state:
+    st.session_state.run_count = 0
+
+# Increment the counter on EVERY script run.
+st.session_state.run_count += 1
+
+
+# --- 4. Conditionally Display the Button ---
+
+# The button will only appear AFTER the first run.
+if st.session_state.run_count > 1:
+    st.button(
+        "⚠️Reset Uploaded data and reset application",
+        on_click=reset_application,
+        type="primary"
+    )
+
+
 # --- Number of classes selector ---
 n_classes = st.number_input(
     "Number of classes",
@@ -515,7 +557,7 @@ if all_ready and all(df is not None for _, df in class_dfs):
     )
     st.session_state.class_data = interpolated_class_dfs
     st.session_state.df        = combined_df
-    st.session_state.backup    = combined_df
+    st.session_state.backup    = combined_df.copy() 
 
     # --- Label editor ---
     default_lbls_multi = {}
@@ -527,7 +569,7 @@ if all_ready and all(df is not None for _, df in class_dfs):
 elif all_ready and all(df is not None for _, df in class_dfs) and n_classes == 1:
     _, df = class_dfs[0]
     st.session_state.df     = df
-    st.session_state.backup = df
+    st.session_state.backup = df.copy() 
     st.session_state.class_data = class_dfs
     default_lbls_single = {col: 1 for col in df.columns[1:]}
     show_label_editor(df, default_lbls_single)

@@ -92,14 +92,14 @@ else:
         
         despike_act = st.toggle("Despike", 
                                         value=False, 
-                                        help="Despike(Threshold, Width) Auto-Despikes spectra with old despike script. Replaces regions of spectra which increase more than a (Threshold) over a specified (Scan Width) with a line.", 
+                                        help="**Auto-Despike Method** - Automatically detects and corrects spikes across the entire spectrum. Regions where the signal exceeds a defined threshold within a specified scan width are replaced with linear interpolation. This method  may slightly alter the overall spectrum. \n \n **Manual Despike Method** - Allows users to define a specific window  where despiking is applied. Only spikes within this region are corrected, minimizing unintended effects on the rest of the spectrum.", 
                                         key='despike_act')
         
         if despike_act:
             
-            st.session_state.despike_function = st.selectbox(label="Select your despike Function",  options=["old method","new method"])
+            st.session_state.despike_function = st.selectbox(label="Select your despike Function",  options=["Auto despike method","Manual despike method"])
             
-            if st.session_state.despike_function == "old method":
+            if st.session_state.despike_function == "Auto despike method":
                 # Add more functions to this selectbox if needed
                 st.session_state.despike_act_threshold = st.number_input(label="Despike threshold",
                                                                 min_value = 0, max_value = 1000, value = 300,
@@ -108,7 +108,7 @@ else:
                 st.session_state.despike_act_zap_length = st.number_input(label="Despike zap length / window size",
                                                                 min_value = 0, max_value = 100, value = 11,
                                                                 step = 1, placeholder="Insert a number")
-            elif st.session_state.despike_function == "new method":
+            elif st.session_state.despike_function == "Manual despike method":
                 # Add more functions to this selectbox if needed
                 st.session_state.despike_act_threshold = st.number_input(label="Despike threshold",
                                                                 min_value = 0, max_value = 1000, value = 300,
@@ -340,16 +340,16 @@ else:
         if outlierremoval_act:
             # Add more functions to this selectbox if needed
             st.session_state.outlierremoval_act_single_threshold = st.number_input(label="Outlier Removal Single Threshold",
-                                                            min_value = 1, max_value = 20, value = 4,
-                                                            step = 1, placeholder="Insert a number")
+                                                            min_value = 0.01, max_value = 20.00, value = 4.00,
+                                                            step = 0.01, placeholder="Insert a number")
             
             st.session_state.outlierremoval_act_distance_threshold = st.number_input(label="Outlier Removal Distance Threshold",
-                                                            min_value = 1, max_value = 20, value = 6,
-                                                            step = 1, placeholder="Insert a number")
+                                                            min_value = 0.01, max_value = 20.00, value = 6.00,
+                                                            step = 0.01, placeholder="Insert a number")
             
             st.session_state.outlierremoval_act_correlation_threshold = st.number_input(label="Outlier Removal correlation Threshold",
-                                                            min_value = 1, max_value = 20, value = 4,
-                                                            step = 1, placeholder="Insert a number")
+                                                            min_value = 0.01, max_value = 20.00, value = 4.00,
+                                                            step = 0.01, placeholder="Insert a number")
     with st.sidebar:
         pre_processing()
             
@@ -373,12 +373,12 @@ else:
         
         # despike_act
         if st.session_state.despike_act:
-            if st.session_state.despike_function == "old method":
+            if st.session_state.despike_function == "Auto despike method":
                 st.session_state.df.iloc[:, 1:] = function.despikeSpec(spectra = st.session_state.df.iloc[:, 1:],
                                                                     ramanshift = st.session_state.df.iloc[:, 0],
                                                                     threshold = st.session_state.despike_act_threshold,
                                                                     zap_length = st.session_state.despike_act_zap_length)
-            elif st.session_state.despike_function == "new method":
+            elif st.session_state.despike_function == "Manual despike method":
                 st.session_state.df.iloc[:, 1:] = function.despikeSpec_v2(spectra = st.session_state.df.iloc[:, 1:],
                                                                         ramanshift = st.session_state.df.iloc[:, 0],
                                                                         threshold = st.session_state.despike_act_threshold,
@@ -438,7 +438,10 @@ else:
 
         # outlier removal act
         if st.session_state.outlierremoval_act:
-            df_cleaned, st.session_state.remove_outliers_log = function.remove_outliers(st.session_state.df)
+            df_cleaned, st.session_state.remove_outliers_log = function.remove_outliers(st.session_state.df,
+                single_thresh=st.session_state.outlierremoval_act_single_threshold,
+                distance_thresh=st.session_state.outlierremoval_act_distance_threshold,
+                coeff_thresh=st.session_state.outlierremoval_act_correlation_threshold)
             st.session_state.df = pd.concat([st.session_state.df.iloc[:, 0], df_cleaned], axis=1)
         
     
@@ -530,6 +533,7 @@ else:
         
     
     try:
+        st.toast("Processing...", icon="📍")
         # data_melted = st.session_state.temp.melt(id_vars=[x_axis], var_name='Sample ID', value_name='Intensity')
         # # st.session_state.data_melt = data_melted
         # if "Average" in data_melted['Sample ID'].values:

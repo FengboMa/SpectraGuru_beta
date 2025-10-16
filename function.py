@@ -1277,3 +1277,80 @@ def make_matplotlib_png(data, x_col,
         return buf.getvalue()
     finally:
         plt.rcParams.update(old_rc)
+
+def spectra_derivation(
+    group: "pd.DataFrame",
+    norm_method: str = "None",
+    sg_win: int = 11,   # kept for compatibility; ignored
+    sg_poly: int = 3    # kept for compatibility; ignored
+) -> "pd.DataFrame":
+    """
+    Compute 1st and 2nd derivatives of a single spectrum group (per Sample ID),
+    with optional normalization applied AFTER derivatives.
+    
+    Parameters
+    ----------
+    group : pd.DataFrame
+        Columns: 'Ramanshift', 'Intensity' for one Sample ID.
+    norm_method : str
+        "None" or "Min-Max Normalization".
+    sg_win, sg_poly : int
+        Ignored in this derivative-only implementation (kept for compatibility).
+
+    Returns
+    -------
+    pd.DataFrame
+        Copy of input (sorted by Ramanshift) with two new columns:
+        'y1' (1st derivative), 'y2' (2nd derivative).
+        If normalization is enabled, y1/y2 are min–max scaled per spectrum.
+    """
+    import numpy as np
+    import pandas as pd
+    from scipy.signal import savgol_filter
+
+    g = group.sort_values("Ramanshift").copy()
+    x = g["Ramanshift"].to_numpy(dtype=float)
+    y = g["Intensity"].to_numpy(dtype=float)
+
+    n = len(x)
+    if n < 5:
+        g["y1"] = np.nan
+        g["y2"] = np.nan
+        return g
+
+    # --- validate window and poly ---
+    w = int(sg_win)
+    if w % 2 == 0:  # must be odd
+        w += 1
+    if w > n:       # cannot exceed number of points
+        w = n if n % 2 == 1 else n - 1
+    if w < 5:
+        w = 5
+    p = int(min(sg_poly, w - 1))
+
+    # --- compute spacing for delta ---
+    dx = np.diff(x)
+    delta = np.median(dx) if len(dx) else 1.0
+    if not np.isfinite(delta) or delta == 0:
+        delta = 1.0
+
+    # --- derivatives with Savitzky–Golay ---
+    y1 = savgol_filter(y, window_length=w, polyorder=p, deriv=1, delta=delta, mode="interp")
+    y2 = savgol_filter(y, window_length=w, polyorder=p, deriv=2, delta=delta, mode="interp")
+
+    # --- normalization AFTER derivatives ---
+    if norm_method == "Min-Max Normalization":
+        def _minmax(a: np.ndarray) -> np.ndarray:
+            amin = np.nanmin(a)
+            amax = np.nanmax(a)
+            rng = amax - amin
+            if np.isfinite(rng) and rng > 0:
+                return (a - amin) / rng
+            return np.zeros_like(a)
+
+        y1 = _minmax(y1)
+        y2 = _minmax(y2)
+
+    g["y1"] = y1
+    g["y2"] = y2
+    return g

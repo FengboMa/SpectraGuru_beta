@@ -32,23 +32,29 @@ You do not have to host it locally to use the application. But if you wish to de
    
    SpectraGuru runs on:
 
-       altair==5.3.0
+       altair==5.5.0
+
+       Authlib==1.6.5
 
        deprecation==2.1.0
 
-       matplotlib==3.8.4
+       matplotlib==3.10.6
 
-       numpy==1.23.5
+       numpy==2.3.3
 
-       pandas==2.2.2
+       pandas==2.3.2
 
-       scikit_learn==1.5.1
+       psycopg2==2.9.10
 
-       scipy==1.14.0
+       scikit_learn==1.7.2
 
-       streamlit==1.35.0
+       scipy==1.16.2
 
-       streamlit_extras==0.4.3
+       seaborn==0.13.2
+
+       streamlit==1.49.1
+
+       streamlit_extras==0.7.8
 
     Or use requirements.txt to install the dependencies: 
 

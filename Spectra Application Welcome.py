@@ -15,16 +15,14 @@ os.chdir(current_dir)
 
 function.wide_space_default()
 
-# Request authentication
 if not st.user.is_logged_in:
+    st.warning("You are not logged in to SpectraGuru. Please log in below:")
     if st.button("Log in with Google"):
-        st.login()
-    st.stop()
-
-st.text("Hi " + st.user.name + "!")
-
-if st.button("Log out"):
-    st.logout()
+        st.login("google-oauth2")
+else:
+    st.text("Hi " + st.user.name + "!")
+    if st.button("Log out"):
+        st.logout()
 
 # hide_st_style = """
 #             <style>

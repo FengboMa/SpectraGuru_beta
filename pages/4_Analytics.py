@@ -426,7 +426,7 @@ else:
                     # )
                 # optional: your logger
                 try:
-                    function.log_function_use_count(st.session_state.function_log_file_path, "Spectra_Derived", st.session_state.df[1:].shape[1])
+                    function.log_function_use_count(st.session_state.function_log_file_path, "Spectra_Derivation_Used")
                     function.log_plot_generated_count(st.session_state.log_file_path)
                 except Exception:
                     pass

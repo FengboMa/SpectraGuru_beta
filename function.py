@@ -1312,3 +1312,34 @@ def spectra_derivation(
     g["y1"] = y1
     g["y2"] = y2
     return g
+
+# Finds the optimal fit of some number of Gaussian peaks to a given spectrum. The number of peaks must be specified
+# by the caller. Returns the sum of all Gaussian distributions: an estimate of the input data.
+def gaussian_peak_fitting(x_data, y_data, num_peaks=1):
+    from scipy.optimize import least_squares
+    import numpy as np
+
+    # Set up parameter array with (num_peaks * 3) elements
+    # Every three elements of this array correspond to a single peak (a, mu, std) where:
+    # a = amplitude of peak
+    # mu = center of peak
+    # std = standard deviation of peak
+    initial_params = []
+    for i in range(num_peaks):
+        initial_params[3*i + 0] = 1
+        initial_params[3*i + 1] = np.shape(x_data) / 2
+        initial_params[3*i + 2] = 1
+        
+    initial_params = np.array(initial_params)
+
+    def residuals(params, x, y, num_peaks):
+        costv = y
+        for i in range(num_peaks):
+            a, mu, std = initial_params[3*i:3*(i+1)]
+            costv -= a * np.exp(- ((x - mu) ** 2)/(2*(std**2)))
+        return costv
+
+    result_params = least_squares(residuals, initial_params, args=(x_data, y_data, num_peaks))
+    print(result_params)
+
+    pass

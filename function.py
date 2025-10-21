@@ -1324,22 +1324,28 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1):
     # a = amplitude of peak
     # mu = center of peak
     # std = standard deviation of peak
-    initial_params = []
+    initial_params = np.zeros([3 * num_peaks])
     for i in range(num_peaks):
         initial_params[3*i + 0] = 1
-        initial_params[3*i + 1] = np.shape(x_data) / 2
+        initial_params[3*i + 1] = np.average(x_data) / 2
         initial_params[3*i + 2] = 1
-        
+
     initial_params = np.array(initial_params)
 
     def residuals(params, x, y, num_peaks):
-        costv = y
+        costv = np.copy(y)
         for i in range(num_peaks):
-            a, mu, std = initial_params[3*i:3*(i+1)]
+            a, mu, std = params[3*i:3*(i+1)]
             costv -= a * np.exp(- ((x - mu) ** 2)/(2*(std**2)))
         return costv
 
-    result_params = least_squares(residuals, initial_params, args=(x_data, y_data, num_peaks))
+    result_params = least_squares(residuals, initial_params, args=(x_data, y_data, num_peaks))['x']
     print(result_params)
 
-    pass
+    y_result = np.zeros([len(x_data)])
+
+    for i in range(num_peaks):
+        a, mu, std = result_params[3*i:3*(i+1)]
+        y_result += a * np.exp(- ((x_data - mu) ** 2)/(2*(std**2)))
+
+    return y_result

@@ -863,3 +863,37 @@ else:
             function.log_function_use_count(st.session_state.function_log_file_path, "TSNE_Used")
 
             st.write(tsne_df)
+
+
+# ----FOR TESTING----
+def test():
+    import altair
+    import pandas as pd
+    x_values = st.session_state.df_stats['Ramanshift']
+    y_values = st.session_state.df_stats['Average']
+
+    fit = function.gaussian_peak_fitting(x_values, y_values, 5)
+
+    plot = alt.Chart(pd.DataFrame({'Ramanshift':x_values, 'Intensity':y_values})).mark_line().encode(
+        x='Ramanshift',
+        y='Intensity'
+    ).properties(
+        width=1300,
+        height=300,
+    )
+
+    st.altair_chart(plot)
+
+    new_plot = alt.Chart(pd.DataFrame({'Ramanshift':x_values, 'Intensity':fit})).mark_line().encode(
+        x='Ramanshift',
+        y='Intensity'
+    ).properties(
+        width=1300,
+        height=300,
+    )
+
+    st.altair_chart(new_plot)
+
+
+if st.button("test"):
+    test()

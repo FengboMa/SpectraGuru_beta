@@ -1322,7 +1322,7 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1):
 
     df = pd.DataFrame({'Ramanshift':x_data, 'Intensity':y_data})
 
-    peaks, properties = peak_identification(y_data, prominence=0)
+    peaks, properties = peak_identification(y_data, prominence=0, width=0)
     peak_df = df.iloc[peaks].copy()
     properties_df = pd.DataFrame(properties)
 
@@ -1333,35 +1333,36 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1):
     peak_df = peak_df.sort_values(by='prominences', ascending=False).head(num_peaks)
 
     peak_df = peak_df.reset_index(drop=True)
+    print(peak_df)
 
     # Set up parameter array with (num_peaks * 3) elements
-    # Every three elements of this array correspond to a single peak (a, mu, std) where:
+    # Every two elements of this array correspond to a single peak (a, mu, std) where:
     # a = amplitude of peak
     # mu = center of peak
     # std = standard deviation of peak
     initial_params = np.zeros([3 * num_peaks])
     for i in range(num_peaks):
-        initial_params[3*i + 0] = 1
+        initial_params[3*i + 0] = 7000
         initial_params[3*i + 1] = peak_df['Ramanshift'][i]
         initial_params[3*i + 2] = 1
-        print(peak_df['Ramanshift'][i])
 
     initial_params = np.array(initial_params)
 
     def residuals(params, x, y, num_peaks):
-        costv = np.copy(y)
+        costv = np.zeros(len(y))
         for i in range(num_peaks):
             a, mu, std = params[3*i:3*(i+1)]
-            costv -= a * np.exp(- ((x - mu) ** 2)/(2*(std**2)))
-        return abs(costv)
+            costv += abs(y - a * np.exp(-((x - mu) ** 2)/(2*(std**2))))
+        return costv
 
-    result_params = least_squares(residuals, initial_params, bounds=(0,x_data[len(x_data) - 1]), args=(x_data, y_data, num_peaks))['x']
-    #print(result_params)
+    result_params = least_squares(residuals, initial_params, bounds=(1,np.inf), args=(x_data, y_data, num_peaks))['x']
+    print(result_params)
 
     y_results = np.zeros((num_peaks, len(x_data)))
 
     for i in range(num_peaks):
-        a, mu, std = result_params[3*i:3*(i+1)]
+        a, std = result_params[2*i:2*(i+1)]
+        mu = peak_df['Ramanshift'][i]
         y_results[i] += a * np.exp(- ((x_data - mu) ** 2)/(2*(std**2)))
 
     result_df = pd.DataFrame(y_results.T, columns=[f"G{i}" for i in range(num_peaks)])

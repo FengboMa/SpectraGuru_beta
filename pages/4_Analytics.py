@@ -876,7 +876,7 @@ def test():
     fit_df = function.gaussian_peak_fitting(x_values, y_values, 6)
     fit_df = pd.concat([df, fit_df], axis=1)
 
-    fit_df_melted = fit_df.melt(id_vars=['Ramanshift'], var_name='variable', value_name='Intensity')
+    fit_df_melted = fit_df.melt(id_vars=['Ramanshift'], var_name='variable', value_name='value')
     print(fit_df_melted)
 
     plot = alt.Chart(fit_df_melted).mark_line().encode(

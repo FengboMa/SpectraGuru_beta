@@ -872,7 +872,7 @@ def test():
     x_values = st.session_state.df_stats['Ramanshift']
     y_values = st.session_state.df_stats['Average']
 
-    fit = function.gaussian_peak_fitting(x_values, y_values, 5)
+    fit = function.gaussian_peak_fitting(x_values, y_values, 10)
 
     plot = alt.Chart(pd.DataFrame({'Ramanshift':x_values, 'Intensity':y_values})).mark_line().encode(
         x='Ramanshift',

@@ -1318,6 +1318,21 @@ def spectra_derivation(
 def gaussian_peak_fitting(x_data, y_data, num_peaks=1):
     from scipy.optimize import least_squares
     import numpy as np
+    import pandas as pd
+
+    df = pd.DataFrame({'Ramanshift':x_data, 'Intensity':y_data})
+
+    peaks, properties = peak_identification(y_data, prominence=0)
+    peak_df = df.iloc[peaks].copy()
+    properties_df = pd.DataFrame(properties)
+
+    peak_df = peak_df.reset_index(drop=True)
+    properties_df = properties_df.reset_index(drop=True)
+
+    peak_df = pd.concat([peak_df, properties_df], axis=1)
+    peak_df = peak_df.sort_values(by='prominences', ascending=False).head(num_peaks)
+
+    peak_df = peak_df.reset_index(drop=True)
 
     # Set up parameter array with (num_peaks * 3) elements
     # Every three elements of this array correspond to a single peak (a, mu, std) where:
@@ -1327,8 +1342,9 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1):
     initial_params = np.zeros([3 * num_peaks])
     for i in range(num_peaks):
         initial_params[3*i + 0] = 1
-        initial_params[3*i + 1] = np.average(x_data) / 2
+        initial_params[3*i + 1] = peak_df['Ramanshift'][i]
         initial_params[3*i + 2] = 1
+        print(peak_df['Ramanshift'][i])
 
     initial_params = np.array(initial_params)
 
@@ -1337,15 +1353,18 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1):
         for i in range(num_peaks):
             a, mu, std = params[3*i:3*(i+1)]
             costv -= a * np.exp(- ((x - mu) ** 2)/(2*(std**2)))
-        return costv
+        return abs(costv)
 
-    result_params = least_squares(residuals, initial_params, args=(x_data, y_data, num_peaks))['x']
-    print(result_params)
+    result_params = least_squares(residuals, initial_params, bounds=(0,x_data[len(x_data) - 1]), args=(x_data, y_data, num_peaks))['x']
+    #print(result_params)
 
-    y_result = np.zeros([len(x_data)])
+    y_results = np.zeros((num_peaks, len(x_data)))
 
     for i in range(num_peaks):
         a, mu, std = result_params[3*i:3*(i+1)]
-        y_result += a * np.exp(- ((x_data - mu) ** 2)/(2*(std**2)))
+        y_results[i] += a * np.exp(- ((x_data - mu) ** 2)/(2*(std**2)))
 
-    return y_result
+    result_df = pd.DataFrame(y_results.T, columns=[f"G{i}" for i in range(num_peaks)])
+    print(result_df)
+
+    return result_df

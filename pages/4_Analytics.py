@@ -871,28 +871,24 @@ def test():
     import pandas as pd
     x_values = st.session_state.df_stats['Ramanshift']
     y_values = st.session_state.df_stats['Average']
+    df = pd.DataFrame({'Ramanshift':x_values, 'Intensity':y_values})
 
-    fit = function.gaussian_peak_fitting(x_values, y_values, 10)
+    fit_df = function.gaussian_peak_fitting(x_values, y_values, 6)
+    fit_df = pd.concat([df, fit_df], axis=1)
 
-    plot = alt.Chart(pd.DataFrame({'Ramanshift':x_values, 'Intensity':y_values})).mark_line().encode(
-        x='Ramanshift',
-        y='Intensity'
+    fit_df_melted = fit_df.melt(id_vars=['Ramanshift'], var_name='variable', value_name='Intensity')
+    print(fit_df_melted)
+
+    plot = alt.Chart(fit_df_melted).mark_line().encode(
+        x='Ramanshift:T',
+        y='value:Q',
+        color='variable:N'
     ).properties(
         width=1300,
         height=300,
     )
 
     st.altair_chart(plot)
-
-    new_plot = alt.Chart(pd.DataFrame({'Ramanshift':x_values, 'Intensity':fit})).mark_line().encode(
-        x='Ramanshift',
-        y='Intensity'
-    ).properties(
-        width=1300,
-        height=300,
-    )
-
-    st.altair_chart(new_plot)
 
 
 if st.button("test"):

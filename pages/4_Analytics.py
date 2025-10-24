@@ -873,7 +873,7 @@ def test():
     y_values = st.session_state.df_stats['Average'][0:1000]
     df = pd.DataFrame({'Ramanshift':x_values, 'Intensity':y_values})
 
-    fit_df = function.gaussian_peak_fitting(x_values, y_values, 5)
+    fit_df = function.gaussian_peak_fitting(x_values, y_values, 7)
     fit_df = pd.concat([df, fit_df], axis=1)
 
     fit_df_melted = fit_df.melt(id_vars=['Ramanshift'], var_name='variable', value_name='value')

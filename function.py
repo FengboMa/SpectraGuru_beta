@@ -1322,6 +1322,7 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1):
 
     df = pd.DataFrame({'Ramanshift':x_data, 'Intensity':y_data})
 
+    # identify and sort peaks
     peaks, properties = peak_identification(y_data, prominence=0, width=0)
     peak_df = df.iloc[peaks].copy()
     properties_df = pd.DataFrame(properties)
@@ -1342,9 +1343,9 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1):
     # std = standard deviation of peak
     initial_params = np.zeros([3 * num_peaks])
     for i in range(num_peaks):
-        initial_params[3*i + 0] = np.average(y_data)
-        initial_params[3*i + 1] = peak_df['Ramanshift'][i]
-        initial_params[3*i + 2] = 1
+        initial_params[3*i + 0] = np.average(y_data) / 1000
+        initial_params[3*i + 1] = i * 100 / num_peaks
+        initial_params[3*i + 2] = 10
 
     initial_params = np.array(initial_params)
 
@@ -1352,20 +1353,41 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1):
         costv = np.zeros(len(y))
         for i in range(num_peaks):
             a, mu, std = params[3*i:3*(i+1)]
-            sigv = 1/(1+np.exp(abs(x-mu)-peak_df['widths'][i]/2))
-            costv += abs(y - a * np.exp(-((x - mu) ** 2)/(2*(std**2)))) * sigv
-        return costv
+            peak_center = peak_df['Ramanshift'][0]
+            peak_width = peak_df['widths'][0]
+            # want the parameters found during least squares to range from 0-100, so we can
+            # correct the ranges here.
 
-    result_params = least_squares(residuals, initial_params, bounds=(1,np.inf), args=(x_data, y_data, num_peaks))['x']
+            # amplitude should range from 0 to 100000
+            a *= 1000
+            # center should be within range of the peak
+            mu = peak_center - peak_width + (2 * mu * peak_width / 100)
+            # standard deviation can stay as is
+            std = std
+
+            costv += a * np.exp(-((x - mu) ** 2)/(2*(std**2)))
+        sigv = 1/(1+np.exp(abs(x-peak_center)-peak_width))
+        return abs(y - costv) * sigv
+
+    result_params = least_squares(residuals, initial_params, bounds=(0,100), args=(x_data, y_data, num_peaks))['x']
     print(result_params)
 
-    y_results = np.zeros((num_peaks, len(x_data)))
+    y_results = np.zeros((num_peaks + 1, len(x_data)))
 
     for i in range(num_peaks):
         a, mu, std = result_params[3*i:3*(i+1)]
+        peak_center = peak_df['Ramanshift'][0]
+        peak_width = peak_df['widths'][0]
+        # amplitude should range from 0 to 100000
+        a *= 1000
+        # center should be within range of the peak
+        mu = peak_center - peak_width + (2 * mu * peak_width / 100)
+        # standard deviation can stay as is
+        std = std
         y_results[i] += a * np.exp(- ((x_data - mu) ** 2)/(2*(std**2)))
+    y_results[num_peaks] = np.sum(y_results, axis=0)
 
-    result_df = pd.DataFrame(y_results.T, columns=[f"G{i}" for i in range(num_peaks)])
+    result_df = pd.DataFrame(y_results.T, columns=[f"G{i}" for i in range(num_peaks + 1)])
     print(result_df)
 
     return result_df

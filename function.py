@@ -1342,7 +1342,7 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1):
     # std = standard deviation of peak
     initial_params = np.zeros([3 * num_peaks])
     for i in range(num_peaks):
-        initial_params[3*i + 0] = 7000
+        initial_params[3*i + 0] = np.average(y_data)
         initial_params[3*i + 1] = peak_df['Ramanshift'][i]
         initial_params[3*i + 2] = 1
 
@@ -1352,7 +1352,8 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1):
         costv = np.zeros(len(y))
         for i in range(num_peaks):
             a, mu, std = params[3*i:3*(i+1)]
-            costv += abs(y - a * np.exp(-((x - mu) ** 2)/(2*(std**2))))
+            sigv = 1/(1+np.exp(abs(x-mu)-peak_df['widths'][i]/2))
+            costv += abs(y - a * np.exp(-((x - mu) ** 2)/(2*(std**2)))) * sigv
         return costv
 
     result_params = least_squares(residuals, initial_params, bounds=(1,np.inf), args=(x_data, y_data, num_peaks))['x']
@@ -1361,8 +1362,7 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1):
     y_results = np.zeros((num_peaks, len(x_data)))
 
     for i in range(num_peaks):
-        a, std = result_params[2*i:2*(i+1)]
-        mu = peak_df['Ramanshift'][i]
+        a, mu, std = result_params[3*i:3*(i+1)]
         y_results[i] += a * np.exp(- ((x_data - mu) ** 2)/(2*(std**2)))
 
     result_df = pd.DataFrame(y_results.T, columns=[f"G{i}" for i in range(num_peaks)])

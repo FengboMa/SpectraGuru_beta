@@ -1396,7 +1396,7 @@ def gaussian_peak_fitting_test(x_data, y_data, num_peaks=1, num_fit_curves=1):
 
 # Finds the optimal fit of some number of Gaussian curves to a given spectrum. The number of peaks and curves should be specified
 # by the caller. Returns the sum of all Gaussian distributions: an estimate of the input data around the most prominent peaks.
-def gaussian_peak_fitting(x_data, y_data, num_peaks=1, num_fit_curves=1):
+def gaussian_peak_fitting(x_data, y_data, num_peaks=1, num_fit_curves=1, const_model=0):
     from scipy.optimize import least_squares
     import numpy as np
     import pandas as pd
@@ -1466,7 +1466,7 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1, num_fit_curves=1):
 
         # define cost function
         def residuals(params, x, y, n):
-            sumv = np.zeros(len(y))
+            sumv = np.zeros(len(y)) + const_model
             for c in range(n):
                 a_, mu_, std_ = params[3*c:3*(c+1)]
                 a, mu, std = convert_from_standard_bounds(a_, mu_, std_)
@@ -1481,11 +1481,11 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1, num_fit_curves=1):
         for c in range(n):
             a_, mu_, std_ = result_params[3*c:3*(c+1)]
             a, mu, std = convert_from_standard_bounds(a_, mu_, std_)
-            result_y = a * np.exp(-((x_data - mu) ** 2)/(2*(std**2)))
+            result_y = a * np.exp(-((x_data - mu) ** 2)/(2*(std**2))) + const_model
             results.append(result_y)
     
     results = np.array(results)
-    results_sum = np.sum(results, axis=0)
+    results_sum = np.sum(results - const_model, axis=0) + const_model
     #print(results_sum)
 
     results_df = pd.DataFrame(results.T, columns=[f"G{i}" for i in range(num_fit_curves)])

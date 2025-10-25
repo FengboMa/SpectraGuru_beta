@@ -31,6 +31,7 @@ if 'df' in st.session_state:
                                 "Spectra Derivation",
                                 "Correlation Heatmap",
                                 "Peak Identification and Stats",
+                                "Gaussian Peak Fitting",
                                 "Hierarchically-clustered Heatmap",
                                 "Principal Components Analysis (PCA)-Beta",
                                 "T-SNE Dimensionality Reduction-Beta"),
@@ -99,6 +100,17 @@ if 'df' in st.session_state:
             st.session_state.peak_iden_distance_p = st.session_state.peak_iden_distance
             st.session_state.peak_iden_prominence_p = st.session_state.peak_iden_prominence
             st.session_state.peak_iden_width_p = st.session_state.peak_iden_width
+    elif st.session_state.stats_plot_select == "Gaussian Peak Fitting":
+        st.sidebar.number_input(label='Max number of peaks to fit', min_value = 1, max_value = 15, placeholder='Insert a number',
+                                    key='gauss_fit_num_peaks', step=1, value=1,
+                                    help = "The maximum number of peaks that may be analyzed when fitting Gaussian curves to your data. Not all peaks are guaranteed to be fit, since the distribution is based on peak prominence.")
+        st.sidebar.number_input(label='Number of Gaussian curves to use', min_value = 1, max_value = 20, placeholder='Insert a number',
+                                    key='gauss_fit_num_curves', step=1, value=1,
+                                    help = "The total number of Gaussian curves to fit to your data, partitioned between the most prominent peaks")
+        if st.sidebar.toggle(label='Use constant model', value=False, key = 'gauss_fit_use_const_model',help="Toggle on to use a custom constant model determining the baseline intensity for the fit."):
+            st.sidebar.number_input(label='Baseline intensity for constant model', min_value = 0.00, max_value = 100000.00, placeholder='Insert a number',
+                                        key='gauss_fit_const_model', step=10.00, value=0.00,
+                                        help = "The baseline intensity. Targeted peak(s) should lie entirely above this intensity. For fitting purposes, the data will be temporarily normalized based on this baseline.")
     elif st.session_state.stats_plot_select == "Hierarchically-clustered Heatmap":
         st.sidebar.toggle(label="Show clustered heatmap", value=True, key="HCA_heatmap")
     elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)-Beta":
@@ -768,6 +780,43 @@ else:
             function.log_plot_generated_count(st.session_state.log_file_path)
             function.log_function_use_count(st.session_state.function_log_file_path, "Analytics_Peak_Identification_Used")
         
+        elif st.session_state.stats_plot_select == "Gaussian Peak Fitting":
+
+            st.write("**Gaussian Peak Fitting**")
+
+            x_data = st.session_state.df_stats['Ramanshift']
+            y_data = st.session_state.df_stats['Average']
+
+            df = pd.DataFrame({'Ramanshift':x_data, 'Average Spectra':y_data})
+
+            if st.session_state.gauss_fit_use_const_model:
+                fit_df = function.gaussian_peak_fitting(x_data, y_data, num_peaks=st.session_state.gauss_fit_num_peaks, num_fit_curves=st.session_state.gauss_fit_num_curves, const_model=st.session_state.gauss_fit_const_model)
+            else:
+                fit_df = function.gaussian_peak_fitting(x_data, y_data, num_peaks=st.session_state.gauss_fit_num_peaks, num_fit_curves=st.session_state.gauss_fit_num_curves)
+            fit_df = pd.concat([df, fit_df], axis=1)
+
+            fit_df_melted = fit_df.melt(id_vars=['Ramanshift'], var_name='variable', value_name='value')
+            #print(fit_df_melted)
+
+            plot = alt.Chart(fit_df_melted).mark_line().encode(
+                x=alt.X('Ramanshift', title='Raman shift/cm^-1', type='quantitative'),
+                y=alt.Y('value', title='Intensity/a.u.', type='quantitative'),
+                color='variable:N'
+            ).properties(
+                width=1300,
+                height=300,
+            )
+
+            st.altair_chart(plot)
+
+            st.write("**Fit Data**")
+
+            # put G columns into scientific notation for readability
+            g_cols = [col for col in fit_df.columns if col.startswith('G')]
+            fit_df[g_cols] = fit_df[g_cols].apply(lambda col: col.map(lambda x: f"{x:.2e}"))
+            st.write(fit_df)
+
+
         elif st.session_state.stats_plot_select == "Hierarchically-clustered Heatmap":
             
             st.write("**Hierarchically-clustered Heatmap**")

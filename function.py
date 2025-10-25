@@ -1403,6 +1403,7 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1, num_fit_curves=1, const_m
     import math
 
     df = pd.DataFrame({'Ramanshift':x_data, 'Intensity':y_data})
+    print("test")
 
     # identify and sort peaks
     peaks, properties = peak_identification(y_data, prominence=0, width=0)
@@ -1471,7 +1472,8 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1, num_fit_curves=1, const_m
                 a_, mu_, std_ = params[3*c:3*(c+1)]
                 a, mu, std = convert_from_standard_bounds(a_, mu_, std_)
                 sumv += a * np.exp(-((x - mu) ** 2)/(2*(std**2))) # Add Gaussian curve
-            sigv = 1/(1+np.exp(abs(x-peak_center)-peak_width/2)) # modified sigmoid to weigh peak x-values more heavily
+            sigv_cutoff = np.full(len(y), 700)
+            sigv = 1/(1+np.exp(np.minimum(abs(x-peak_center)-peak_width/2, sigv_cutoff))) # modified sigmoid to weigh peak x-values more heavily
             return abs(y - sumv) * sigv
         
         # perform least squares minimization

@@ -1313,9 +1313,9 @@ def spectra_derivation(
     g["y2"] = y2
     return g
 
-# Finds the optimal fit of some number of Gaussian peaks to a given spectrum. The number of peaks must be specified
-# by the caller. Returns the sum of all Gaussian distributions: an estimate of the input data.
-def gaussian_peak_fitting(x_data, y_data, num_peaks=1):
+# Finds the optimal fit of some number of Gaussian curves to a given spectrum. The number of peaks and curves should be specified
+# by the caller. Returns the sum of all Gaussian distributions: an estimate of the input data around the most prominent peaks.
+def gaussian_peak_fitting_test(x_data, y_data, num_peaks=1, num_fit_curves=1):
     from scipy.optimize import least_squares
     import numpy as np
     import pandas as pd
@@ -1334,10 +1334,10 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1):
     peak_df = peak_df.sort_values(by='prominences', ascending=False).head(num_peaks)
 
     peak_df = peak_df.reset_index(drop=True)
-    print(peak_df)
+    #print(peak_df)
 
     # Set up parameter array with (num_peaks * 3) elements
-    # Every two elements of this array correspond to a single peak (a, mu, std) where:
+    # Every three elements of this array correspond to a single peak (a, mu, std) where:
     # a = amplitude of peak
     # mu = center of peak
     # std = standard deviation of peak
@@ -1391,3 +1391,104 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1):
     print(result_df)
 
     return result_df
+
+# Finds the optimal fit of some number of Gaussian curves to a given spectrum. The number of peaks and curves should be specified
+# by the caller. Returns the sum of all Gaussian distributions: an estimate of the input data around the most prominent peaks.
+def gaussian_peak_fitting(x_data, y_data, num_peaks=1, num_fit_curves=1):
+    from scipy.optimize import least_squares
+    import numpy as np
+    import pandas as pd
+    import math
+
+    df = pd.DataFrame({'Ramanshift':x_data, 'Intensity':y_data})
+
+    # identify and sort peaks
+    peaks, properties = peak_identification(y_data, prominence=0, width=0)
+    peak_df = df.iloc[peaks].copy()
+    properties_df = pd.DataFrame(properties)
+
+    peak_df = peak_df.reset_index(drop=True)
+    properties_df = properties_df.reset_index(drop=True)
+
+    peak_df = pd.concat([peak_df, properties_df], axis=1)
+    peak_df = peak_df.sort_values(by='prominences', ascending=False).head(num_peaks)
+
+    peak_df = peak_df.reset_index(drop=True)
+
+    # systematically split curves between most prominent peaks
+    prominences = peak_df['prominences']
+    total_prominence = np.sum(prominences)
+
+    partition = np.zeros(num_peaks, dtype=int)
+    for i in range(num_peaks):
+        partition[i] = math.floor(num_fit_curves * prominences[i] / total_prominence)
+    subtotal = np.sum(partition)
+    
+    # correct for rounding
+    for i in range(num_fit_curves - subtotal):
+        partition[i] += 1
+
+    # fit curves for each peak
+    results = []
+    for p in range(num_peaks):
+        n = partition[p] # number of fit curves allocated to this peak
+        peak_center = peak_df['Ramanshift'][p]
+        peak_width = peak_df['widths'][p]
+        #print(n)
+
+        # set up parameter array with n*3 elements
+        #
+        # Every three elements of this array correspond to a single Gaussian curve (a', mu', std') where:
+        # a = amplitude of curve
+        # mu = center of curve
+        # std = standard deviation of curve
+        #
+        # In practice, the parameters represent different but related values so that they all fall between the same bounds (0-100):
+        # a' = a / 1000
+        # mu' = (mu - peak_center + peak_width / 2) * 100 / peak_width
+        # std' = std - 1
+        #
+        def convert_from_standard_bounds(a_, mu_, std_):
+            a = a_ * 1000
+            mu = peak_center - peak_width / 2 + (mu_ * peak_width / 100)
+            std = std_ + 1
+            return a, mu, std
+
+        initial_params = np.zeros([n*3])
+        for i in range(n):
+            # in standard bounds
+            initial_params[3*i+0] = np.average(y_data) / 1000
+            initial_params[3*i+1] = i * 100 / n
+            initial_params[3*i+2] = 10
+        initial_params = np.array(initial_params)
+
+        # define cost function
+        def residuals(params, x, y, n):
+            sumv = np.zeros(len(y))
+            for c in range(n):
+                a_, mu_, std_ = params[3*c:3*(c+1)]
+                a, mu, std = convert_from_standard_bounds(a_, mu_, std_)
+                sumv += a * np.exp(-((x - mu) ** 2)/(2*(std**2))) # Add Gaussian curve
+            sigv = 1/(1+np.exp(abs(x-peak_center)-peak_width/2)) # modified sigmoid to weigh peak x-values more heavily
+            return abs(y - sumv) * sigv
+        
+        # perform least squares minimization
+        result_params = least_squares(residuals, initial_params, bounds=(0,100), args=(x_data, y_data, n))['x']
+
+        # append results
+        for c in range(n):
+            a_, mu_, std_ = result_params[3*c:3*(c+1)]
+            a, mu, std = convert_from_standard_bounds(a_, mu_, std_)
+            result_y = a * np.exp(-((x_data - mu) ** 2)/(2*(std**2)))
+            results.append(result_y)
+    
+    results = np.array(results)
+    results_sum = np.sum(results, axis=0)
+    #print(results_sum)
+
+    results_df = pd.DataFrame(results.T, columns=[f"G{i}" for i in range(num_fit_curves)])
+    #print(results_df)
+    results_df = pd.concat([results_df, pd.DataFrame(results_sum.T, columns=["GSUM"])], axis=1)
+    #print(results_df)
+
+    return results_df

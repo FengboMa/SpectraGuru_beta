@@ -1361,12 +1361,12 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1):
             # amplitude should range from 0 to 100000
             a *= 1000
             # center should be within range of the peak
-            mu = peak_center - peak_width + (2 * mu * peak_width / 100)
+            mu = peak_center - peak_width / 2 + (mu * peak_width / 100)
             # standard deviation can stay as is
             std = std
 
             costv += a * np.exp(-((x - mu) ** 2)/(2*(std**2)))
-        sigv = 1/(1+np.exp(abs(x-peak_center)-peak_width))
+        sigv = 1/(1+np.exp(abs(x-peak_center)-peak_width/2))
         return abs(y - costv) * sigv
 
     result_params = least_squares(residuals, initial_params, bounds=(0,100), args=(x_data, y_data, num_peaks))['x']
@@ -1381,7 +1381,7 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1):
         # amplitude should range from 0 to 100000
         a *= 1000
         # center should be within range of the peak
-        mu = peak_center - peak_width + (2 * mu * peak_width / 100)
+        mu = peak_center - peak_width / 2 + (mu * peak_width / 100)
         # standard deviation can stay as is
         std = std
         y_results[i] += a * np.exp(- ((x_data - mu) ** 2)/(2*(std**2)))

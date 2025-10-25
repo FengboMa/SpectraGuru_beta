@@ -16,3 +16,4 @@ Analytics_Clustering_Dendrograms_Drawn	1
 Analytics_PCA_Used	1
 Analytics_TSNE_Used	0
 Analytics_Spectra_Derivation_Used	1
+Analytics_Gaussian_Peak_Fitting_Used	0

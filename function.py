@@ -1403,7 +1403,6 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1, num_fit_curves=1, const_m
     import math
 
     df = pd.DataFrame({'Ramanshift':x_data, 'Intensity':y_data})
-    print("test")
 
     # identify and sort peaks
     peaks, properties = peak_identification(y_data, prominence=0, width=0)

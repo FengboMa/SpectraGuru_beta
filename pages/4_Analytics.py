@@ -808,6 +808,8 @@ else:
             )
 
             st.altair_chart(plot)
+            function.log_plot_generated_count(st.session_state.log_file_path)
+            function.log_function_use_count(st.session_state.function_log_file_path, "Analytics_Gaussian_Peak_Fitting_Used")
 
             st.write("**Fit Data**")
 

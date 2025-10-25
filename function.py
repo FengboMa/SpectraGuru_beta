@@ -1313,6 +1313,7 @@ def spectra_derivation(
     g["y2"] = y2
     return g
 
+"""
 # Finds the optimal fit of some number of Gaussian curves to a given spectrum. The number of peaks and curves should be specified
 # by the caller. Returns the sum of all Gaussian distributions: an estimate of the input data around the most prominent peaks.
 def gaussian_peak_fitting_test(x_data, y_data, num_peaks=1, num_fit_curves=1):
@@ -1391,6 +1392,7 @@ def gaussian_peak_fitting_test(x_data, y_data, num_peaks=1, num_fit_curves=1):
     print(result_df)
 
     return result_df
+"""
 
 # Finds the optimal fit of some number of Gaussian curves to a given spectrum. The number of peaks and curves should be specified
 # by the caller. Returns the sum of all Gaussian distributions: an estimate of the input data around the most prominent peaks.

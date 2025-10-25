@@ -913,7 +913,7 @@ else:
 
             st.write(tsne_df)
 
-
+"""
 # ----FOR TESTING----
 def test():
     import altair
@@ -942,3 +942,4 @@ def test():
 
 if st.button("test"):
     test()
+"""

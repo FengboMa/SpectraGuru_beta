@@ -1395,7 +1395,7 @@ def gaussian_peak_fitting_test(x_data, y_data, num_peaks=1, num_fit_curves=1):
 """
 
 # Finds the optimal fit of some number of Gaussian curves to a given spectrum. The number of peaks and curves should be specified
-# by the caller. Returns the sum of all Gaussian distributions: an estimate of the input data around the most prominent peaks.
+# by the caller. Returns all Gaussian distributions: an estimate of the input data around the most prominent peaks.
 def gaussian_peak_fitting(x_data, y_data, num_peaks=1, num_fit_curves=1, const_model=0):
     from scipy.optimize import least_squares
     import numpy as np

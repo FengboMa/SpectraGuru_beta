@@ -101,7 +101,7 @@ if 'df' in st.session_state:
             st.session_state.peak_iden_prominence_p = st.session_state.peak_iden_prominence
             st.session_state.peak_iden_width_p = st.session_state.peak_iden_width
     elif st.session_state.stats_plot_select == "Gaussian Peak Fitting":
-        st.sidebar.number_input(label='Max number of peaks to fit', min_value = 1, max_value = 15, placeholder='Insert a number',
+        st.sidebar.number_input(label='Max number of peaks to fit', min_value = 1, max_value = 10, placeholder='Insert a number',
                                     key='gauss_fit_num_peaks', step=1, value=1,
                                     help = "The maximum number of peaks that may be analyzed when fitting Gaussian curves to your data. Not all peaks are guaranteed to be fit, since the distribution is based on peak prominence.")
         st.sidebar.number_input(label='Number of Gaussian curves to use', min_value = 1, max_value = 20, placeholder='Insert a number',

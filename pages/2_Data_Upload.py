@@ -205,13 +205,50 @@ FORMAT_OPTIONS = {
     "Single CSV (comma-separated)":      {"kind": "single_csv", "multi": False, "types": ["csv"]},
 }
 def process_upload(kind, uploaded):
-    if kind in ("multi_txt", "multi_csv"):
-        return load_multi_data(uploaded) if uploaded else None
-    if kind == "single_tsv":
-        return load_tab_data(uploaded) if uploaded is not None else None
-    if kind == "single_csv":
-        return load_data(uploaded) if uploaded is not None else None
-    return None
+    """Handle file uploads based on selected data format, with friendly error messages."""
+    if not uploaded:
+        st.warning("Please upload at least one file to continue.")
+        return None
+
+    try:
+        if kind in ("multi_txt", "multi_csv"):
+            df = load_multi_data(uploaded)
+        elif kind == "single_tsv":
+            df = load_tab_data(uploaded)
+        elif kind == "single_csv":
+            df = load_data(uploaded)
+        else:
+            st.error("Unsupported file type or format selection.")
+            return None
+
+        return df
+
+    except ValueError as e:
+        # ValueError from validation (like mismatched columns)
+        st.error(
+            "The uploaded data could not be processed. "
+            "Please check that your files match the selected format "
+            "(for example, two numeric columns with a shared x-axis)."
+        )
+        st.caption(f"Details: {str(e)}")
+        return None
+
+    except pd.errors.ParserError:
+        st.error(
+            "There was a problem reading your file. "
+            "It might not be a valid CSV or text file. "
+            "Please re-check your format and try again."
+        )
+        return None
+
+    except Exception:
+        # Mask all other system errors with a polite fallback
+        st.error(
+            "Something went wrong while loading your data. "
+            "Please confirm that the file type matches your selected option "
+            "and try again."
+        )
+        return None
 
 if n_classes > 1:
     st.warning(

@@ -1336,7 +1336,7 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1, num_fit_curves=1, const_m
 
     peak_df = peak_df.reset_index(drop=True)
 
-    # systematically split curves between most prominent peaks
+    # systematically partition curves between most prominent peaks
     prominences = peak_df['prominences']
     total_prominence = np.sum(prominences)
 

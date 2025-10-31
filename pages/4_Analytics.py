@@ -101,10 +101,10 @@ if 'df' in st.session_state:
             st.session_state.peak_iden_prominence_p = st.session_state.peak_iden_prominence
             st.session_state.peak_iden_width_p = st.session_state.peak_iden_width
     elif st.session_state.stats_plot_select == "Gaussian Peak Fitting":
-        st.sidebar.number_input(label='Max number of peaks to fit', min_value = 1, max_value = 10, placeholder='Insert a number',
+        st.sidebar.number_input(label='Number of peaks to fit', min_value = 1, max_value = 20, placeholder='Insert a number',
                                     key='gauss_fit_num_peaks', step=1, value=1,
-                                    help = "The maximum number of peaks that may be analyzed when fitting Gaussian curves to your data. Not all peaks are guaranteed to be fit, since the distribution is based on peak prominence.")
-        st.sidebar.number_input(label='Number of Gaussian curves to use', min_value = 1, max_value = 20, placeholder='Insert a number',
+                                    help = "The number of peaks that may be analyzed when fitting Gaussian curves to your data. As long as there are at least as many curves as peaks, each peak will be fit with at least one curve.")
+        st.sidebar.number_input(label='Number of Gaussian curves to use', min_value = 1, max_value = 30, placeholder='Insert a number',
                                     key='gauss_fit_num_curves', step=1, value=1,
                                     help = "The total number of Gaussian curves to fit to your data, partitioned between the most prominent peaks")
         if st.sidebar.toggle(label='Use constant model', value=False, key = 'gauss_fit_use_const_model',help="Toggle on to use a custom constant model determining the baseline intensity for the fit."):
@@ -814,8 +814,8 @@ else:
             st.write("**Fit Data**")
 
             # put G columns into scientific notation for readability
-            g_cols = [col for col in fit_df.columns if col.startswith('G')]
-            fit_df[g_cols] = fit_df[g_cols].apply(lambda col: col.map(lambda x: f"{x:.2e}"))
+            #g_cols = [col for col in fit_df.columns if col.startswith('G')]
+            #fit_df[g_cols] = fit_df[g_cols].apply(lambda col: col.map(lambda x: f"{x:.2e}"))
             st.write(fit_df)
 
 

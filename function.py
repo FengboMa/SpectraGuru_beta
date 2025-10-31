@@ -1341,8 +1341,12 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1, num_fit_curves=1, const_m
     total_prominence = np.sum(prominences)
 
     partition = np.zeros(num_peaks, dtype=int)
+    subtotal = min(num_peaks, num_fit_curves)
+    for i in range(subtotal):
+        partition[i] += 1
+
     for i in range(num_peaks):
-        partition[i] = math.floor(num_fit_curves * prominences[i] / total_prominence)
+        partition[i] += math.floor((num_fit_curves - subtotal) * prominences[i] / total_prominence)
     subtotal = np.sum(partition)
     
     # correct for rounding
@@ -1404,6 +1408,7 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1, num_fit_curves=1, const_m
             result_y = a * np.exp(-((x_data - mu) ** 2)/(2*(std**2))) + const_model
             results.append(result_y)
     
+    results = [round(p, 4) for p in results]
     results = np.array(results)
     results_sum = np.sum(results - const_model, axis=0) + const_model
     #print(results_sum)

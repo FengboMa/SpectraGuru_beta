@@ -133,11 +133,11 @@ if 'connection' not in st.session_state:
         st.session_state.db_logged_in = False
         st.session_state.db_error     = str(e)
 
-with st.expander("Database Login", expanded=False):
-    if st.session_state.db_logged_in:
-        st.success("Logged in as **sg_user**.")
-    else:
-        st.error(f"Database connection failed: {st.session_state.get('db_error', 'unknown error')}")
+# with st.expander("Database Login", expanded=False):
+#     if st.session_state.db_logged_in:
+#         st.success("Logged in as **sg_user**.")
+#     else:
+#         st.error(f"Database connection failed: {st.session_state.get('db_error', 'unknown error')}")
 
 # ----------------------------------------
 def reset_application():

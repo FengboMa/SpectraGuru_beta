@@ -1,6 +1,8 @@
-# Introduction page
+from dotenv import load_dotenv
+load_dotenv("CLERK.env")
 import streamlit as st
 from streamlit_modal import Modal
+from auth_utils import clerk_signin_url, verify_clerk_session
 # import streamlit.components.v1 as components
 
 import function
@@ -15,93 +17,115 @@ os.chdir(current_dir)
 
 function.wide_space_default()
 
-# if not st.user.is_logged_in:
-#     st.warning("You are not logged in to SpectraGuru. Please log in below:")
-#     if st.button("Log in with Google"):
-#         st.login("google-oauth2")
-# else:
-#     st.text("Hi " + st.user.name + "!")
-#     if st.button("Log out"):
-#         st.logout()
+#####################
+params = st.query_params
+token  = params.get("__clerk_db_jwt") or params.get("session_id")
+if isinstance(token, list):
+    token = token[0]
 
-# hide_st_style = """
-#             <style>
-#             #MainMenu {visibility: hidden;}
-#             footer {visibility: hidden;}
-#             header {visibility: hidden;}
-#             </style>
-#             """
-# st.markdown(hide_st_style, unsafe_allow_html=True)
-# st.markdown("""
-#         <style>
-#                .block-container {
-#                     padding-top: 0rem;
-#                     padding-bottom: 0rem;
-                    
-#                 }
-#         </style>
-#         """, unsafe_allow_html=True)
+if token and not st.session_state.get("userlogedin"):
+    user = verify_clerk_session(token)
+    if user:
+        st.session_state.userlogedin = True
+        st.session_state.username    = user["first_name"]
+        st.session_state.popup_closed = True
+        st.query_params.clear() 
+        # Introduction page
+
+print("DEBUG  token =", token)            # ← should be a long JWT string
+print("DEBUG  already_logged =", st.session_state.get("userlogedin"))
+
+#####################
 
 
-# sidebar_icon = r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v11\element\UGA_logo_ExtremeHoriz_FC_MARCM.png"
-# st.logo(sidebar_icon, icon_image=sidebar_icon)
-
-# st.image(r'C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software\spectraApp_v13\element\Phy2.png',
-#             width = 1300)
 st.image(r"element/Application header picture-3.png")
 st.session_state.log_file_path = r"element/user_count.txt"
 
+# --- Initial Setup ---
 hide_close_button_css = """
-<style>
-.modal-close {
-    display: none !important;
-}
-</style>
+    <style>
+        div[aria-label="Modal"]>button[aria-label="Close"] {
+            display: none;
+        }
+    </style>
 """
-
-# Inject custom CSS to hide the close button
 st.markdown(hide_close_button_css, unsafe_allow_html=True)
-modal = Modal(
-    "Welcome to SpectraGuru", 
-    key="welcome_modal", 
-    
-    # Optional
-    padding=20, 
-    max_width=600 
-)
 
-st.html(
-    '''
+
+# ---------- grab token from URL on every run ----------
+
+
+
+params = st.query_params                 # returns Mapping[str, str | list[str] | None]
+token  = (
+    params.get("__clerk_db_jwt")         # either str or list → handle both
+    or params.get("session_id")
+)
+if isinstance(token, list):              # Clerk might give list
+    token = token[0]
+
+if token and not st.session_state.get("userlogedin"):
+    user = verify_clerk_session(token)
+    if user:
+        st.session_state.userlogedin = True
+        st.session_state.username = user.get("first_name", "User")
+        st.session_state.popup_closed = True        # skip modal from now on
+
+# ---------- session flags ----------
+for key, default in {
+    "popup_closed": False,
+    "userlogedin": False,
+}.items():
+    st.session_state.setdefault(key, default)
+
+# ---------- helper for guest button ----------
+def guest_entry():
+    st.session_state.userlogedin = False
+    st.session_state.popup_closed = True
+    st.session_state.current_user_count = function.log_user_count(
+        st.session_state.log_file_path
+    )
+
+# ---------- modal ----------
+if not st.session_state.popup_closed and not st.session_state.userlogedin:
+    # hide close icon
+    st.markdown(
+        """
         <style>
-            div[aria-label="Modal"]>button[aria-label="Close"] {
-                display: none;
-            }
+        div[aria-label="Modal"]>button[aria-label="Close"] {display:none;}
         </style>
-    '''
-)
+        """,
+        unsafe_allow_html=True,
+    )
 
-if 'popup_closed' not in st.session_state:
-    st.session_state.popup_closed = False
+    modal = Modal("Welcome to SpectraGuru", key="welcome_modal",
+                  padding=20, max_width=600)
 
-if not st.session_state.popup_closed:
     with modal.container():
-        st.info('SpectraGuru is still under development. Current version: SpectraGuru ver. 1.1.1')
+        st.info("SpectraGuru is still under development. Current version: SpectraGuru ver. 1.2.1")
         st.write("Thanks for visiting SpectraGuru, a spectroscopy processing and visualization tool.")
-        st.write("If you encounter a problem, please send an email to Fengbo.Ma@uga.edu")
-        st.write("**:arrow_upper_left: After clicking Start button below, then navigate to Data Upload located at the top of the sidebar to begin!**")
-        
-        # check = st.button('Start', type='primary')
-        # if check:
-        #     st.session_state.popup_closed = True
-        
-        # value = st.checkbox("By checking this box, you agree with Policy, License and Disclaimer of SpectraGuru")
-        value = st.checkbox("By checking this box, you agree with Policy and Disclaimer of SpectraGuru")
-        if value:
-            st.button('Start')
-            st.session_state.popup_closed = True
-            st.session_state.current_user_count = function.log_user_count(st.session_state.log_file_path)
-        st.caption("More information about SpectraGuru [Policy, License and Disclaimer](https://fengboma.github.io/docs.spectraguru/docs/License-Policies-Disclaimers.html)")
+        st.write("If you encounter a problem, please email Fengbo.Ma@uga.edu")
+        st.write("**:arrow_upper_left: After starting, go to ‘Data Upload’ in the sidebar to begin!**")
 
+        col1, col2 = st.columns(2)
+
+        # left: guest
+        col1.button("Continue as Guest", on_click=guest_entry)
+
+        # right: login via Clerk—just a link
+        signin_url = clerk_signin_url()           # already returns the full redirect URL
+        col2.link_button("Log in", signin_url,type="primary")  
+
+
+        st.caption(
+            "By clicking any button you agree with the "
+            "[Policy and Disclaimer of SpectraGuru]"
+            "(https://fengboma.github.io/docs.spectraguru/docs/License-Policies-Disclaimers.html)"
+        )
+
+# ---------- greet authenticated users ----------
+if st.session_state.get("userlogedin"):
+    st.write(f"Welcome {st.session_state.get('username', 'Guest')} 👋")
 # -------------
 
 
@@ -130,6 +154,14 @@ st.markdown(
     ---
     
     """)
+
+st.info("Check out our latest news and updates on SpectraGuru!")
+
+# Add expander to show the flyer
+with st.expander("View SpectraGuru Flyer (v2, Oct 26)"):
+    st.image("news/Spectraguru flyer v2 oct26 (1).png", caption="SpectraGuru Flyer v2 – October 26", use_container_width=True)
+st.divider()
+
 
 col1, col2 = st.columns([2, 12])
 if col1.button(label='Data Upload Page', key='switch_data_upload_page'):
@@ -163,9 +195,19 @@ col1.markdown(
     - Interpolation
     - Crop
     - Despike
+        - Auto despike method
+        - Manual despike method
     - Smoothening
+        - Savitzky-Golay filter
+        - 1D Fast Fourier Transform filter
     - Baseline removal
+        - AirPLS
+        - ModPoly
+        - Gaussian-Lorentzian Fitting
     - Normalization
+        - Normalize by area
+        - Normalize by Peak
+        - Min-Max Normalization
     - Outlier removal
     """)
 # col2.write("")
@@ -206,10 +248,15 @@ col3.image(r'element/SpectraGuru Welcome Page Flow Chart.png')
 # col1, col2,col3 = st.columns([1,1,3])
 col1.markdown(
     """
-    #### Statistics Page
+    #### Analytics Page
     - Average Plot with Original Spectra
     - Confidence Interval Plot
+    - Spectra Derivation
     - Correlation Heatmap
+    - Peak Identification and Stats
+    - Hierarchically-clustered Heatmap
+    - Principal Components Analysis (PCA)
+    - T‑Distributed Stochastic Neighbor Embedding (t‑SNE)
     """)
 
 
@@ -222,10 +269,6 @@ st.markdown(
     The geographic map visualizes where visiter from based on their latitude and longitude, with color intensity representing the frequency at each location. Each point on the map is derived from our record, showing the geographical distribution of occurrences.
 """
 )
-
-# st.html(
-#     "\"
-# )
 
 import streamlit.components.v1 as components
 p = open(r"element/traffic_heatmap.html")
@@ -241,4 +284,15 @@ st.markdown(
     - Find us here: [Zhao Nano Lab](https://www.zhao-nano-lab.com/)
     - Explore more or report an issue? Send us a message to us (zhao-nano-lab@uga.edu)
 """
+)
+
+st.markdown(
+    """
+    ### SpectraGuru supported by:
+    <div style="display:flex; justify-content:center; align-items:center; gap:40px;">
+        <img src="element/USDA.png" style="height:100px; object-fit:contain;">
+        <img src="element/nsf.png" style="height:100px; object-fit:contain;">
+    </div>
+    """,
+    unsafe_allow_html=True
 )

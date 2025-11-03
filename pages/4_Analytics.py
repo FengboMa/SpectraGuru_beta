@@ -818,6 +818,21 @@ else:
             #fit_df[g_cols] = fit_df[g_cols].apply(lambda col: col.map(lambda x: f"{x:.2e}"))
             st.write(fit_df)
 
+            @st.cache_data
+            def download_df(df):
+                return df.to_csv(index = False).encode("utf-8")
+            
+            stats_download_df = download_df(fit_df)
+            current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+            download_file_name = f"data_Gaussian_Fit_{current_time}.csv"
+
+            st.download_button(
+                label="Download Gaussian Fit data as CSV",
+                data=stats_download_df,
+                file_name=download_file_name,
+                mime="text/csv",
+            )
+
 
         elif st.session_state.stats_plot_select == "Hierarchically-clustered Heatmap":
             

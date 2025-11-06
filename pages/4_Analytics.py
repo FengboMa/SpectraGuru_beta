@@ -101,12 +101,24 @@ if 'df' in st.session_state:
             st.session_state.peak_iden_prominence_p = st.session_state.peak_iden_prominence
             st.session_state.peak_iden_width_p = st.session_state.peak_iden_width
     elif st.session_state.stats_plot_select == "Gaussian Peak Fitting":
-        st.sidebar.number_input(label='Number of peaks to fit', min_value = 1, max_value = 20, placeholder='Insert a number',
-                                    key='gauss_fit_num_peaks', step=1, value=1,
+        if 'do_gauss_fit' not in st.session_state:
+            st.session_state.do_gauss_fit = True
+        num_peaks = st.sidebar.number_input(label='Number of peaks to fit', min_value = 1, max_value = 20, placeholder='Insert a number',
+                                    key='gauss_fit_num_peaks', step=1, value=3,
                                     help = "The number of peaks that may be analyzed when fitting Gaussian curves to your data. As long as there are at least as many curves as peaks, each peak will be fit with at least one curve.")
-        st.sidebar.number_input(label='Number of Gaussian curves to use', min_value = 1, max_value = 30, placeholder='Insert a number',
-                                    key='gauss_fit_num_curves', step=1, value=1,
+        num_curves = 5
+        if 'gauss_fit_num_curves' in st.session_state:
+            num_curves = st.session_state.gauss_fit_num_curves
+
+            # don't run the fit until the user submits new parameters
+            st.session_state.do_gauss_fit = False
+
+        st.sidebar.number_input(label='Number of Gaussian curves to use', min_value = num_peaks, max_value = 30, placeholder='Insert a number',
+                                    key='gauss_fit_num_curves', step=1, value=max(num_peaks, num_curves),
                                     help = "The total number of Gaussian curves to fit to your data, partitioned between the most prominent peaks")
+        if st.sidebar.button("Submit Parameters", type="primary"):
+            st.session_state.do_gauss_fit = True
+        st.sidebar.caption("Toggle on to use a custom constant model determining the baseline intensity for the fit. Not recommended if you have already performed baseline removal in preprocessing.")
         if st.sidebar.toggle(label='Use constant model', value=False, key = 'gauss_fit_use_const_model',help="Toggle on to use a custom constant model determining the baseline intensity for the fit."):
             st.sidebar.number_input(label='Baseline intensity for constant model', min_value = 0.00, max_value = 100000.00, placeholder='Insert a number',
                                         key='gauss_fit_const_model', step=10.00, value=0.00,
@@ -789,11 +801,12 @@ else:
 
             df = pd.DataFrame({'Ramanshift':x_data, 'Average Spectra':y_data})
 
-            if st.session_state.gauss_fit_use_const_model:
-                fit_df = function.gaussian_peak_fitting(x_data, y_data, num_peaks=st.session_state.gauss_fit_num_peaks, num_fit_curves=st.session_state.gauss_fit_num_curves, const_model=st.session_state.gauss_fit_const_model)
-            else:
-                fit_df = function.gaussian_peak_fitting(x_data, y_data, num_peaks=st.session_state.gauss_fit_num_peaks, num_fit_curves=st.session_state.gauss_fit_num_curves)
-            fit_df = pd.concat([df, fit_df], axis=1)
+            if st.session_state.do_gauss_fit:
+                if st.session_state.gauss_fit_use_const_model:
+                    st.session_state.gauss_fit_df = function.gaussian_peak_fitting(x_data, y_data, num_peaks=st.session_state.gauss_fit_num_peaks, num_fit_curves=st.session_state.gauss_fit_num_curves, const_model=st.session_state.gauss_fit_const_model)
+                else:
+                    st.session_state.gauss_fit_df = function.gaussian_peak_fitting(x_data, y_data, num_peaks=st.session_state.gauss_fit_num_peaks, num_fit_curves=st.session_state.gauss_fit_num_curves)
+            fit_df = pd.concat([df, st.session_state.gauss_fit_df], axis=1)
 
             fit_df_melted = fit_df.melt(id_vars=['Ramanshift'], var_name='variable', value_name='value')
             #print(fit_df_melted)

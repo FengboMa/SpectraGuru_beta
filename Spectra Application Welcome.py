@@ -18,22 +18,25 @@ os.chdir(current_dir)
 function.wide_space_default()
 
 #####################
-params = st.query_params
-token  = params.get("__clerk_db_jwt") or params.get("session_id")
-if isinstance(token, list):
-    token = token[0]
-
-if token and not st.session_state.get("userlogedin"):
-    user = verify_clerk_session(token)
-    if user:
-        st.session_state.userlogedin = True
-        st.session_state.username    = user["first_name"]
-        st.session_state.popup_closed = True
-        st.query_params.clear() 
-        # Introduction page
-
-print("DEBUG  token =", token)            # ← should be a long JWT string
-print("DEBUG  already_logged =", st.session_state.get("userlogedin"))
+#params = st.query_params
+#token  = params.get("__clerk_db_jwt") or params.get("session_id")
+#if isinstance(token, list):
+#    token = token[0]
+#
+#if token and 'user_logged_in' not in st.session_state:
+#    user = verify_clerk_session(token)
+#    if user:
+#        st.session_state.user_logged_in = True
+#        st.session_state.username    = user["first_name"]
+#        st.session_state.popup_closed = True
+#        st.query_params.clear() 
+#        # Introduction page
+#
+#if 'user_logged_in' not in st.session_state:
+#    st.session_state.user_logged_in = False
+#
+#print("DEBUG  token =", token)            # ← should be a long JWT string
+#print("DEBUG  already_logged =", st.session_state.user_logged_in)
 
 #####################
 
@@ -64,30 +67,34 @@ token  = (
 if isinstance(token, list):              # Clerk might give list
     token = token[0]
 
-if token and not st.session_state.get("userlogedin"):
-    user = verify_clerk_session(token)
-    if user:
-        st.session_state.userlogedin = True
-        st.session_state.username = user.get("first_name", "User")
-        st.session_state.popup_closed = True        # skip modal from now on
-
 # ---------- session flags ----------
 for key, default in {
     "popup_closed": False,
-    "userlogedin": False,
+    "user_logged_in": False,
 }.items():
     st.session_state.setdefault(key, default)
 
+# ---------- get user info from token ----------
+if token and not st.session_state.user_logged_in:
+    user = verify_clerk_session(token)
+    print("USER:",user)
+    if user:
+        st.session_state.user_logged_in = True
+        st.session_state.username = user.get("first_name", "User")
+        st.session_state.popup_closed = True        # skip modal from now on
+        print("DEBUG: Retrieved user from token.")
+    #st.query_params.clear()
+
 # ---------- helper for guest button ----------
 def guest_entry():
-    st.session_state.userlogedin = False
+    st.session_state.user_logged_in = False
     st.session_state.popup_closed = True
     st.session_state.current_user_count = function.log_user_count(
         st.session_state.log_file_path
     )
 
 # ---------- modal ----------
-if not st.session_state.popup_closed and not st.session_state.userlogedin:
+if not st.session_state.popup_closed and not st.session_state.user_logged_in:
     # hide close icon
     st.markdown(
         """
@@ -114,6 +121,7 @@ if not st.session_state.popup_closed and not st.session_state.userlogedin:
 
         # right: login via Clerk—just a link
         signin_url = clerk_signin_url()           # already returns the full redirect URL
+        print(signin_url)
         col2.link_button("Log in", signin_url,type="primary")  
 
 
@@ -124,7 +132,7 @@ if not st.session_state.popup_closed and not st.session_state.userlogedin:
         )
 
 # ---------- greet authenticated users ----------
-if st.session_state.get("userlogedin"):
+if st.session_state.get("user_logged_in"):
     st.write(f"Welcome {st.session_state.get('username', 'Guest')} 👋")
 # -------------
 

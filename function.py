@@ -1340,6 +1340,7 @@ def gaussian_peak_fitting(x_data, y_data, num_peaks=1, num_fit_curves=1, const_m
     prominences = peak_df['prominences']
     total_prominence = np.sum(prominences)
 
+    # ensure that every peak gets at least one Gaussian
     partition = np.zeros(num_peaks, dtype=int)
     subtotal = min(num_peaks, num_fit_curves)
     for i in range(subtotal):

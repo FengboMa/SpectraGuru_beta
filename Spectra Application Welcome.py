@@ -121,7 +121,6 @@ if not st.session_state.popup_closed and not st.session_state.user_logged_in:
 
         # right: login via Clerk—just a link
         signin_url = clerk_signin_url()           # already returns the full redirect URL
-        print(signin_url)
         col2.link_button("Log in", signin_url,type="primary")  
 
 

@@ -25,7 +25,7 @@ def verify_clerk_session(token: str):
     # ① try universal verify  ────────────────────────────────
     resp = requests.post(
         "https://api.clerk.com/v1/tokens/verify",
-        headers={"Authorization": f"Bearer {CLERK_SECRET_KEY}"},
+        headers={"Authorization": f"Bearer \u003c{CLERK_SECRET_KEY}\u003e"},
         json={"token": token},
         timeout=5,
     )

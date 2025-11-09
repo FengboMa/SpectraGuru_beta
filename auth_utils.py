@@ -29,6 +29,7 @@ def verify_clerk_session(token: str):
         json={"token": token},
         timeout=5,
     )
+    print(resp.text)
     print("TRACE  /tokens/verify →", resp.status_code, resp.text[:150])
 
     if resp.status_code == 200:

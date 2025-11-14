@@ -4,7 +4,8 @@ from dotenv import load_dotenv
 
 load_dotenv()                      # reads .env in local dev
 
-
+CLERK_JWKS_KEY = os.getenv("CLERK_JWKS_KEY")
+CLERK_PUBLIC_KEY = os.getenv("CLERK_PUBLISHABLE_KEY")
 CLERK_SECRET_KEY = os.getenv("CLERK_SECRET_KEY")
 FRONTEND_API    = os.getenv("CLERK_FRONTEND_API")
 APP_URL         = os.getenv("APP_URL")          # where Clerk should bounce back
@@ -24,12 +25,13 @@ def verify_clerk_session(token: str):
 
     # ① try universal verify  ────────────────────────────────
     resp = requests.post(
-        "https://api.clerk.com/v1/tokens/verify",
-        headers={"Authorization": f"Bearer \u003c{CLERK_SECRET_KEY}\u003e"},
+        f"https://api.clerk.com/v1/token/verify",
+        headers={"Authorization": f"Bearer {CLERK_SECRET_KEY}"},
         json={"token": token},
         timeout=5,
     )
-    print(resp.text)
+    print("XXX",resp.text)
+    print("XXX")
     print("TRACE  /tokens/verify →", resp.status_code, resp.text[:150])
 
     if resp.status_code == 200:

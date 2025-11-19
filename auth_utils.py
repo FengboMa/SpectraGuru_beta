@@ -22,13 +22,20 @@ def clerk_signin_url() -> str:
     )
 
 def verify_clerk_session(token: str):
+    token = "sess_35g81LQlKvUOjeGJSwx0Xhtyqmu"
+    resp = requests.get(
+        f"https://api.clerk.com/v1/sessions/{token}",
+        headers={"Authorization": f"Bearer {CLERK_SECRET_KEY}"},
+        timeout=5,
+    )
+    print("YYY", resp.json(), "YYY")
     from clerk_backend_api import Clerk
     from clerk_backend_api.security.types import AuthenticateRequestOptions
     with Clerk(
         bearer_auth=f"{CLERK_SECRET_KEY}",
     ) as clerk:
-
-        session = clerk.sessions.list()
+        pass
+        session = clerk.sessions.list(client_id=resp.json()['client_id'])
         print("###",session,"###")
 
 def verify_clerk_session_old(token: str):

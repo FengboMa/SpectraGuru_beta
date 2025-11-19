@@ -22,7 +22,7 @@ def clerk_signin_url() -> str:
     )
 
 def verify_clerk_session(token: str):
-    token = "sess_35g81LQlKvUOjeGJSwx0Xhtyqmu"
+    
     resp = requests.get(
         f"https://api.clerk.com/v1/sessions/{token}",
         headers={"Authorization": f"Bearer {CLERK_SECRET_KEY}"},
@@ -37,8 +37,6 @@ def verify_clerk_session(token: str):
         session = clerk.sessions.list(client_id=resp.json()['client_id'])
         print("###",session,"###")
     
-    import streamlit as st
-    print("COOKIE:",st.context.cookies['_streamlit_xsrf'])
 
 def verify_clerk_session_old(token: str):
     if not token:

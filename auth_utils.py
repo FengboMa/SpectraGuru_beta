@@ -30,13 +30,15 @@ def verify_clerk_session(token: str):
     )
     print("YYY", resp.json(), "YYY")
     from clerk_backend_api import Clerk
-    from clerk_backend_api.security.types import AuthenticateRequestOptions
     with Clerk(
         bearer_auth=f"{CLERK_SECRET_KEY}",
     ) as clerk:
         pass
         session = clerk.sessions.list(client_id=resp.json()['client_id'])
         print("###",session,"###")
+    
+    import streamlit as st
+    print("COOKIE:",st.context.cookies['_streamlit_xsrf'])
 
 def verify_clerk_session_old(token: str):
     if not token:

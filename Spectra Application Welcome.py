@@ -61,11 +61,14 @@ st.markdown(hide_close_button_css, unsafe_allow_html=True)
 
 params = st.query_params                 # returns Mapping[str, str | list[str] | None]
 token  = (
-    params.get("__clerk_db_jwt")         # either str or list → handle both
+    params.get("__session")
+    or params.get("__clerk_session")
+    or params.get("__clerk_db_jwt")         # either str or list → handle both
     or params.get("session_id")
 )
 if isinstance(token, list):              # Clerk might give list
     token = token[0]
+print("TOKEN:",token)
 
 # ---------- session flags ----------
 for key, default in {

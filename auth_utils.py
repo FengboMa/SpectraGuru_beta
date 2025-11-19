@@ -33,9 +33,12 @@ def verify_clerk_session(token: str):
     with Clerk(
         bearer_auth=f"{CLERK_SECRET_KEY}",
     ) as clerk:
-        pass
-        session = clerk.sessions.list(client_id=resp.json()['client_id'])
-        print("###",session,"###")
+        
+        #session = clerk.sessions.list(client_id=resp.json()['client_id'])
+        #print("###",session,"###")
+
+        res = clerk.instance_settings.get()
+        print("RESPONSE:", res.model_dump_json())
     
 
 def verify_clerk_session_old(token: str):

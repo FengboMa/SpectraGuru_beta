@@ -140,7 +140,7 @@ else:
             
             if st.session_state.stats_avg_act:
                 avg_stats_base = alt.Chart(stats_data_melted).mark_line().encode(
-                        x=alt.X('Ramanshift', title='Raman shift/cm^-1', type='quantitative'),
+                        x=alt.X('Ramanshift', title='Raman shift/cm⁻¹', type='quantitative'),
                         y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
                         tooltip=alt.value(None),
                         color=alt.condition(
@@ -166,7 +166,7 @@ else:
             else:
                 filtered_avg_df = stats_data_melted[stats_data_melted['Sample ID'] == 'Average']
                 avg_stats_base2 = alt.Chart(filtered_avg_df).mark_line().encode(
-                        x=alt.X('Ramanshift', title='Raman shift/cm^-1', type='quantitative'),
+                        x=alt.X('Ramanshift', title='Raman shift/cm⁻¹', type='quantitative'),
                         y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
                         tooltip=alt.value(None),
                         color=alt.value('blue'),
@@ -200,7 +200,7 @@ else:
                 # st.write(std_df)
                 # Plot the results using Altair
                 std_plot = alt.Chart(std_df).mark_line().encode(
-                    x='Ramanshift',
+                    x=alt.X('Ramanshift', axis=alt.Axis(title='Raman shift/cm⁻¹')),
                     y='Standard Deviation'
                 ).properties(
                             width=1300,
@@ -269,7 +269,7 @@ else:
             })
             
             base = alt.Chart(data).encode(
-                x='Ramanshift'
+                x=alt.X('Ramanshift', axis=alt.Axis(title='Raman shift/cm⁻¹'))
             ).properties(
                             width=1300,
                             height=600,

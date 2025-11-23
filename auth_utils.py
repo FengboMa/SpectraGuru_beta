@@ -51,6 +51,23 @@ def request_proxy():
     data = res.read()
 
     print(data.decode("utf-8"))
+
+    import clerk_backend_api
+    from clerk_backend_api import Clerk
+
+
+    with Clerk(
+        bearer_auth=f"{CLERK_SECRET_KEY}"
+    ) as clerk:
+
+        res = clerk.email_addresses.get()
+
+        assert res is not None
+
+        # Handle response
+        print(res)
+
+
     #resp = requests.get("http://localhost:8000/user")
 
 def verify_clerk_session(token: str):

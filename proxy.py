@@ -75,6 +75,19 @@ async def get_user(request: Request):
     # Cookies
     print("Cookies:", request.cookies)
 
+    from clerk_backend_api import Clerk
+    from clerk_backend_api.security import authenticate_request
+    from clerk_backend_api.security.types import AuthenticateRequestOptions
+
+    sdk = Clerk(bearer_auth=f"{CLERK_SECRET_KEY}")
+    request_state = sdk.authenticate_request(
+        request,
+        AuthenticateRequestOptions(
+            authorized_parties=['http://localhost', 'http://localhost:8000', 'http://localhost:8501']
+        )
+    )
+    print("PAYLOAD:",request_state)
+
 
     #return {"user": request.state.user}
 

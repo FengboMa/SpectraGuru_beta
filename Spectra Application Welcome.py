@@ -55,7 +55,6 @@ hide_close_button_css = """
 st.markdown(hide_close_button_css, unsafe_allow_html=True)
 
 
-
 #request_proxy()
 
 # ---------- grab token from URL on every run ----------
@@ -81,7 +80,7 @@ for key, default in {
     st.session_state.setdefault(key, default)
 
 # ---------- get user info from token ----------
-if token and not st.session_state.user_logged_in:
+if False and token and not st.session_state.user_logged_in:
     user = verify_clerk_session(token)
     print("USER:",user)
     if user:

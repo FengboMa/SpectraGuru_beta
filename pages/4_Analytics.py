@@ -734,7 +734,7 @@ else:
             
             # Step 3: Create the base interactive plot
             avg_stats_base2 = alt.Chart(filtered_avg_df).mark_line().encode(
-                x=alt.X('Ramanshift', title='Raman shift/cm^-1', type='quantitative'),
+                x=alt.X('Ramanshift', title='Raman shift/cm⁻¹', type='quantitative'),
                 y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
                 tooltip=alt.value(None),
                 color=alt.value('blue'),
@@ -751,9 +751,9 @@ else:
                 color='red',
                 size=100
             ).encode(
-                x=alt.X('Ramanshift', title='Raman shift/cm^-1', type='quantitative'),
+                x=alt.X('Ramanshift', title='Raman shift/cm⁻¹', type='quantitative'),
                 y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
-                tooltip=[alt.Tooltip('Ramanshift', title='Raman shift/cm^-1'),
+                tooltip=[alt.Tooltip('Ramanshift', title='Raman shift/cm⁻¹'),
                         alt.Tooltip('Intensity', title='Intensity/a.u.')]
             ).properties(
                 width=1300,

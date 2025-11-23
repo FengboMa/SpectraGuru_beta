@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 load_dotenv("CLERK.env")
 import streamlit as st
 from streamlit_modal import Modal
-from auth_utils import clerk_signin_url, verify_clerk_session
+from auth_utils import clerk_signin_url, verify_clerk_session, request_proxy
 # import streamlit.components.v1 as components
 
 import function
@@ -54,6 +54,9 @@ hide_close_button_css = """
 """
 st.markdown(hide_close_button_css, unsafe_allow_html=True)
 
+
+
+#request_proxy()
 
 # ---------- grab token from URL on every run ----------
 

@@ -54,14 +54,20 @@ def request_proxy():
     #resp = requests.get("http://localhost:8000/user")
 
 def verify_clerk_session(token: str):
-    resp = requests.post(
-        f"https://sunny-rodent-17.accounts.dev/v1/client/tokens",
-        headers={"Authorization": f"Bearer <{CLERK_PUBLIC_KEY}>"},
-        json={"jwt": token}
+    from clerk_backend_api import Clerk
 
-    )
 
-    print(resp.text)
+    with Clerk(
+        bearer_auth=f"{CLERK_SECRET_KEY}",
+    ) as clerk:
+
+        res = clerk.jwks.get_jwks()
+
+        assert res is not None
+
+        # Handle response
+        print(res)
+
 
     
     

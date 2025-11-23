@@ -555,6 +555,37 @@ def get_transformed_spectrum_data():
     except:
         pass
 
+def confidence_interval(df, conf_lvl=95):
+    """
+    Compute confidence interval for each row of a dataframe.
+    df: dataframe with replicate spectra (each column is a spectrum)
+    conf_lvl: confidence level (default 95)
+    Returns: mean_values, ci_upper, ci_lower
+    """
+    import numpy as np
+    from scipy.stats import t
+    # Number of replicate spectra
+    n = df.shape[1]
+
+    # Mean and standard deviation per row
+    mean_values = df.mean(axis=1)
+    sd_values = df.std(axis=1)
+
+    # Standard error
+    se_values = sd_values / np.sqrt(n)
+
+    # Convert conf level to two-sided alpha
+    alpha = 1 - conf_lvl / 100.0
+
+    # t-value for CI
+    t_value = t.ppf(1 - alpha/2, df=n - 1)
+
+    # CI bounds
+    ci_upper = mean_values + t_value * se_values
+    ci_lower = mean_values - t_value * se_values
+
+    return mean_values, ci_upper, ci_lower
+
 def hierarchical_clustering_heatmap(df):
     """
     Function to create a hierarchical clustering heatmap on the sample columns of the input dataframe.

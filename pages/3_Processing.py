@@ -680,7 +680,7 @@ else:
             # Generate the Altair plot
             def generate_altair_plot(data):
                 base = alt.Chart(data).mark_line().encode(
-                x=alt.X(x_axis, title='Raman shift/cm^-1', type='quantitative'),
+                x=alt.X(x_axis, title='Raman shift/cm⁻¹', type='quantitative'),
                 y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
                 color='Sample ID:N',
                 size=alt.condition(
@@ -719,7 +719,7 @@ else:
             # Generate the Altair plot
             def generate_altair_plot_fastmode(data):
                 base = base = alt.Chart(data).mark_line().encode(
-                x=alt.X(x_axis, title='Raman shift/cm^-1', type='quantitative'),
+                x=alt.X(x_axis, title='Raman shift/cm⁻¹', type='quantitative'),
                 y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
                 tooltip=alt.value(None),
                 color='Sample ID:N',

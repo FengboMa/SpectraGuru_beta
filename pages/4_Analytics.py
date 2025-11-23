@@ -39,6 +39,20 @@ if 'df' in st.session_state:
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
         st.sidebar.toggle(label='Show spectra you selected', value=True, key = 'stats_avg_act',help='Show or hide original selected spectra.')
         st.sidebar.toggle(label='Show Standard Deviation', value=True, key = 'stats_avg_std_act',help='Show or hide Standard Deviation.')
+    elif st.session_state.stats_plot_select == "Confidence Interval Plot":
+        st.sidebar.selectbox(label="Confidence Level",
+            options=(90, 95, 99),
+            index=1,
+            key="conf_lvl",
+            help=(
+        "Choose the confidence level for the interval. "
+        "This controls the width of the confidence band. Higher levels produce wider intervals. "
+        "The interval is computed with the formula: "
+        "$CI = \\bar{x} \\pm t \\cdot (s / \\sqrt{n})$, "
+        "where $\\bar{x}$ is the mean, $s$ is the standard deviation, and $n$ is the number of spectra. "
+        "This interval estimates the uncertainty of the mean spectrum."
+    ))
+    
     elif st.session_state.stats_plot_select == "Spectra Derivation":
         st.sidebar.selectbox(label="Normalization Method",
             options=("None", "Min-Max Normalization"),
@@ -253,14 +267,8 @@ else:
             std_df = st.session_state.df_stats.iloc[:, 1:]
             std_df = std_df.drop('Average', axis=1)
             
-            # st.write(std_df)
-            # Calculate mean and std deviation
-            mean_values = std_df.mean(axis=1)
-            std_values = std_df.std(axis=1)
+            mean_values, ci_upper, ci_lower = function.confidence_interval(std_df, conf_lvl=st.session_state.conf_lvl)
 
-            ci_upper = mean_values + std_values
-            ci_lower = mean_values - std_values
-            
             data = pd.DataFrame({
                 'Ramanshift': ramanshift,
                 'Mean': mean_values,
@@ -268,13 +276,16 @@ else:
                 'CI_Lower': ci_lower
             })
             
+            CI_title_text = f"{st.session_state.conf_lvl} percent Confidence Interval Plot"
+            
             base = alt.Chart(data).encode(
                 x=alt.X('Ramanshift', axis=alt.Axis(title='Raman shift/cm⁻¹'))
             ).properties(
                             width=1300,
                             height=600,
+                            title = CI_title_text
                 )
-
+            
             # Line for mean values
             mean_line = base.mark_line(color='blue').encode(
                 y='Mean'

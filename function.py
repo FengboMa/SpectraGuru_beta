@@ -555,15 +555,22 @@ def get_transformed_spectrum_data():
     except:
         pass
 
-def confidence_interval(df, conf_lvl=95):
+def confidence_interval(df, threshold, interval_method):
     """
-    Compute confidence interval for each row of a dataframe.
-    df: dataframe with replicate spectra (each column is a spectrum)
-    conf_lvl: confidence level (default 95)
-    Returns: mean_values, ci_upper, ci_lower
+    Unified interval computation.
+    
+    df: dataframe of replicate spectra (each column is a spectrum)
+    threshold: 
+        - CI mode: confidence level (90, 95, 99)
+        - STD mode: standard deviation multiplier (1, 2, 3)
+    interval_method: "Confidence Interval" or "Standard Deviation"
+    
+    Returns:
+        mean_values, ci_upper, ci_lower
     """
     import numpy as np
     from scipy.stats import t
+
     # Number of replicate spectra
     n = df.shape[1]
 
@@ -571,20 +578,38 @@ def confidence_interval(df, conf_lvl=95):
     mean_values = df.mean(axis=1)
     sd_values = df.std(axis=1)
 
-    # Standard error
-    se_values = sd_values / np.sqrt(n)
+    # ---------------------------------------------------------
+    # Mode 1: Confidence Interval (threshold = conf level)
+    # ---------------------------------------------------------
+    if interval_method == "Confidence Interval":
 
-    # Convert conf level to two-sided alpha
-    alpha = 1 - conf_lvl / 100.0
+        conf_lvl = threshold
 
-    # t-value for CI
-    t_value = t.ppf(1 - alpha/2, df=n - 1)
+        # Standard error
+        se_values = sd_values / np.sqrt(n)
 
-    # CI bounds
-    ci_upper = mean_values + t_value * se_values
-    ci_lower = mean_values - t_value * se_values
+        # Convert conf level to two-sided alpha
+        alpha = 1 - conf_lvl / 100.0
 
-    return mean_values, ci_upper, ci_lower
+        # t critical value
+        t_value = t.ppf(1 - alpha / 2, df=n - 1)
+
+        ci_upper = mean_values + t_value * se_values
+        ci_lower = mean_values - t_value * se_values
+
+        return mean_values, ci_upper, ci_lower
+
+    # ---------------------------------------------------------
+    # Mode 2: Standard Deviation envelope (threshold = SD multiplier)
+    # ---------------------------------------------------------
+    elif interval_method == "Standard Deviation":
+
+        sd_mult = threshold
+
+        ci_upper = mean_values + sd_mult * sd_values
+        ci_lower = mean_values - sd_mult * sd_values
+
+        return mean_values, ci_upper, ci_lower
 
 def hierarchical_clustering_heatmap(df):
     """

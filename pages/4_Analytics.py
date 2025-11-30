@@ -40,18 +40,54 @@ if 'df' in st.session_state:
         st.sidebar.toggle(label='Show spectra you selected', value=True, key = 'stats_avg_act',help='Show or hide original selected spectra.')
         st.sidebar.toggle(label='Show Standard Deviation', value=True, key = 'stats_avg_std_act',help='Show or hide Standard Deviation.')
     elif st.session_state.stats_plot_select == "Confidence Interval Plot":
-        st.sidebar.selectbox(label="Confidence Level",
-            options=(90, 95, 99),
-            index=1,
-            key="conf_lvl",
+        # Interval method selector
+        interval_method = st.sidebar.radio(
+            label="Interval Method",
+            options=("Confidence Interval", "Standard Deviation"),
+            index=0,   # default to Confidence Interval
             help=(
-        "Choose the confidence level for the interval. "
-        "This controls the width of the confidence band. Higher levels produce wider intervals. "
-        "The interval is computed with the formula: "
-        "$CI = \\bar{x} \\pm t \\cdot (s / \\sqrt{n})$, "
-        "where $\\bar{x}$ is the mean, $s$ is the standard deviation, and $n$ is the number of spectra. "
-        "This interval estimates the uncertainty of the mean spectrum."
-    ))
+                "Choose how the uncertainty band is computed.\n\n"
+                "Confidence Interval estimates the uncertainty of the mean using "
+                "the t-distribution.\n\n"
+                "Standard Deviation shows how replicate spectra vary from each other."
+            ),
+            key = "interval_method"
+        )
+
+        # If user selects Confidence Interval method
+        if interval_method == "Confidence Interval":
+            conf_lvl = st.sidebar.selectbox(
+                label="Confidence Level",
+                options=(90, 95, 99),
+                index=1,   # default to 95 percent
+                key="conf_lvl",
+                help=(
+                    "Choose the confidence level for the interval. "
+                    "Higher levels produce wider intervals. "
+                    "The interval is computed using the formula: "
+                    "$CI = \\bar{x} \\pm t \\cdot (s / \\sqrt{n})$, "
+                    "where $\\bar{x}$ is the mean, $s$ is the standard deviation of replicates, "
+                    "and $n$ is the number of spectra.\n\n"
+                    "This interval estimates **uncertainty of the mean spectrum**, not the "
+                    "spread of the raw spectra."
+                )
+            )
+
+        else:
+            # Standard deviation envelope
+            std_multiplier = st.sidebar.selectbox(
+                label="Number of Standard Deviations",
+                options=(1, 2, 3),
+                index=0,   # default to 1 SD
+                key="std_mult",
+                help=(
+                    "Choose how many standard deviations to use when forming the envelope. "
+                    "For example, 1 SD typically captures about 68 percent of spectra if data is "
+                    "normally distributed.\n\n"
+                    "This method visualizes **spread among individual spectra**, not the "
+                    "uncertainty of the mean."
+                )
+            )
     
     elif st.session_state.stats_plot_select == "Spectra Derivation":
         st.sidebar.selectbox(label="Normalization Method",
@@ -267,7 +303,18 @@ else:
             std_df = st.session_state.df_stats.iloc[:, 1:]
             std_df = std_df.drop('Average', axis=1)
             
-            mean_values, ci_upper, ci_lower = function.confidence_interval(std_df, conf_lvl=st.session_state.conf_lvl)
+            if st.session_state.interval_method == "Confidence Interval":
+                threshold = st.session_state.conf_lvl     # 90, 95, 99
+                CI_title_text = f"{threshold} percent Confidence Interval Plot"
+            else:
+                threshold = st.session_state.std_mult     # 1, 2, 3
+                CI_title_text = f"±{threshold} Standard Deviation Envelope Plot"
+
+            mean_values, ci_upper, ci_lower = function.confidence_interval(
+                df=std_df,
+                threshold=threshold,
+                interval_method=st.session_state.interval_method
+            )
 
             data = pd.DataFrame({
                 'Ramanshift': ramanshift,
@@ -275,9 +322,7 @@ else:
                 'CI_Upper': ci_upper,
                 'CI_Lower': ci_lower
             })
-            
-            CI_title_text = f"{st.session_state.conf_lvl} percent Confidence Interval Plot"
-            
+
             base = alt.Chart(data).encode(
                 x=alt.X('Ramanshift', axis=alt.Axis(title='Raman shift/cm⁻¹'))
             ).properties(

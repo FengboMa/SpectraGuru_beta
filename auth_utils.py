@@ -12,7 +12,7 @@ ACCOUNT_PORTAL = os.getenv("CLERK_TEST_ACCOUNT_PORTAL")
 APP_URL         = os.getenv("APP_URL")          # where Clerk should bounce back
 JWKS_URL = os.getenv("CLERK_TEST_JWKS_URL")
 
-print("PK:",CLERK_PUBLIC_KEY)
+#print("PK:",CLERK_PUBLIC_KEY)
 
 def clerk_signin_url() -> str:
     app_url = os.getenv("APP_URL") or "http://localhost:80"   # fallback → never None
@@ -34,7 +34,7 @@ def request_proxy():
     res = conn.getresponse()
     data = res.read()
 
-    print(data.decode("utf-8"))
+    #print(data.decode("utf-8"))
 
     ####
     client_id = "client_35rVJEnjt4hUf0GMvTaNAnonOak"

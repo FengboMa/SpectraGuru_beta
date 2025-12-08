@@ -11,7 +11,7 @@ import React, {
   ReactElement,
 } from "react"
 import { SignIn } from "@clerk/clerk-react"
-import { useUser } from "@clerk/clerk-react"
+import { useUser, useClerk } from "@clerk/clerk-react"
 
 /**
  * A template for creating Streamlit components with React
@@ -31,9 +31,12 @@ import { useUser } from "@clerk/clerk-react"
  */
 function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
   // Extract custom arguments passed from Python
+  const action = args["action"]
   const height = args["height"]
+  const render = args["render"]
 
   const { isSignedIn, user } = useUser()
+  const { signOut } = useClerk()
 
   useEffect(() => {
     // Call this when the component's size might change
@@ -42,7 +45,26 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
     // affect the visual size of the component.
   }, [theme])
 
+  if (action == "logout") {
+    signOut()
+    return (
+      //<div id="hidden" style={{ display: "none" }}></div>
+      <span>
+        LOGOUT. &nbsp;
+      </span>
+    )
+  }
+
   useEffect(() => {
+
+    // If no user data appears after a full second, assume the user is logged out.
+    if (action == "startup" && !(isSignedIn && user)) {
+      let timeoutId: ReturnType<typeof setTimeout>;
+      timeoutId = setTimeout(() => {
+        Streamlit.setComponentValue("NO_USER");
+      }, 1000);
+    }
+
     if (isSignedIn && user) {
       // Send the user object to Streamlit
       const safeUser = {
@@ -57,15 +79,25 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
     }
   }, [isSignedIn, user]);
 
+  if (!render) {
+    if (!isSignedIn) {
+      return (
+        <div id="hidden" style={{ display: "none" }}>
+          <SignIn />
+        </div>
+      )
+    }
+    return (
+      <div id="hidden" style={{ display: "none" }}></div>
+    )
+  }
   if (!isSignedIn) {
     return (
       <span>
-        Hello, there! &nbsp;
         <SignIn />
       </span>
     )
   }
-
   return (
     <span>
       Already signed in. &nbsp;

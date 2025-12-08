@@ -40,6 +40,73 @@ function.wide_space_default()
 
 #####################
 
+if 'user_decided' not in st.session_state:
+    st.session_state.user_decided = False
+
+if 'user' not in st.session_state:
+    st.session_state.user = None
+
+if 'user_logged_in' not in st.session_state:
+    st.session_state.user_logged_in = False
+
+if 'attempt_logout' not in st.session_state:
+    st.session_state.attempt_logout = False
+
+import streamlit.components.v1 as components
+
+_clerk_component = components.declare_component(
+    "clerk_component",
+    url="http://localhost:3001/"
+)
+
+if not st.session_state.attempt_logout:
+    placeholder = st.empty()
+
+    #print("run")
+
+    with placeholder:
+        user = _clerk_component(key="startup", action="startup", height=0, render=False)
+
+        if user:
+            st.session_state.user_decided = True
+            if not user == "NO_USER":
+                st.session_state.user = user
+                st.session_state.user_logged_in = user['signedIn']
+
+    if st.session_state.user_decided:
+        placeholder.empty()
+    else:
+        st.write("Loading user data...")
+        st.stop() # do not go forward without getting confirmation from Clerk about user login status
+
+st.session_state.attempt_logout = False
+
+#st.write(st.session_state.user)
+print("User:", st.session_state.user)
+
+
+def login():
+    placeholder = st.empty()
+    with placeholder:
+        _clerk_component(key="login", action="login", height=500, render=True)
+
+def logout():
+
+    print("test")
+
+    placeholder = st.empty()
+    with placeholder:
+        _clerk_component(key="logout", action="logout", height=0, render=False)
+
+    st.session_state.user_decided = False
+    st.session_state.user = None
+    st.session_state.user_logged_in = False
+    st.session_state.attempt_logout = True
+
+st.button("Log Out", on_click=logout)
+st.button("Log in", on_click=login)
+
+
 
 st.image(r"element/Application header picture-3.png")
 st.session_state.log_file_path = r"element/user_count.txt"
@@ -75,7 +142,7 @@ token  = (
 )
 if isinstance(token, list):              # Clerk might give list
     token = token[0]
-print("TOKEN:",token)
+#print("TOKEN:",token)
 
 # ---------- session flags ----------
 for key, default in {
@@ -104,7 +171,7 @@ def guest_entry():
     )
 
 # ---------- modal ----------
-if not st.session_state.popup_closed and not st.session_state.user_logged_in:
+if not st.session_state.popup_closed and st.session_state.user_decided and not st.session_state.user_logged_in:
     # hide close icon
     st.markdown(
         """
@@ -141,8 +208,12 @@ if not st.session_state.popup_closed and not st.session_state.user_logged_in:
         )
 
 # ---------- greet authenticated users ----------
-if st.session_state.get("user_logged_in"):
-    st.write(f"Welcome {st.session_state.get('username', 'Guest')} 👋")
+if st.session_state.user_logged_in:
+    if st.session_state.user['firstName']:
+        username = st.session_state.user['firstName']
+    else:
+        username = "Guest"
+    st.write(f"Welcome {username}! 👋")
 # -------------
 
 
@@ -314,14 +385,3 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-import streamlit.components.v1 as components
-
-_clerk_component = components.declare_component(
-    "clerk_component",
-    url="http://localhost:3001/"
-)
-
-user = _clerk_component(height=200)
-st.write("Clerk Component")
-
-st.write(user)

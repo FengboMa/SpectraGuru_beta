@@ -3,6 +3,7 @@ import requests
 from jose import jwt
 import os, requests
 from dotenv import load_dotenv
+from clerk_backend_api import Clerk
 
 load_dotenv("CLERK_TEST.env")                      # reads .env in local dev
 
@@ -13,15 +14,16 @@ ACCOUNT_PORTAL = os.getenv("CLERK_TEST_ACCOUNT_PORTAL")
 JWKS_URL = os.getenv("CLERK_TEST_JWKS_URL")
 
 app = FastAPI()
+clerk_client = Clerk(bearer_auth=CLERK_SECRET_KEY)
 from fastapi.middleware.cors import CORSMiddleware
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:8501"],  # Streamlit origin
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+#app.add_middleware(
+#    CORSMiddleware,
+#    allow_origins=["http://localhost:8501"],  # Streamlit origin
+#    allow_credentials=True,
+#    allow_methods=["*"],
+#    allow_headers=["*"],
+#)
 
 #JWKS_URL = "https://<your-clerk-domain>/.well-known/jwks.json"
 #CLERK_ISSUER = "https://<your-clerk-domain>"
@@ -91,3 +93,28 @@ async def get_user(request: Request):
 
     #return {"user": request.state.user}
 
+@app.get("/protected")
+async def protected(request: Request):
+    print("QUERY RECEIVED")
+    # Query params
+    print("Query params:", dict(request.query_params))
+
+    # Headers
+    print("Headers:", dict(request.headers))
+
+    # Cookies
+    print("Cookies:", request.cookies)
+
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+
+    token = auth_header.split("Bearer ")[1]
+
+    # Verify session with Clerk
+    try:
+        session = clerk_client.sessions.verify(token)
+        user = clerk_client.users.get(session.user_id)
+        return {"user_id": user.id, "email": user.email_addresses}
+    except Exception as e:
+        raise HTTPException(status_code=401, detail="Invalid token")

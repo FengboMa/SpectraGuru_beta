@@ -57,6 +57,11 @@ st.markdown(hide_close_button_css, unsafe_allow_html=True)
 
 #request_proxy()
 
+#clerk_script = 
+
+#html(clerk_script)
+
+
 # ---------- grab token from URL on every run ----------
 
 
@@ -308,3 +313,15 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
+import streamlit.components.v1 as components
+
+_clerk_component = components.declare_component(
+    "clerk_component",
+    url="http://localhost:3001/"
+)
+
+user = _clerk_component(height=200)
+st.write("Clerk Component")
+
+st.write(user)

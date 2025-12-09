@@ -33,7 +33,6 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
   // Extract custom arguments passed from Python
   const action = args["action"]
   const height = args["height"]
-  const render = args["render"]
 
   const { isSignedIn, user } = useUser()
   const { signOut } = useClerk()
@@ -79,18 +78,6 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
     }
   }, [isSignedIn, user]);
 
-  if (!render) {
-    if (!isSignedIn) {
-      return (
-        <div id="hidden" style={{ display: "none" }}>
-          <SignIn />
-        </div>
-      )
-    }
-    return (
-      <div id="hidden" style={{ display: "none" }}></div>
-    )
-  }
   if (!isSignedIn) {
     return (
       <span>
@@ -100,7 +87,7 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
   }
   return (
     <span>
-      Already signed in. &nbsp;
+      Loading... &nbsp;
     </span>
   )
 }

@@ -1,8 +1,7 @@
-from dotenv import load_dotenv
-load_dotenv("CLERK.env")
 import streamlit as st
 from streamlit_modal import Modal
-from auth_utils import clerk_signin_url, verify_clerk_session, request_proxy
+from auth_utils import login, logout, startup, populate, restore_defaults
+from auth_utils import _clerk_component
 # import streamlit.components.v1 as components
 
 import function
@@ -42,66 +41,25 @@ function.wide_space_default()
 
 if 'user_decided' not in st.session_state:
     st.session_state.user_decided = False
-
 if 'user' not in st.session_state:
     st.session_state.user = None
-
 if 'user_logged_in' not in st.session_state:
     st.session_state.user_logged_in = False
-
 if 'attempt_logout' not in st.session_state:
     st.session_state.attempt_logout = False
-
-import streamlit.components.v1 as components
-
-_clerk_component = components.declare_component(
-    "clerk_component",
-    url="http://localhost:3001/"
-)
+    print("ATTEMPT LOGOUT FALSE LINE 50")
+if 'show_welcome_modal' not in st.session_state:
+    st.session_state.show_welcome_modal = True
+if 'show_login_modal' not in st.session_state:
+    st.session_state.show_login_modal = False
 
 if not st.session_state.attempt_logout:
-    placeholder = st.empty()
-
-    #print("run")
-
-    with placeholder:
-        user = _clerk_component(key="startup", action="startup", height=0, render=False)
-
-        if user:
-            st.session_state.user_decided = True
-            if not user == "NO_USER":
-                st.session_state.user = user
-                st.session_state.user_logged_in = user['signedIn']
-
-    if st.session_state.user_decided:
-        placeholder.empty()
-    else:
-        st.write("Loading user data...")
-        st.stop() # do not go forward without getting confirmation from Clerk about user login status
-
-st.session_state.attempt_logout = False
+    startup()
+else:
+    print("ATTEMPT LOGOUT")
 
 #st.write(st.session_state.user)
 print("User:", st.session_state.user)
-
-
-def login():
-    placeholder = st.empty()
-    with placeholder:
-        _clerk_component(key="login", action="login", height=500, render=True)
-
-def logout():
-
-    print("test")
-
-    placeholder = st.empty()
-    with placeholder:
-        _clerk_component(key="logout", action="logout", height=0, render=False)
-
-    st.session_state.user_decided = False
-    st.session_state.user = None
-    st.session_state.user_logged_in = False
-    st.session_state.attempt_logout = True
 
 st.button("Log Out", on_click=logout)
 st.button("Log in", on_click=login)
@@ -128,11 +86,6 @@ st.markdown(hide_close_button_css, unsafe_allow_html=True)
 
 #html(clerk_script)
 
-
-# ---------- grab token from URL on every run ----------
-
-
-
 params = st.query_params                 # returns Mapping[str, str | list[str] | None]
 token  = (
     params.get("__session")
@@ -143,13 +96,6 @@ token  = (
 if isinstance(token, list):              # Clerk might give list
     token = token[0]
 #print("TOKEN:",token)
-
-# ---------- session flags ----------
-for key, default in {
-    "popup_closed": False,
-    "user_logged_in": False,
-}.items():
-    st.session_state.setdefault(key, default)
 
 # ---------- get user info from token ----------
 if False and token and not st.session_state.user_logged_in:
@@ -165,13 +111,17 @@ if False and token and not st.session_state.user_logged_in:
 # ---------- helper for guest button ----------
 def guest_entry():
     st.session_state.user_logged_in = False
-    st.session_state.popup_closed = True
+    st.session_state.show_welcome_modal = False
     st.session_state.current_user_count = function.log_user_count(
         st.session_state.log_file_path
     )
 
-# ---------- modal ----------
-if not st.session_state.popup_closed and st.session_state.user_decided and not st.session_state.user_logged_in:
+print("Welcome:",st.session_state.show_welcome_modal)
+print("Logged in:",st.session_state.user_logged_in)
+
+# ---------- welcome modal ----------
+if st.session_state.show_welcome_modal and not st.session_state.user_logged_in:
+    st.session_state.show_login_modal = False
     # hide close icon
     st.markdown(
         """
@@ -182,10 +132,10 @@ if not st.session_state.popup_closed and st.session_state.user_decided and not s
         unsafe_allow_html=True,
     )
 
-    modal = Modal("Welcome to SpectraGuru", key="welcome_modal",
+    welcome_modal = Modal("Welcome to SpectraGuru", key="welcome_modal",
                   padding=20, max_width=600)
 
-    with modal.container():
+    with welcome_modal.container():
         st.info("SpectraGuru is still under development. Current version: SpectraGuru ver. 1.2.1")
         st.write("Thanks for visiting SpectraGuru, a spectroscopy processing and visualization tool.")
         st.write("If you encounter a problem, please email Fengbo.Ma@uga.edu")
@@ -197,8 +147,10 @@ if not st.session_state.popup_closed and st.session_state.user_decided and not s
         col1.button("Continue as Guest", on_click=guest_entry)
 
         # right: login via Clerk—just a link
-        signin_url = clerk_signin_url()           # already returns the full redirect URL
-        col2.link_button("Log in", signin_url,type="primary")  
+        #signin_url = clerk_signin_url()           # already returns the full redirect URL
+        #col2.link_button("Log in", signin_url,type="primary")  
+
+        col2.button("Log in here", on_click=login, type="primary")
 
 
         st.caption(
@@ -206,6 +158,22 @@ if not st.session_state.popup_closed and st.session_state.user_decided and not s
             "[Policy and Disclaimer of SpectraGuru]"
             "(https://fengboma.github.io/docs.spectraguru/docs/License-Policies-Disclaimers.html)"
         )
+
+print("Login modal:", st.session_state.show_login_modal)
+print("User decided:", st.session_state.user_decided)
+# ---------- login modal ----------- #
+if st.session_state.show_login_modal and not st.session_state.user_logged_in:
+    st.session_state.show_welcome_modal = False
+
+    @st.dialog("Log in to SpectraGuru", width="medium", dismissible=True, on_dismiss="ignore")
+    def login_dialog():
+        user = _clerk_component(key="login", action="login", height=500)
+
+        if populate(user):
+            st.rerun()
+
+    login_dialog()
+
 
 # ---------- greet authenticated users ----------
 if st.session_state.user_logged_in:

@@ -7,6 +7,9 @@ _clerk_component = components.declare_component(
     url="http://localhost:3001/"
 )
 
+def clerk_component(key, action, height=0):
+    return _clerk_component(key=key, action=action, height=height)
+
 def populate(user):
     if user:
         st.session_state.user_decided = True
@@ -26,7 +29,7 @@ def populate(user):
 def startup():
     placeholder = st.empty()
     with placeholder:
-        user = _clerk_component(key="startup", action="startup", height=0)
+        user = clerk_component(key="startup", action="startup")
 
         populate(user)
 
@@ -45,8 +48,7 @@ def login():
     
 def logout():
     with st.session_state.global_placeholder:
-        st.write("test")
-        _clerk_component(key="logout", action="logout", height=100)
+        clerk_component(key="logout", action="logout")
     
     st.session_state.user_decided = False
     st.session_state.user = None

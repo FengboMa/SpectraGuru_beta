@@ -1,7 +1,7 @@
 import streamlit as st
 from streamlit_modal import Modal
 from auth_utils import login, logout, startup, populate
-from auth_utils import _clerk_component
+from auth_utils import clerk_component
 # import streamlit.components.v1 as components
 
 import function
@@ -62,9 +62,9 @@ else:
 print("User:", st.session_state.user)
 
 if st.session_state.user_logged_in:
-    st.button("Log Out", on_click=logout)
+    st.button("Log Out", on_click=logout, type='primary')
 elif not st.session_state.show_welcome_modal:
-    st.button("Log in", on_click=login)
+    st.button("Log in", on_click=login, type='primary')
 
 
 
@@ -165,9 +165,12 @@ print("User decided:", st.session_state.user_decided)
 # ---------- login modal ----------- #
 if st.session_state.show_login_modal:
 
-    @st.dialog("Log in to SpectraGuru", width="medium", dismissible=True, on_dismiss="ignore")
+    def abort():
+        st.session_state.show_login_modal = False
+
+    @st.dialog("Log in to SpectraGuru", width="medium", dismissible=True, on_dismiss=abort)
     def login_dialog():
-        user = _clerk_component(key="login", action="login", height=500)
+        user = clerk_component(key="login", action="login", height=500)
 
         if populate(user):
             st.rerun()
@@ -353,4 +356,4 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.session_state.global_placeholder = st.empty()
+st.session_state.global_placeholder = st.empty() # this should stay the last line of code in this file.

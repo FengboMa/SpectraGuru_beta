@@ -1,6 +1,6 @@
 import streamlit as st
 from streamlit_modal import Modal
-from auth_utils import login, logout, startup, populate, restore_defaults
+from auth_utils import login, logout, startup, populate
 from auth_utils import _clerk_component
 # import streamlit.components.v1 as components
 
@@ -45,24 +45,26 @@ if 'user' not in st.session_state:
     st.session_state.user = None
 if 'user_logged_in' not in st.session_state:
     st.session_state.user_logged_in = False
-if 'attempt_logout' not in st.session_state:
-    st.session_state.attempt_logout = False
-    print("ATTEMPT LOGOUT FALSE LINE 50")
+if 'do_startup' not in st.session_state:
+    st.session_state.do_startup = True
 if 'show_welcome_modal' not in st.session_state:
     st.session_state.show_welcome_modal = True
 if 'show_login_modal' not in st.session_state:
     st.session_state.show_login_modal = False
 
-if not st.session_state.attempt_logout:
+if st.session_state.do_startup:
+    print("DOING STARTUP...")
     startup()
 else:
-    print("ATTEMPT LOGOUT")
+    print("STARTUP SKIPPED")
 
 #st.write(st.session_state.user)
 print("User:", st.session_state.user)
 
-st.button("Log Out", on_click=logout)
-st.button("Log in", on_click=login)
+if st.session_state.user_logged_in:
+    st.button("Log Out", on_click=logout)
+elif not st.session_state.show_welcome_modal:
+    st.button("Log in", on_click=login)
 
 
 
@@ -120,8 +122,7 @@ print("Welcome:",st.session_state.show_welcome_modal)
 print("Logged in:",st.session_state.user_logged_in)
 
 # ---------- welcome modal ----------
-if st.session_state.show_welcome_modal and not st.session_state.user_logged_in:
-    st.session_state.show_login_modal = False
+if st.session_state.show_welcome_modal and not st.session_state.show_login_modal:
     # hide close icon
     st.markdown(
         """
@@ -162,8 +163,7 @@ if st.session_state.show_welcome_modal and not st.session_state.user_logged_in:
 print("Login modal:", st.session_state.show_login_modal)
 print("User decided:", st.session_state.user_decided)
 # ---------- login modal ----------- #
-if st.session_state.show_login_modal and not st.session_state.user_logged_in:
-    st.session_state.show_welcome_modal = False
+if st.session_state.show_login_modal:
 
     @st.dialog("Log in to SpectraGuru", width="medium", dismissible=True, on_dismiss="ignore")
     def login_dialog():
@@ -353,3 +353,4 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+st.session_state.global_placeholder = st.empty()

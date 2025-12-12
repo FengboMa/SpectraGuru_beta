@@ -13,6 +13,10 @@ def populate(user):
         if not user == "NO_USER":
             st.session_state.user = user
             st.session_state.user_logged_in = user['signedIn']
+
+            st.session_state.show_login_modal = False
+            st.session_state.show_welcome_modal = False
+
             return True
         else:
             return False
@@ -28,28 +32,22 @@ def startup():
 
     if st.session_state.user_decided:
         placeholder.empty()
+        st.session_state.do_startup = False
     else:
         st.write("Loading user data...")
         st.stop() # do not go forward without getting confirmation from Clerk about user login status
 
 def login():
-    st.session_state.attempt_logout = False
-    print("ATTEMPT LOGOUT FALSE LINE 37")
-    st.session_state.show_welcome_modal = False
+    if 'global_placeholder' in st.session_state:
+        st.session_state.global_placeholder.empty()
+
     st.session_state.show_login_modal = True
     
 def logout():
-    placeholder = st.empty()
-    with placeholder:
-        _clerk_component(key="logout", action="logout", height=0)
+    with st.session_state.global_placeholder:
+        st.write("test")
+        _clerk_component(key="logout", action="logout", height=100)
     
-    restore_defaults()
-    st.session_state.attempt_logout = True
-    print("ATTEMPT LOGOUT TRUE LINE 48")
-
-def restore_defaults():
     st.session_state.user_decided = False
     st.session_state.user = None
     st.session_state.user_logged_in = False
-    st.session_state.show_welcome_modal = True
-    st.session_state.show_login_modal = False

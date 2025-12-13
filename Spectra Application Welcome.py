@@ -170,10 +170,13 @@ if st.session_state.show_login_modal:
 
     @st.dialog("Log in to SpectraGuru", width="medium", dismissible=True, on_dismiss=abort)
     def login_dialog():
-        user = clerk_component(key="login", action="login", height=500)
+        left, center, right = st.columns([1, 3, 1])
 
-        if populate(user):
-            st.rerun()
+        with center:
+            user = clerk_component(key="login", action="login", height=500)
+
+            if populate(user):
+                st.rerun()
 
     login_dialog()
 

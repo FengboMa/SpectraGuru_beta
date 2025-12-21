@@ -97,6 +97,23 @@ if 'df' in st.session_state:
             help="Apply per-spectrum Min–Max scaling before taking derivatives.")
     elif st.session_state.stats_plot_select == "Correlation Heatmap":
         
+        st.sidebar.selectbox(
+            label='Correlation Algorithm',
+            options=('Pearson Correlation', 'Cosine Similarity'),
+            index=0,
+            key='heatmap_corr_method',
+            help=(
+                "Choose the correlation/similarity algorithm:\n\n"
+                "**Pearson Correlation**: Measures linear correlation between variables. "
+                "Values range from -1 (perfect negative) to 1 (perfect positive). "
+                "Sensitive to scale and magnitude.\n\n"
+                "**Cosine Similarity**: Measures the cosine of the angle between vectors. "
+                "Values range from -1 to 1. Less sensitive to magnitude, focuses on direction/shape."
+            )
+        )
+        
+        st.sidebar.toggle(label='Compute Average', value=False, key='heatmap_compute_avg', help='Add an average row/column at the end of the heatmap.')
+        
         if st.sidebar.toggle(label='Customize Heatmap scale', value=False, key = 'heatmap_scale',help='Customize heatmap scale manually.'):
             st.sidebar.number_input(label='Heatmap scale min',min_value= -1.0, max_value= 1.00, placeholder='Insert a number between -1 and 1',
                                     key = 'heatmap_min',step = 0.01, value = 0.5, format="%.2f")
@@ -490,16 +507,27 @@ else:
                 st.error(f"Error during processing: {e}")
         
         elif st.session_state.stats_plot_select == "Correlation Heatmap":
-            # Select only the columns we need for standard deviation calculation
+            # Select only the columns we need for correlation calculation
             # Filter out the columns
             columns_to_include = [col for col in st.session_state.temp.columns if col not in ["Ramanshift", "Average","Standard Deviation"]]
-            df_filtered = st.session_state.temp[columns_to_include]
-            df_filtered['Average'] = df_filtered.mean(axis=1)
+            df_filtered = st.session_state.temp[columns_to_include].copy()
             
-            # st.write(df_filtered)
-
-            # Calculate the correlation matrix
-            corr_matrix = df_filtered.corr()
+            # Add average column if toggle is enabled
+            if st.session_state.heatmap_compute_avg:
+                df_filtered['Average'] = df_filtered.mean(axis=1)
+            
+            # Calculate the correlation matrix based on selected method
+            if st.session_state.heatmap_corr_method == "Pearson Correlation":
+                corr_matrix = df_filtered.corr(method='pearson')
+            else:  # Cosine Similarity
+                from sklearn.metrics.pairwise import cosine_similarity
+                # Calculate cosine similarity between columns (transpose so columns become rows)
+                cosine_sim = cosine_similarity(df_filtered.T)
+                corr_matrix = pd.DataFrame(
+                    cosine_sim,
+                    index=df_filtered.columns,
+                    columns=df_filtered.columns
+                )
 
             # Display the correlation matrix
             # stats_row2.dataframe(corr_matrix, use_container_width=True)

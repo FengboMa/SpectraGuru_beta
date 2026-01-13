@@ -756,35 +756,42 @@ else:
             # function.log_plot_generated_count(st.session_state.log_file_path)
         
         
-        # Download 
+        # Download handlers
         @st.cache_data
         def download_df(df):
-            return df.to_csv(index = False).encode("utf-8")
-        
+            return df.to_csv(index=False).encode("utf-8")
+
         csv = download_df(st.session_state.df)
+
         current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
         download_file_name = f"data_{current_time}.csv"
         download_plot_name = f"spectra_plot_{current_time}.png"
 
-        st.download_button(
-            label="Download data as CSV",
-            data=csv,
-            file_name=download_file_name,
-            mime="text/csv",
-        )
-        
         png_bytes = function.make_matplotlib_png(data_melted, x_axis)
-        st.download_button(
-            "Download plot (PNG, 600 dpi)",
-            data=png_bytes,
-            file_name=download_plot_name,
-            mime="image/png",
-            use_container_width=False,
-    )
-        
+
+        # Create a single row with two columns
+        dcol1,dcol2, col_spacer  = st.columns([1, 1, 3])
+
+        with dcol1:
+            st.download_button(
+                label="Data export (CSV)",
+                data=csv,
+                file_name=download_file_name,
+                mime="text/csv"
+            )
+
+        with dcol2:
+            st.download_button(
+                label="Plot export (PNG, 600 dpi)",
+                data=png_bytes,
+                file_name=download_plot_name,
+                mime="image/png"
+            )
+
+        # Outlier removal log
         if st.session_state.outlierremoval_act:
-            st.write("**Following spectra has been detect and removed by outlier removal function**")
+            st.write("**Following spectra has been detected and removed by the outlier removal function**")
             st.table(st.session_state.remove_outliers_log)
-        
+                
     except:
         pass

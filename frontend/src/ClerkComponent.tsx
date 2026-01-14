@@ -30,6 +30,7 @@ import { useUser, useClerk } from "@clerk/clerk-react"
  * @returns {ReactElement} The rendered component
  */
 function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
+
   // Extract custom arguments passed from Python
   const action = args["action"]
   const height = args["height"]

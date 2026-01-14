@@ -1,10 +1,14 @@
 import streamlit as st
 import streamlit.components.v1 as components
 from streamlit_modal import Modal
+import os
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
 
 _clerk_component = components.declare_component(
     "clerk_component",
-    url="http://localhost:3001/"
+    url="http://localhost:3001/",
+    #path=os.path.join(current_dir, "frontend", "build")
 )
 
 def clerk_component(key, action, height=0):

@@ -48,7 +48,6 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
   if (action == "logout") {
     signOut()
     return (
-      //<div id="hidden" style={{ display: "none" }}></div>
       <span>
         LOGOUT. &nbsp;
       </span>
@@ -82,7 +81,10 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
   if (!isSignedIn) {
     return (
       <span>
-        <SignIn />
+        <SignIn 
+          routing="virtual"
+          forceRedirectUrl="http://localhost:8501/component/auth_utils.clerk_component/index.html"
+        />
       </span>
     )
   }

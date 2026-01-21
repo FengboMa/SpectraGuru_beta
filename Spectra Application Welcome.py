@@ -181,7 +181,6 @@ if st.session_state.show_login_modal:
 
     login_dialog()
 
-
 # ---------- greet authenticated users ----------
 if st.session_state.user_logged_in:
     if st.session_state.user['firstName']:

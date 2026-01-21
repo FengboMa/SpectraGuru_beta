@@ -8,6 +8,7 @@ const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 const rootElement = document.getElementById("root")
 
 if (!rootElement) {
+  console.log("Root element not found")
   throw new Error("Root element not found")
 }
 

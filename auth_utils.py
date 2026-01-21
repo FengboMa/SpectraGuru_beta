@@ -7,15 +7,19 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 
 _clerk_component = components.declare_component(
     "clerk_component",
-    url="http://localhost:3001/",
-    #path=os.path.join(current_dir, "frontend", "build")
+    #url="http://localhost:3001/",
+    path="frontend/build"
 )
 
 def clerk_component(key, action, height=0):
     return _clerk_component(key=key, action=action, height=height)
 
 def populate(user):
-    if user:
+    if user == "TEST":
+        st.session_state.user_decided = True
+        st.session_state.show_login_modal = False
+        return True
+    elif user and not st.session_state.user_logged_in:
         st.session_state.user_decided = True
         if not user == "NO_USER":
             st.session_state.user = user
@@ -27,6 +31,7 @@ def populate(user):
             return True
         else:
             return False
+    return False
 
 
 # checks whether the user is already logged in and populates the user dict accordingly.

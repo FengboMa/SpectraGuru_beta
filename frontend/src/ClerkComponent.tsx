@@ -13,6 +13,8 @@ import React, {
 import { SignIn } from "@clerk/clerk-react"
 import { useUser, useClerk } from "@clerk/clerk-react"
 
+const COMPONENT_URL = import.meta.env.VITE_COMPONENT_HOST_URL
+
 /**
  * A template for creating Streamlit components with React
  *
@@ -83,7 +85,7 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
       <span>
         <SignIn 
           routing="virtual"
-          forceRedirectUrl="http://localhost:8501/component/auth_utils.clerk_component/index.html"
+          forceRedirectUrl={COMPONENT_URL}
         />
       </span>
     )

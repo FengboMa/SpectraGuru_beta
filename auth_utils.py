@@ -1,6 +1,5 @@
 import streamlit as st
 import streamlit.components.v1 as components
-from streamlit_modal import Modal
 import os
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -15,11 +14,7 @@ def clerk_component(key, action, height=0):
     return _clerk_component(key=key, action=action, height=height)
 
 def populate(user):
-    if user == "TEST":
-        st.session_state.user_decided = True
-        st.session_state.show_login_modal = False
-        return True
-    elif user and not st.session_state.user_logged_in:
+    if user and not st.session_state.user_logged_in:
         st.session_state.user_decided = True
         if not user == "NO_USER":
             st.session_state.user = user

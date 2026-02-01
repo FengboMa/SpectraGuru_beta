@@ -16,15 +16,11 @@ import { useUser, useClerk } from "@clerk/clerk-react"
 const COMPONENT_URL = import.meta.env.VITE_COMPONENT_HOST_URL
 
 /**
- * A template for creating Streamlit components with React
- *
- * This component demonstrates the essential structure and patterns for
- * creating interactive Streamlit components, including:
- * - Accessing props and args sent from Python
- * - Managing component state with React hooks
- * - Communicating back to Streamlit via Streamlit.setComponentValue()
- * - Using the Streamlit theme for styling
- * - Setting frame height for proper rendering
+ * Handles the logic for a custom Clerk Component, which controls user login UIUX.
+ * Arguments are passed from Streamlit to this component to determine which action to take.
+ * - action='startup' checks for an already logged-in user for when the app is booted up.
+ * - action='logout' logs out the user.
+ * - action='login' displays the Clerk SignIn widget and sets Streamlit.setComponentValue(user).
  *
  * @param {ComponentProps} props - The props object passed from Streamlit
  * @param {Object} props.args - Custom arguments passed from the Python side

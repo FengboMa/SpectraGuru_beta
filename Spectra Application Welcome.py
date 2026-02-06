@@ -81,35 +81,6 @@ hide_close_button_css = """
 """
 st.markdown(hide_close_button_css, unsafe_allow_html=True)
 
-
-#request_proxy()
-
-#clerk_script = 
-
-#html(clerk_script)
-
-params = st.query_params                 # returns Mapping[str, str | list[str] | None]
-token  = (
-    params.get("__session")
-    or params.get("__clerk_session")
-    or params.get("__clerk_db_jwt")         # either str or list → handle both
-    or params.get("session_id")
-)
-if isinstance(token, list):              # Clerk might give list
-    token = token[0]
-#print("TOKEN:",token)
-
-# ---------- get user info from token ----------
-if False and token and not st.session_state.user_logged_in:
-    user = verify_clerk_session(token)
-    print("USER:",user)
-    if user:
-        st.session_state.user_logged_in = True
-        st.session_state.username = user.get("first_name", "User")
-        st.session_state.popup_closed = True        # skip modal from now on
-        print("DEBUG: Retrieved user from token.")
-    #st.query_params.clear()
-
 # ---------- helper for guest button ----------
 def guest_entry():
     st.session_state.user_logged_in = False
@@ -181,6 +152,9 @@ if st.session_state.show_login_modal:
 
     login_dialog()
 
+st.write("# SpectraGuru  - A Spectra Analysis Application ")
+# st.info('SpectraGuru is still under development. Current version: SpectraGuru ver. 0.15')
+
 # ---------- greet authenticated users ----------
 if st.session_state.user_logged_in:
     if st.session_state.user['firstName']:
@@ -189,10 +163,6 @@ if st.session_state.user_logged_in:
         username = "Guest"
     st.write(f"Welcome {username}! 👋")
 # -------------
-
-
-st.write("# SpectraGuru  - A Spectra Analysis Application ")
-# st.info('SpectraGuru is still under development. Current version: SpectraGuru ver. 0.15')
 
 # current_user_count = function.log_user_count(st.session_state.log_file_path)
 try:

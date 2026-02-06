@@ -61,13 +61,6 @@ else:
 #st.write(st.session_state.user)
 print("User:", st.session_state.user)
 
-if st.session_state.user_logged_in:
-    st.button("Log Out", on_click=logout, type='primary')
-elif not st.session_state.show_welcome_modal:
-    st.button("Log in", on_click=login, type='primary')
-
-
-
 st.image(r"element/Application header picture-3.png")
 st.session_state.log_file_path = r"element/user_count.txt"
 
@@ -176,6 +169,11 @@ except:
     pass
 
 st.sidebar.success("Navigate to Data Upload page above to start")
+
+if st.session_state.user_logged_in:
+    st.sidebar.button("Log Out", on_click=logout, type='primary')
+elif not st.session_state.show_welcome_modal:
+    st.sidebar.button("Log In", on_click=login, type='primary')
 
 st.markdown(
     """

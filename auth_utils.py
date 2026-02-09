@@ -1,61 +1,59 @@
-# auth_utils.py
-import os, requests, urllib.parse
-from dotenv import load_dotenv
+import streamlit as st
+import streamlit.components.v1 as components
+import os
 
-load_dotenv()                      # reads .env in local dev
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+_clerk_component = components.declare_component(
+    "clerk_component",
+    #url="http://localhost:3001/",
+    path="frontend/build"
+)
+
+def clerk_component(key, action, height=0):
+    return _clerk_component(key=key, action=action, height=height)
+
+def populate(user):
+    if user and not st.session_state.user_logged_in:
+        st.session_state.user_decided = True
+        if not user == "NO_USER":
+            st.session_state.user = user
+            st.session_state.user_logged_in = user['signedIn']
+
+            st.session_state.show_login_modal = False
+            st.session_state.show_welcome_modal = False
+
+            return True
+        else:
+            return False
+    return False
 
 
-CLERK_SECRET_KEY = os.getenv("CLERK_SECRET_KEY")
-FRONTEND_API    = os.getenv("CLERK_FRONTEND_API")
-APP_URL         = os.getenv("APP_URL")          # where Clerk should bounce back
+# checks whether the user is already logged in and populates the user dict accordingly.
+def startup():
+    placeholder = st.empty()
+    with placeholder:
+        user = clerk_component(key="startup", action="startup")
 
-def clerk_signin_url() -> str:
-    app_url = os.getenv("APP_URL") or "http://localhost:80"   # fallback → never None
-    redirect = urllib.parse.quote_plus(app_url)
-    return (
-        f"https://{FRONTEND_API}/sign-in?"
-        f"redirect_url={redirect}"
-        "&create_session=true"          # ← NEW
-    )
+        populate(user)
 
-def verify_clerk_session(token: str):
-    if not token:
-        return None
+    if st.session_state.user_decided:
+        placeholder.empty()
+        st.session_state.do_startup = False
+    else:
+        st.write("Loading user data...")
+        st.stop() # do not go forward without getting confirmation from Clerk about user login status
 
-    # ① try universal verify  ────────────────────────────────
-    resp = requests.post(
-        "https://api.clerk.com/v1/tokens/verify",
-        headers={"Authorization": f"Bearer {CLERK_SECRET_KEY}"},
-        json={"token": token},
-        timeout=5,
-    )
-    print("TRACE  /tokens/verify →", resp.status_code, resp.text[:150])
+def login():
+    if 'global_placeholder' in st.session_state:
+        st.session_state.global_placeholder.empty()
 
-    if resp.status_code == 200:
-        claims = resp.json().get("claims", {})
-        return {
-            "id":         claims.get("sub"),
-            "first_name": claims.get("given_name", "User"),
-            "last_name":  claims.get("family_name", ""),
-            "email":      claims.get("email"),
-        }
-
-    # ② fallback: treat as session-id  ───────────────────────
-    resp = requests.get(
-        f"https://api.clerk.com/v1/sessions/{token}",
-        headers={"Authorization": f"Bearer {CLERK_SECRET_KEY}"},
-        timeout=5,
-    )
-    print("TRACE  /sessions/id   →", resp.status_code, resp.text[:150])
-
-    if resp.status_code == 200 and resp.json().get("status") == "active":
-        data = resp.json()
-        return {
-            "id": data["user_id"],
-            "first_name": "User",
-            "last_name":  "",
-            "email":      None,
-        }
-    print("DEBUG  CLERK_SECRET_KEY =", bool(CLERK_SECRET_KEY))
-
-    return None
+    st.session_state.show_login_modal = True
+    
+def logout():
+    with st.session_state.global_placeholder:
+        clerk_component(key="logout", action="logout")
+    
+    st.session_state.user_decided = False
+    st.session_state.user = None
+    st.session_state.user_logged_in = False

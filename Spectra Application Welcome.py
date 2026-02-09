@@ -1,8 +1,7 @@
-from dotenv import load_dotenv
-load_dotenv("CLERK.env")
 import streamlit as st
 from streamlit_modal import Modal
-from auth_utils import clerk_signin_url, verify_clerk_session
+from auth_utils import login, logout, startup, populate
+from auth_utils import clerk_component
 # import streamlit.components.v1 as components
 
 import function
@@ -18,25 +17,49 @@ os.chdir(current_dir)
 function.wide_space_default()
 
 #####################
-params = st.query_params
-token  = params.get("__clerk_db_jwt") or params.get("session_id")
-if isinstance(token, list):
-    token = token[0]
-
-if token and not st.session_state.get("userlogedin"):
-    user = verify_clerk_session(token)
-    if user:
-        st.session_state.userlogedin = True
-        st.session_state.username    = user["first_name"]
-        st.session_state.popup_closed = True
-        st.query_params.clear() 
-        # Introduction page
-
-print("DEBUG  token =", token)            # ← should be a long JWT string
-print("DEBUG  already_logged =", st.session_state.get("userlogedin"))
+#params = st.query_params
+#token  = params.get("__clerk_db_jwt") or params.get("session_id")
+#if isinstance(token, list):
+#    token = token[0]
+#
+#if token and 'user_logged_in' not in st.session_state:
+#    user = verify_clerk_session(token)
+#    if user:
+#        st.session_state.user_logged_in = True
+#        st.session_state.username    = user["first_name"]
+#        st.session_state.popup_closed = True
+#        st.query_params.clear() 
+#        # Introduction page
+#
+#if 'user_logged_in' not in st.session_state:
+#    st.session_state.user_logged_in = False
+#
+#print("DEBUG  token =", token)            # ← should be a long JWT string
+#print("DEBUG  already_logged =", st.session_state.user_logged_in)
 
 #####################
 
+if 'user_decided' not in st.session_state:
+    st.session_state.user_decided = False
+if 'user' not in st.session_state:
+    st.session_state.user = None
+if 'user_logged_in' not in st.session_state:
+    st.session_state.user_logged_in = False
+if 'do_startup' not in st.session_state:
+    st.session_state.do_startup = True
+if 'show_welcome_modal' not in st.session_state:
+    st.session_state.show_welcome_modal = True
+if 'show_login_modal' not in st.session_state:
+    st.session_state.show_login_modal = False
+
+if st.session_state.do_startup:
+    print("DOING STARTUP...")
+    startup()
+else:
+    print("STARTUP SKIPPED")
+
+#st.write(st.session_state.user)
+print("User:", st.session_state.user)
 
 st.image(r"element/Application header picture-3.png")
 st.session_state.log_file_path = r"element/user_count.txt"
@@ -51,43 +74,19 @@ hide_close_button_css = """
 """
 st.markdown(hide_close_button_css, unsafe_allow_html=True)
 
-
-# ---------- grab token from URL on every run ----------
-
-
-
-params = st.query_params                 # returns Mapping[str, str | list[str] | None]
-token  = (
-    params.get("__clerk_db_jwt")         # either str or list → handle both
-    or params.get("session_id")
-)
-if isinstance(token, list):              # Clerk might give list
-    token = token[0]
-
-if token and not st.session_state.get("userlogedin"):
-    user = verify_clerk_session(token)
-    if user:
-        st.session_state.userlogedin = True
-        st.session_state.username = user.get("first_name", "User")
-        st.session_state.popup_closed = True        # skip modal from now on
-
-# ---------- session flags ----------
-for key, default in {
-    "popup_closed": False,
-    "userlogedin": False,
-}.items():
-    st.session_state.setdefault(key, default)
-
 # ---------- helper for guest button ----------
 def guest_entry():
-    st.session_state.userlogedin = False
-    st.session_state.popup_closed = True
+    st.session_state.user_logged_in = False
+    st.session_state.show_welcome_modal = False
     st.session_state.current_user_count = function.log_user_count(
         st.session_state.log_file_path
     )
 
-# ---------- modal ----------
-if not st.session_state.popup_closed and not st.session_state.userlogedin:
+print("Welcome:",st.session_state.show_welcome_modal)
+print("Logged in:",st.session_state.user_logged_in)
+
+# ---------- welcome modal ----------
+if st.session_state.show_welcome_modal and not st.session_state.show_login_modal:
     # hide close icon
     st.markdown(
         """
@@ -98,10 +97,10 @@ if not st.session_state.popup_closed and not st.session_state.userlogedin:
         unsafe_allow_html=True,
     )
 
-    modal = Modal("Welcome to SpectraGuru", key="welcome_modal",
+    welcome_modal = Modal("Welcome to SpectraGuru", key="welcome_modal",
                   padding=20, max_width=600)
 
-    with modal.container():
+    with welcome_modal.container():
         st.info("SpectraGuru is still under development. Current version: SpectraGuru ver. 1.2.1")
         st.write("Thanks for visiting SpectraGuru, a spectroscopy processing and visualization tool.")
         st.write("If you encounter a problem, please email Fengbo.Ma@uga.edu")
@@ -113,8 +112,10 @@ if not st.session_state.popup_closed and not st.session_state.userlogedin:
         col1.button("Continue as Guest", on_click=guest_entry)
 
         # right: login via Clerk—just a link
-        signin_url = clerk_signin_url()           # already returns the full redirect URL
-        col2.link_button("Log in", signin_url,type="primary")  
+        #signin_url = clerk_signin_url()           # already returns the full redirect URL
+        #col2.link_button("Log in", signin_url,type="primary")  
+
+        col2.button("Log in here", on_click=login, type="primary")
 
 
         st.caption(
@@ -123,14 +124,38 @@ if not st.session_state.popup_closed and not st.session_state.userlogedin:
             "(https://fengboma.github.io/docs.spectraguru/docs/License-Policies-Disclaimers.html)"
         )
 
-# ---------- greet authenticated users ----------
-if st.session_state.get("userlogedin"):
-    st.write(f"Welcome {st.session_state.get('username', 'Guest')} 👋")
-# -------------
+print("Login modal:", st.session_state.show_login_modal)
+print("User decided:", st.session_state.user_decided)
+# ---------- login modal ----------- #
+if st.session_state.show_login_modal:
 
+    def abort():
+        st.session_state.show_login_modal = False
+
+    @st.dialog("Log in to SpectraGuru", width="small", dismissible=True, on_dismiss=abort)
+    def login_dialog():
+        left, center, right = st.columns([2, 90, 1])
+        
+        with center:
+            user = clerk_component(key="login", action="login", height=500)
+
+            if populate(user):
+                print("POPULATED")
+                st.rerun()
+
+    login_dialog()
 
 st.write("# SpectraGuru  - A Spectra Analysis Application ")
 # st.info('SpectraGuru is still under development. Current version: SpectraGuru ver. 0.15')
+
+# ---------- greet authenticated users ----------
+if st.session_state.user_logged_in:
+    if st.session_state.user['firstName']:
+        username = st.session_state.user['firstName']
+    else:
+        username = "Guest"
+    st.write(f"Welcome {username}! 👋")
+# -------------
 
 # current_user_count = function.log_user_count(st.session_state.log_file_path)
 try:
@@ -144,6 +169,11 @@ except:
     pass
 
 st.sidebar.success("Navigate to Data Upload page above to start")
+
+if st.session_state.user_logged_in:
+    st.sidebar.button("Log Out", on_click=logout, type='primary')
+elif not st.session_state.show_welcome_modal:
+    st.sidebar.button("Log In", on_click=login, type='primary')
 
 st.markdown(
     """
@@ -296,3 +326,5 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
+st.session_state.global_placeholder = st.empty() # this should stay the last line of code in this file.

@@ -376,14 +376,18 @@ for idx in range(int(n_classes)):
 
         # ======================= 2-B. DATABASE QUERY ======================
         else:
-            if not st.session_state.user_logged_in:
-                st.warning("Please log in to SpectraGuru before querying the database.")
-                all_ready = False
-                st.session_state.selected_counts[idx] = 0
-            elif not st.session_state.db_logged_in:
-                st.warning("Please log in to the database above before querying.")
-                all_ready = False
-                st.session_state.selected_counts[idx] = 0
+            # if not st.user.is_logged_in:
+            #     pass
+            #     st.warning("Please log in to SpectraGuru before querying the database.")
+            #     all_ready = False
+            #     st.session_state.selected_counts[idx] = 0
+            # elif not st.session_state.db_logged_in:
+            #     pass
+            #     st.warning("Please log in to the database above before querying.")
+            #     all_ready = False
+            #     st.session_state.selected_counts[idx] = 0
+            if 1==2:  # Placeholder for future login checks
+                pass
             else:
                 advanced_search = st.checkbox("Advanced Search", key=pkey(f"adv_{idx}"))
                 data_type_filter = (

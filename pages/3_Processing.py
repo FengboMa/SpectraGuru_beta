@@ -9,10 +9,10 @@ from scipy.interpolate import interp1d
 from datetime import datetime
 
 import function
+import log_utils as log
 
 function.wide_space_default()
-st.session_state.log_file_path = r"element/user_count.txt"
-st.session_state.function_log_file_path = r"element/funct_count.txt"
+
 # hide_st_style = """
 #             <style>
 #             #MainMenu {visibility: hidden;}
@@ -356,7 +356,7 @@ else:
             
     # Processing button and reaction
     if st.sidebar.button("Process", type='primary', key = 'process'):        
-        function.log_spectra_processed_count(st.session_state.log_file_path)
+        log.log_spectra_processed_count()
         # interpolation act
         if st.session_state.interpolation_act:
             interpolated_df = pd.DataFrame(st.session_state.interpolation_ref_x, columns=[st.session_state.df.columns[0]])
@@ -379,13 +379,23 @@ else:
                                                                     ramanshift = st.session_state.df.iloc[:, 0],
                                                                     threshold = st.session_state.despike_act_threshold,
                                                                     zap_length = st.session_state.despike_act_zap_length)
-                function.log_function_use_count(st.session_state.function_log_file_path, "Despike_Called")
+                log.log_function_call("Processing_Despike_Auto", 
+                                        f_params={
+                                            'threshold':st.session_state.despike_act_threshold,
+                                            'zap_length':st.session_state.despike_act_zap_length
+                                        })
             elif st.session_state.despike_function == "Manual despike method":
                 st.session_state.df.iloc[:, 1:] = function.despikeSpec_v2(spectra = st.session_state.df.iloc[:, 1:],
                                                                         ramanshift = st.session_state.df.iloc[:, 0],
                                                                         threshold = st.session_state.despike_act_threshold,
                                                                         zap_length = st.session_state.despike_act_zap_length,window_start=st.session_state.despike_fitting_ranges[0][0],window_end=st.session_state.despike_fitting_ranges[0][1])
-                function.log_function_use_count(st.session_state.function_log_file_path, "Despike_Called")
+                log.log_function_call("Processing_Despike_Manual", 
+                                        f_params={
+                                            'threshold':st.session_state.despike_act_threshold,
+                                            'zap_length':st.session_state.despike_act_zap_length,
+                                            'window_start':st.session_state.despike_fitting_ranges[0][0],
+                                            'window_end':st.session_state.despike_fitting_ranges[0][1]
+                                        })
         
         # smoothening_act
         if st.session_state.smoothening_act:
@@ -393,13 +403,21 @@ else:
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply( lambda col: function.savgol_filter_spectra(col, 
                                                                                                                                 window_length = st.session_state.smoothening_act_window_length,
                                                                                                                                 polyorder = st.session_state.smoothening_act_polyorder))
-                function.log_function_use_count(st.session_state.function_log_file_path, "Savgol_Filter_Called", st.session_state.df.iloc[:, 1:].shape[1])
+                log.log_function_call("Processing_Smoothing_Savgol_Filter",
+                                        f_params={
+                                            'window_length':st.session_state.smoothening_act_window_length,
+                                            'polyorder':st.session_state.smoothening_act_polyorder
+                                        })
         
             elif st.session_state.smoothening_function == "1D Fast Fourier Transform filter": 
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply( lambda col: function.FFT_spectra(col, 
                                                                                                                         FFT_threshold = st.session_state.smoothening_act_FFT_threshold,
                                                                                                                         padding_method = st.session_state.smoothening_act_FFT_padding))
-                function.log_function_use_count(st.session_state.function_log_file_path, "FFT_Filter_Called", st.session_state.df.iloc[:, 1:].shape[1])
+                log.log_function_call("Processing_Smoothing_FFT_Filter",
+                                        f_params={
+                                            'FFT_threshold':st.session_state.smoothening_act_FFT_threshold,
+                                            'padding_method':st.session_state.smoothening_act_FFT_padding
+                                        })
             
         # baselineremoval_act
         if st.session_state.baselineremoval_act:
@@ -409,11 +427,20 @@ else:
                                                                                                                             porder=st.session_state.baselineremoval_airPLS_porder, 
                                                                                                                             itermax=st.session_state.baselineremoval_airPLS_itermax,
                                                                                                                             tau=st.session_state.baselineremoval_airPLS_tau))
-                function.log_function_use_count(st.session_state.function_log_file_path, "Air_PLS_Called", st.session_state.df.iloc[:, 1:].shape[1])
+                log.log_function_call("Processing_Baseline_AirPLS",
+                                        f_params={
+                                            'lambda_':st.session_state.baselineremoval_airPLS_lambda,
+                                            'porder':st.session_state.baselineremoval_airPLS_porder,
+                                            'itermax':st.session_state.baselineremoval_airPLS_itermax,
+                                            'tau':st.session_state.baselineremoval_airPLS_tau
+                                        })
             if st.session_state.baselineremoval_function == "ModPoly":
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:] - st.session_state.df.iloc[:, 1:].apply( lambda col: function.ModPoly(col.values, 
                                                                                                                             degree=st.session_state.baselineremoval_ModPoly_degree))
-                function.log_function_use_count(st.session_state.function_log_file_path, "Mod_Poly_Called", st.session_state.df.iloc[:, 1:].shape[1])
+                log.log_function_call("Processing_Baseline_Mod_Poly",
+                                        f_params={
+                                            'degree':st.session_state.baselineremoval_ModPoly_degree
+                                        })
             # if st.session_state.baselineremoval_function == "Gaussian-Lorentzian Fitting":
             #     st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:] - st.session_state.df.iloc[:, 1:].apply( lambda col: function.GLF(col.values, 
             #                                                                                                                                         wavenumber=st.session_state.df.iloc[:, 0].values,
@@ -427,7 +454,10 @@ else:
                             fitting_ranges=st.session_state.fitting_ranges
                         )
                     )
-                    function.log_function_use_count(st.session_state.function_log_file_path, "Gaussian_Lorentzian_Fitting_Called", st.session_state.df.iloc[:, 1:].shape[1])
+                    log.log_function_call("Processing_Baseline_Gaussian_Lorentzian_Fitting",
+                                            f_params={
+                                                'fitting_ranges':st.session_state.fitting_ranges
+                                            })
             except AttributeError as e:
                 if "fitting_ranges" in str(e):
                     st.error("⚠️ Please go to the sidebar and apply your fitting ranges before applying the Gaussian-Lorentzian Fitting.")
@@ -437,13 +467,13 @@ else:
         if st.session_state.normalization_act:
             if st.session_state.normalization_function == "Normalize by area":
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply(function.normalize_by_area, ramanshift =st.session_state.df.iloc[:, 0], axis = 0)        
-                function.log_function_use_count(st.session_state.function_log_file_path, "Normalization_Called", st.session_state.df.iloc[:, 1:].shape[1])
+                log.log_function_call("Processing_Normalization_Area", f_params={})
             elif st.session_state.normalization_function == "Normalize by peak":
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply(function.normalize_by_peak, axis = 0)
-                function.log_function_use_count(st.session_state.function_log_file_path, "Normalization_Called", st.session_state.df.iloc[:, 1:].shape[1])
+                log.log_function_call("Processing_Normalization_Peak", f_params={})
             elif st.session_state.normalization_function == "Min max normalize":
                 st.session_state.df.iloc[:, 1:] = st.session_state.df.iloc[:, 1:].apply(function.min_max_normalize, axis = 0)
-                function.log_function_use_count(st.session_state.function_log_file_path, "Normalization_Called", st.session_state.df.iloc[:, 1:].shape[1])
+                log.log_function_call("Processing_Normalization_Minmax", f_params={})
                 
 
         # outlier removal act
@@ -453,7 +483,12 @@ else:
                 distance_thresh=st.session_state.outlierremoval_act_distance_threshold,
                 coeff_thresh=st.session_state.outlierremoval_act_correlation_threshold)
             st.session_state.df = pd.concat([st.session_state.df.iloc[:, 0], df_cleaned], axis=1)
-            function.log_function_use_count(st.session_state.function_log_file_path, "Remove_Outliers_Called")
+            log.log_function_call("Processing_Remove_Outliers",
+                                    f_params={
+                                        'single_thresh':st.session_state.outlierremoval_act_single_threshold,
+                                        'distance_thresh':st.session_state.outlierremoval_act_distance_threshold,
+                                        'coeff_thresh':st.session_state.outlierremoval_act_correlation_threshold
+                                    })
         
     
     # Function to reset the toggle
@@ -711,7 +746,7 @@ else:
             # Display Plot
             st.altair_chart(cached_plot, use_container_width=False)
             # st.write("zzzzz")
-            function.log_plot_generated_count(st.session_state.log_file_path)
+            log.log_plot_generated_count()
             
         elif mode_option == True:
                 
@@ -749,7 +784,7 @@ else:
             # Display Plot
             st.altair_chart(cached_plot, use_container_width=False)
             # st.write("2222")
-            function.log_plot_generated_count(st.session_state.log_file_path)
+            log.log_plot_generated_count()
             # # Define the nearest selection
             # # click = alt.selection_single(nearest=True, on='click')
             # st.altair_chart(base, use_container_width=False)

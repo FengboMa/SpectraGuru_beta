@@ -7,18 +7,18 @@ user_log_file_path = "log/user_log.txt"
 # Creates a JSON String containing the details of a function call and appends the String to a file.
 # function_name: the canonical name of the function
 # function_params: a dictionary containing the parameters of interest used when calling the function
-def log_function_call(function_name, function_params):
+def log_function_call(f_name, f_params):
 
-    call_number = read_counts()[function_name]
-    increment_count(function_name)
+    call_number = read_counts()[f_name]
+    increment_count(f_name)
 
-    fc_entry = {
-        "function_name":function_name,
+    entry = {
+        "function_name":f_name,
         "call_number":call_number,
-        "parameters":function_params
+        "parameters":f_params
     }
 
-    json_str = json.dumps(fc_entry)
+    json_str = json.dumps(entry)
     print("JSON:", json_str)
 
 # Increments the counter for a specified metric in a given log file. Returns the new count and 
@@ -61,17 +61,17 @@ def write_counts(counts):
 
 
 # User count function
-def log_user_count(log_file_path):
-    return increment_count(log_file_path, 'User')
+def log_user_count():
+    return increment_count(user_log_file_path, 'User')
 
 # Plot_Generated count function
-def log_plot_generated_count(log_file_path):
-    return increment_count(log_file_path, 'Plot_Generated')
+def log_plot_generated_count():
+    return increment_count(user_log_file_path, 'Plot_Generated')
 
 # Spectra_Processed count function
-def log_spectra_processed_count(log_file_path):
+def log_spectra_processed_count():
     import streamlit as st
-    return increment_count(log_file_path, 'Spectra_Processed', st.session_state.df[1:].shape[1])
+    return increment_count(user_log_file_path, 'Spectra_Processed', st.session_state.df[1:].shape[1])
 
 # Essentially a function rename for clarity
 def log_function_use_count(function_log_file_path, keyname, amount=1):

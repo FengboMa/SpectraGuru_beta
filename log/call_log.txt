@@ -1,0 +1,2 @@
+{"function_name": "Processing_Smoothing_Savgol_Filter", "call_number": 4, "parameters": {"window_length": 15, "polyorder": 2}}
+{"function_name": "Processing_Smoothing_FFT_Filter", "call_number": 1, "parameters": {"FFT_threshold": 0.1, "padding_method": "mirror"}}

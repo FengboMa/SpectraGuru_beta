@@ -20,6 +20,14 @@ def log_function_call(f_name, f_params):
 
     json_str = json.dumps(entry)
     print("JSON:", json_str)
+    append_to_file(call_log_file_path, f"{json_str}\n")
+
+def append_to_file(file_path, string):
+    import os
+
+    if os.path.exists(file_path):
+        with open(file_path, "a") as file:
+            file.write(string)
 
 # Increments the counter for a specified metric in a given log file. Returns the new count and 
 # returns 0 if the keyname does not match any recognizable keyname in the log file.

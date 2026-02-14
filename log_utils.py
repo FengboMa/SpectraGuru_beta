@@ -1,15 +1,16 @@
 import json
+import os
 
-count_log_file_path = "log/count_log.txt"
+count_log_file_path = "log/count_log_json.txt"
 call_log_file_path = "log/call_log.txt"
-user_log_file_path = "log/user_log.txt"
+user_log_file_path = "log/user_log_json.txt"
 
 # Creates a JSON String containing the details of a function call and appends the String to a file.
 # function_name: the canonical name of the function
 # function_params: a dictionary containing the parameters of interest used when calling the function
 def log_function_call(f_name, f_params):
 
-    call_number = read_counts(count_log_file_path)[f_name]
+    call_number = read_counts_json(count_log_file_path)[f_name]
     increment_count(count_log_file_path, f_name)
 
     entry = {
@@ -22,6 +23,7 @@ def log_function_call(f_name, f_params):
     print("JSON:", json_str)
     append_to_file(call_log_file_path, f"{json_str}\n")
 
+# appends a specified string to a given file.
 def append_to_file(file_path, string):
     import os
 
@@ -33,9 +35,12 @@ def append_to_file(file_path, string):
 # returns 0 if the keyname does not match any recognizable keyname in the log file.
 def increment_count(file_path, keyname, amount=1):
     try:
-        counts = read_counts(file_path)
+        counts = read_counts_json(file_path)
+
+        # todo: if keyname doesn't exist, add it.
+
         counts[keyname] += amount
-        write_counts(file_path, counts)
+        write_counts_json(file_path, counts)
         return counts[keyname]
     except:
         return 0
@@ -47,8 +52,7 @@ def increment_count(file_path, keyname, amount=1):
 # Key_2[\t]Value_2
 # ...
 def read_counts(file_path):
-    import os
-
+    
     counts = {}
     if os.path.exists(file_path):
         with open(file_path, "r") as file:
@@ -60,12 +64,24 @@ def read_counts(file_path):
 
 # Writes a counts dictionary to a log file
 def write_counts(file_path, counts):
-    import os
-
+    
     with open(file_path, "w") as file:
         for key, value in counts.items():
             file.write(f"{key}\t{value}\n")
 
+def read_counts_json(file_path):
+    
+    counts = {}
+    if os.path.exists(file_path):
+        with open(file_path, "r") as file:
+            counts = json.loads(file)
+                
+    return counts
+
+def write_counts_json(file_path, counts):
+
+    with open(file_path, "w") as file:
+        file.write(json.dumps(counts))
 
 # User count function
 def log_user_count():

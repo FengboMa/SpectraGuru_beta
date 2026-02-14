@@ -1,3 +1,0 @@
-User	0
-Plot_Generated	45
-Spectra_Processed	18

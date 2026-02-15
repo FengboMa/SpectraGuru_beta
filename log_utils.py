@@ -10,8 +10,8 @@ user_log_file_path = "log/user_log_json.txt"
 # function_params: a dictionary containing the parameters of interest used when calling the function
 def log_function_call(f_name, f_params):
 
-    call_number = read_counts_json(count_log_file_path)[f_name]
     increment_count(count_log_file_path, f_name)
+    call_number = read_counts_json(count_log_file_path)[f_name]
 
     entry = {
         "function_name":f_name,
@@ -37,7 +37,9 @@ def increment_count(file_path, keyname, amount=1):
     try:
         counts = read_counts_json(file_path)
 
-        # todo: if keyname doesn't exist, add it.
+        # if keyname doesn't exist, add it.
+        if keyname not in counts:
+            counts[keyname] = 0
 
         counts[keyname] += amount
         write_counts_json(file_path, counts)
@@ -74,7 +76,7 @@ def read_counts_json(file_path):
     counts = {}
     if os.path.exists(file_path):
         with open(file_path, "r") as file:
-            counts = json.loads(file)
+            counts = json.loads(file.readline())
                 
     return counts
 
@@ -85,11 +87,11 @@ def write_counts_json(file_path, counts):
 
 # User count function
 def log_user_count():
-    return increment_count(user_log_file_path, 'User')
+    return increment_count(user_log_file_path, 'Users')
 
 # Plot_Generated count function
 def log_plot_generated_count():
-    return increment_count(user_log_file_path, 'Plot_Generated')
+    return increment_count(user_log_file_path, 'Plots_Generated')
 
 # Spectra_Processed count function
 def log_spectra_processed_count():

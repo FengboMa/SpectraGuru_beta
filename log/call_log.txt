@@ -1,2 +1,26 @@
 {"function_name": "Processing_Smoothing_Savgol_Filter", "call_number": 4, "parameters": {"window_length": 15, "polyorder": 2}}
 {"function_name": "Processing_Smoothing_FFT_Filter", "call_number": 1, "parameters": {"FFT_threshold": 0.1, "padding_method": "mirror"}}
+{"function_name": "Processing_Smoothing_Savgol_Filter", "call_number": 1, "parameters": {"window_length": 15, "polyorder": 2}}
+{"function_name": "Processing_Smoothing_Savgol_Filter", "call_number": 2, "parameters": {"window_length": 15, "polyorder": 2}}
+{"function_name": "Processing_Despike_Auto", "call_number": 1, "parameters": {"threshold": 300, "zap_length": 11}}
+{"function_name": "Processing_Smoothing_Savgol_Filter", "call_number": 3, "parameters": {"window_length": 15, "polyorder": 2}}
+{"function_name": "Processing_Despike_Manual", "call_number": 1, "parameters": {"threshold": 300, "zap_length": 11, "window_start": 300.141602, "window_end": 2501.088135}}
+{"function_name": "Processing_Smoothing_FFT_Filter", "call_number": 1, "parameters": {"FFT_threshold": 0.1, "padding_method": "mirror"}}
+{"function_name": "Processing_Baseline_AirPLS", "call_number": 1, "parameters": {"lambda_": 100, "porder": 1, "itermax": 15, "tau": 0.001}}
+{"function_name": "Processing_Normalization_Area", "call_number": 1, "parameters": {}}
+{"function_name": "Processing_Remove_Outliers", "call_number": 1, "parameters": {"single_thresh": 4.0, "distance_thresh": 6.0, "coeff_thresh": 4.0}}
+{"function_name": "Processing_Baseline_Mod_Poly", "call_number": 1, "parameters": {"degree": 5}}
+{"function_name": "Processing_Normalization_Peak", "call_number": 1, "parameters": {}}
+{"function_name": "Processing_Normalization_Minmax", "call_number": 1, "parameters": {}}
+{"function_name": "Processing_Normalization_Minmax", "call_number": 2, "parameters": {}}
+{"function_name": "Processing_Baseline_Gaussian_Lorentzian_Fitting", "call_number": 1, "parameters": {"fitting_ranges": [[1000.0, 1200.0], [1400.0, 1800.0]]}}
+{"function_name": "Processing_Normalization_Minmax", "call_number": 3, "parameters": {}}
+{"function_name": "Analytics_Spectra_Derivation", "call_number": 1, "parameters": {"norm_method": "None", "sg_win": 11, "sg_poly": 3}}
+{"function_name": "Analytics_Correlation_Heatmap", "call_number": 1, "parameters": {"method": "Pearson Correlation", "compute_avg": false}}
+{"function_name": "Analytics_Peak_Identification", "call_number": 1, "parameters": {"auto": true, "height": 0, "threshold": 0, "distance": 1, "prominence": 0, "width": 0}}
+{"function_name": "Analytics_Peak_Identification", "call_number": 2, "parameters": {"auto": false, "height": null, "threshold": null, "distance": null, "prominence": null, "width": null}}
+{"function_name": "Analytics_Peak_Identification", "call_number": 3, "parameters": {"auto": true, "height": 0, "threshold": 0, "distance": 1, "prominence": 0, "width": 0}}
+{"function_name": "Analytics_Clustering_Clustermap", "call_number": 1, "parameters": {}}
+{"function_name": "Analytics_Clustering_Dendrogram", "call_number": 1, "parameters": {}}
+{"function_name": "Analytics_PCA", "call_number": 1, "parameters": {}}
+{"function_name": "Analytics_TSNE", "call_number": 1, "parameters": {"perplexity": 2, "n_iter": 500}}

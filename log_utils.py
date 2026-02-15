@@ -1,9 +1,9 @@
 import json
 import os
 
-count_log_file_path = "log/count_log_json.txt"
+count_log_file_path = "log/count_log.txt"
 call_log_file_path = "log/call_log.txt"
-user_log_file_path = "log/user_log_json.txt"
+user_log_file_path = "log/user_log.txt"
 
 # Creates a JSON String containing the details of a function call and appends the String to a file.
 # function_name: the canonical name of the function
@@ -48,29 +48,7 @@ def increment_count(file_path, keyname, amount=1):
         return 0
 
 # Returns a dictionary of all the key-value pairs expressed in a given log file. Log files must
-# take the form:
-#
-# Key_1[\t]Value_1
-# Key_2[\t]Value_2
-# ...
-def read_counts(file_path):
-    
-    counts = {}
-    if os.path.exists(file_path):
-        with open(file_path, "r") as file:
-            for line in file:
-                key, value = line.strip().split('\t')
-                counts = {**counts, key: int(value)}
-    
-    return counts
-
-# Writes a counts dictionary to a log file
-def write_counts(file_path, counts):
-    
-    with open(file_path, "w") as file:
-        for key, value in counts.items():
-            file.write(f"{key}\t{value}\n")
-
+# contain a single JSON String
 def read_counts_json(file_path):
     
     counts = {}

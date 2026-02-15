@@ -5,6 +5,7 @@ from auth_utils import clerk_component
 # import streamlit.components.v1 as components
 
 import function
+import log_utils as log
 import os
 
 # Get the current script's directory
@@ -62,7 +63,6 @@ else:
 print("User:", st.session_state.user)
 
 st.image(r"element/Application header picture-3.png")
-st.session_state.log_file_path = r"element/user_count.txt"
 
 # --- Initial Setup ---
 hide_close_button_css = """
@@ -78,9 +78,7 @@ st.markdown(hide_close_button_css, unsafe_allow_html=True)
 def guest_entry():
     st.session_state.user_logged_in = False
     st.session_state.show_welcome_modal = False
-    st.session_state.current_user_count = function.log_user_count(
-        st.session_state.log_file_path
-    )
+    st.session_state.current_user_count = log.log_user_count()
 
 print("Welcome:",st.session_state.show_welcome_modal)
 print("Logged in:",st.session_state.user_logged_in)

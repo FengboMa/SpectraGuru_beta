@@ -150,10 +150,7 @@ st.write("# SpectraGuru  - A Spectra Analysis Application ")
 
 # ---------- greet authenticated users ----------
 if st.session_state.user_logged_in:
-    if st.session_state.user['firstName']:
-        username = st.session_state.user['firstName']
-    else:
-        username = "Guest"
+    username = st.session_state.get('username', 'Guest')
     st.write(f"Welcome {username}! 👋")
 # -------------
 

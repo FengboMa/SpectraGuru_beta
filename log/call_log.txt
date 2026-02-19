@@ -24,3 +24,11 @@
 {"function_name": "Analytics_Clustering_Dendrogram", "call_number": 1, "parameters": {}}
 {"function_name": "Analytics_PCA", "call_number": 1, "parameters": {}}
 {"function_name": "Analytics_TSNE", "call_number": 1, "parameters": {"perplexity": 2, "n_iter": 500}}
+{"function_name": "Processing_Smoothing_FFT_Filter", "call_number": 2, "parameters": {"FFT_threshold": 0.15000000000000002, "padding_method": "zero"}}
+{"function_name": "Processing_Baseline_AirPLS", "call_number": 2, "parameters": {"lambda_": 150, "porder": 3, "itermax": 15, "tau": 0.001}}
+{"function_name": "Analytics_Peak_Identification", "call_number": 4, "parameters": {"auto": true, "height": 0, "threshold": 0, "distance": 1, "prominence": 0, "width": 0}}
+{"function_name": "Analytics_Peak_Identification", "call_number": 5, "parameters": {"auto": true, "height": 0, "threshold": 0, "distance": 1, "prominence": 0, "width": 0}}
+{"function_name": "Analytics_Peak_Identification", "call_number": 6, "parameters": {"auto": false, "height": null, "threshold": null, "distance": null, "prominence": null, "width": null}}
+{"function_name": "Analytics_Peak_Identification", "call_number": 7, "parameters": {"auto": false, "height": 1000.0, "threshold": null, "distance": null, "prominence": null, "width": null}}
+{"function_name": "Analytics_Peak_Identification", "call_number": 8, "parameters": {"auto": false, "height": null, "threshold": null, "distance": null, "prominence": null, "width": null}}
+{"function_name": "Analytics_Peak_Identification", "call_number": 9, "parameters": {"auto": true, "height": 0, "threshold": 0, "distance": 1, "prominence": 0, "width": 0}}

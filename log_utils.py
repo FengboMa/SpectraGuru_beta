@@ -1,4 +1,5 @@
 import json
+from filelock import FileLock
 import os
 import streamlit as st
 
@@ -27,26 +28,30 @@ def log_function_call(f_name, f_params):
 
 # appends a specified string to a given file.
 def append_to_file(file_path, string):
-    import os
+
+    lock = FileLock(file_path + ".lock")
 
     if os.path.exists(file_path):
-        with open(file_path, "a") as file:
-            file.write(string)
+        with lock: # prevents two users from writing to the same file at once.
+            with open(file_path, "a") as file:
+                file.write(string)
 
 # Increments the counter for a specified metric in a given log file. Returns the new count and 
 # returns 0 if the keyname does not match any recognizable keyname in the log file.
 def increment_count(file_path, keyname, amount=1):
+    lock = FileLock(file_path + ".lock")
     try:
-        counts = read_counts_json(file_path)
+        with lock:
+            counts = read_counts_json(file_path)
 
-        # if keyname doesn't exist, add it.
-        if keyname not in counts:
-            counts[keyname] = 0
+            # if keyname doesn't exist, add it.
+            if keyname not in counts:
+                counts[keyname] = 0
 
-        counts[keyname] += amount
-        write_counts_json(file_path, counts)
+            counts[keyname] += amount
+            write_counts_json(file_path, counts)
         return counts[keyname]
-    except:
+    except Exception:
         return 0
 
 # Returns a dictionary of all the key-value pairs expressed in a given log file. Log files must

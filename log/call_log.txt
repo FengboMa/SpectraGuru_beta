@@ -32,3 +32,7 @@
 {"function_name": "Analytics_Peak_Identification", "call_number": 7, "parameters": {"auto": false, "height": 1000.0, "threshold": null, "distance": null, "prominence": null, "width": null}}
 {"function_name": "Analytics_Peak_Identification", "call_number": 8, "parameters": {"auto": false, "height": null, "threshold": null, "distance": null, "prominence": null, "width": null}}
 {"function_name": "Analytics_Peak_Identification", "call_number": 9, "parameters": {"auto": true, "height": 0, "threshold": 0, "distance": 1, "prominence": 0, "width": 0}}
+{"function_name": "Processing_Smoothing_Savgol_Filter", "call_number": 6, "parameters": {"window_length": 13, "polyorder": 4}, "user": "tonyarminio.0@gmail.com"}
+{"function_name": "Processing_Smoothing_Savgol_Filter", "call_number": 7, "parameters": {"window_length": 13, "polyorder": 4}, "user": "tonyarminio.0@gmail.com"}
+{"function_name": "Processing_Despike_Auto", "call_number": 2, "parameters": {"threshold": 300, "zap_length": 11}, "user": "tonyarminio.0@gmail.com"}
+{"function_name": "Processing_Smoothing_Savgol_Filter", "call_number": 8, "parameters": {"window_length": 13, "polyorder": 4}, "user": "tonyarminio.0@gmail.com"}

@@ -15,11 +15,17 @@ def log_function_call(f_name, f_params):
     increment_count(count_log_file_path, f_name)
     call_number = read_counts_json(count_log_file_path)[f_name]
 
+    print(st.session_state.user)
+    if st.session_state.user_logged_in:
+        user_name = st.session_state.user['email']
+    else:
+        user_name = "Guest"
+
     entry = {
         "function_name":f_name,
         "call_number":call_number,
         "parameters":f_params,
-        "user":st.session_state.user.email
+        "user":user_name
     }
 
     json_str = json.dumps(entry)

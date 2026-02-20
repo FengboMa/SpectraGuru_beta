@@ -15,8 +15,8 @@ def log_function_call(f_name, f_params):
     increment_count(count_log_file_path, f_name)
     call_number = read_counts_json(count_log_file_path)[f_name]
 
-    print(st.session_state.user)
     if st.session_state.user_logged_in:
+        print(st.session_state.user)
         user_name = st.session_state.user['email']
     else:
         user_name = "Guest"
@@ -29,7 +29,7 @@ def log_function_call(f_name, f_params):
     }
 
     json_str = json.dumps(entry)
-    print("JSON:", json_str)
+    #print("JSON:", json_str)
     append_to_file(call_log_file_path, f"{json_str}\n")
 
 # appends a specified string to a given file.
@@ -92,3 +92,21 @@ def log_spectra_processed_count():
 # Essentially a function rename for clarity
 def log_function_use_count(function_log_file_path, keyname, amount=1):
     return increment_count(function_log_file_path, keyname, amount)
+
+
+### TEST FUNCTIONS ###
+# The following functions are for convenience during testing and are not used for the application.
+
+def clear_call_log():
+    with open(call_log_file_path, "w") as file:
+        file.write("")
+
+def clear_count_log():
+    write_counts_json(count_log_file_path, counts={})
+
+# fills the call log with trash to test performance
+def fill_call_log(n_entries):
+    for i in range(int(n_entries / 3)):
+        log_function_call("Trash_Function_1", f_params={"param_1":84, "param_2":0.0111, "param_3":"value"})
+        log_function_call("Trash_Function_2", f_params={"param_4":90909, "param_5":7891, "param_6":True})
+        log_function_call("Trash_Function_3", f_params={"param_7":False, "param_8":"octagon"})

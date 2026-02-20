@@ -14,7 +14,6 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 # Change the working directory
 os.chdir(current_dir)
 
-
 function.wide_space_default()
 
 #####################
@@ -61,6 +60,10 @@ else:
 
 #st.write(st.session_state.user)
 print("User:", st.session_state.user)
+
+#log.fill_call_log(100000)
+#log.clear_call_log()
+#log.clear_count_log()
 
 st.image(r"element/Application header picture-3.png")
 

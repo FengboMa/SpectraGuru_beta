@@ -391,8 +391,17 @@ def read_counts(log_file_path):
 def write_counts(log_file_path, counts):
     import os
 
+    # Clean up any incorrect keys (e.g., 'Spectra_processed' with lowercase p)
+    corrected_counts = {}
+    for key, value in counts.items():
+        # Map old incorrect keys to correct ones
+        if key == 'Spectra_processed':
+            corrected_counts['Spectra_Processed'] = value
+        else:
+            corrected_counts[key] = value
+    
     with open(log_file_path, "w") as file:
-        for key, value in counts.items():
+        for key, value in corrected_counts.items():
             file.write(f"{key}\t{value}\n")
 
 

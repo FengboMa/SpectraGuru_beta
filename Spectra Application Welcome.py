@@ -64,6 +64,12 @@ print("User:", st.session_state.user)
 st.image(r"element/Application header picture-3.png")
 st.session_state.log_file_path = r"element/user_count.txt"
 
+# Initialize user count (logs +1 for each unique session)
+if 'current_user_count' not in st.session_state:
+    st.session_state.current_user_count = function.log_user_count(
+        st.session_state.log_file_path
+    )
+
 # --- Initial Setup ---
 hide_close_button_css = """
     <style>
@@ -78,9 +84,6 @@ st.markdown(hide_close_button_css, unsafe_allow_html=True)
 def guest_entry():
     st.session_state.user_logged_in = False
     st.session_state.show_welcome_modal = False
-    st.session_state.current_user_count = function.log_user_count(
-        st.session_state.log_file_path
-    )
 
 print("Welcome:",st.session_state.show_welcome_modal)
 print("Logged in:",st.session_state.user_logged_in)

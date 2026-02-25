@@ -17,15 +17,19 @@ def log_function_call(f_name, f_params):
 
     if st.session_state.user_logged_in:
         print(st.session_state.user)
-        user_name = st.session_state.user['email']
+        user = {
+            "id":st.session_state.user['id'],
+            "name":st.session_state.user['firstName'] + " " + st.session_state.user['lastName'],
+            "email":st.session_state.user['email']
+        }
     else:
-        user_name = "Guest"
+        user = "Guest"
 
     entry = {
         "function_name":f_name,
         "call_number":call_number,
         "parameters":f_params,
-        "user":user_name
+        "user":user
     }
 
     json_str = json.dumps(entry)
@@ -103,10 +107,3 @@ def clear_call_log():
 
 def clear_count_log():
     write_counts_json(count_log_file_path, counts={})
-
-# fills the call log with trash to test performance
-def fill_call_log(n_entries):
-    for i in range(int(n_entries / 3)):
-        log_function_call("Trash_Function_1", f_params={"param_1":84, "param_2":0.0111, "param_3":"value"})
-        log_function_call("Trash_Function_2", f_params={"param_4":90909, "param_5":7891, "param_6":True})
-        log_function_call("Trash_Function_3", f_params={"param_7":False, "param_8":"octagon"})

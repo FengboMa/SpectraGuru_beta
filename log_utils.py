@@ -16,7 +16,7 @@ def log_function_call(f_name, f_params):
     call_number = read_counts_json(count_log_file_path)[f_name]
 
     if st.session_state.user_logged_in:
-        print(st.session_state.user)
+        #print(st.session_state.user)
         user = {
             "id":st.session_state.user['id'],
             "name":st.session_state.user['firstName'] + " " + st.session_state.user['lastName'],
@@ -47,7 +47,7 @@ def append_to_file(file_path, string):
                 file.write(string)
 
 # Increments the counter for a specified metric in a given log file. Returns the new count and 
-# returns 0 if the keyname does not match any recognizable keyname in the log file.
+# creates a new entry if the keyname doesn't already exist.
 def increment_count(file_path, keyname, amount=1):
     lock = FileLock(file_path + ".lock")
     try:

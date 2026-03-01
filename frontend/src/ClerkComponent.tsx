@@ -10,7 +10,7 @@ import React, {
   useState,
   ReactElement,
 } from "react"
-import { SignIn } from "@clerk/clerk-react"
+import { SignIn, SignUp } from "@clerk/clerk-react"
 import { useUser, useClerk } from "@clerk/clerk-react"
 
 const COMPONENT_URL = import.meta.env.VITE_COMPONENT_HOST_URL
@@ -35,13 +35,20 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
 
   const { isSignedIn, user } = useUser()
   const { signOut } = useClerk()
+  const params = new URLSearchParams(window.location.search);
+  const mode = params.get("mode") == "signup" ? "signup" : "signin";
+
 
   useEffect(() => {
     // Call this when the component's size might change
-    Streamlit.setFrameHeight(height)
+    if (mode == "signup") {
+      Streamlit.setFrameHeight(730)
+    } else {
+      Streamlit.setFrameHeight(height)
+    }
     // Adding the style and theme as dependencies since they might
     // affect the visual size of the component.
-  }, [theme])
+  }, [mode])
 
   if (action == "logout") {
     signOut()
@@ -77,14 +84,30 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
   }, [isSignedIn, user]);
 
   if (!isSignedIn) {
-    return (
-      <span>
-        <SignIn 
-          routing="virtual"
-          forceRedirectUrl={COMPONENT_URL}
-        />
-      </span>
-    )
+    if (mode == "signin") {
+      return (
+        <span>
+          <SignIn 
+            routing="virtual"
+            forceRedirectUrl={COMPONENT_URL}
+            signUpForceRedirectUrl={COMPONENT_URL}
+            signUpUrl={`${COMPONENT_URL}?mode=signup`}
+          />
+        </span>
+      )
+    } else if (mode == "signup") {
+      return (
+        <span>
+          <SignUp
+            routing="virtual"
+            forceRedirectUrl={COMPONENT_URL}
+            signInForceRedirectUrl={COMPONENT_URL}
+            oauthFlow="popup"
+            signInUrl={`${COMPONENT_URL}?mode=signin`}
+          />
+        </span>
+      )
+    }
   }
   return (
     <span>

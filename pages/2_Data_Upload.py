@@ -4,6 +4,8 @@ import function
 import psycopg2
 import numpy as np
 from scipy.interpolate import interp1d
+from function import show_feedback
+import traceback
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Page-scoped key helper  ➜  every widget / cache key on this page is prefixed
@@ -38,19 +40,37 @@ def load_tab_data(file):
 
 @st.cache_data
 def load_multi_data(file_paths):
+    # UPDATE TO READ_COLUMNS TO INCLUDE FEEDBACK COMPONENT
     def read_columns(file_path):
         try:
             df = pd.read_csv(
-                file_path, delim_whitespace=True, skip_blank_lines=True,
-                comment='#', header=None, on_bad_lines='skip'
+                file_path,
+                delim_whitespace=True,
+                skip_blank_lines=True,
+                comment='#',
+                header=None,
+                on_bad_lines='skip'
             )
+
             df = df.apply(pd.to_numeric, errors='coerce').dropna()
+
             if df.shape[1] < 2:
-                raise ValueError(f"File {file_path} does not contain at least two columns.")
+                raise ValueError("File must contain at least two numeric columns.")
+
             return df[0], df[1]
+
         except Exception as e:
-            print(f"Error reading {file_path}: {e}")
-            return None, None
+            show_feedback(
+                message=f"Failed to read file: {file_path.name}",
+                severity="error",
+                suggestions=[
+                    "Ensure the file has two numeric columns.",
+                    "Remove header text or comments.",
+                    "Confirm the selected format matches the file type."
+                ],
+                details=traceback.format_exc()
+            )
+            st.stop()
 
     first_columns, second_columns, file_names = [], [], []
     for file in file_paths:
@@ -204,49 +224,68 @@ FORMAT_OPTIONS = {
     "Single TSV (.tsv / tab-separated)": {"kind": "single_tsv", "multi": False, "types": ["csv"]},
     "Single CSV (comma-separated)":      {"kind": "single_csv", "multi": False, "types": ["csv"]},
 }
+
+# UPDATE TO READ_COLUMNS TO INCLUDE FEEDBACK COMPONENT
 def process_upload(kind, uploaded):
-    """Handle file uploads based on selected data format, with friendly error messages."""
     if not uploaded:
-        st.warning("Please upload at least one file to continue.")
+        show_feedback(
+            message="No file uploaded.",
+            severity="warning",
+            suggestions=["Upload at least one file to continue."]
+        )
         return None
 
     try:
         if kind in ("multi_txt", "multi_csv"):
             df = load_multi_data(uploaded)
+
         elif kind == "single_tsv":
             df = load_tab_data(uploaded)
+
         elif kind == "single_csv":
             df = load_data(uploaded)
+
         else:
-            st.error("Unsupported file type or format selection.")
+            show_feedback(
+                message="Unsupported format selected.",
+                severity="error",
+                suggestions=["Choose a valid format from the dropdown."]
+            )
+            return None
+
+        if df is None or df.empty:
+            show_feedback(
+                message="The uploaded file contains no usable data.",
+                severity="error",
+                suggestions=[
+                    "Ensure the file contains numeric values.",
+                    "Check for blank rows."
+                ]
+            )
             return None
 
         return df
 
-    except ValueError as e:
-        # ValueError from validation (like mismatched columns)
-        st.error(
-            "The uploaded data could not be processed. "
-            "Please check that your files match the selected format "
-            "(for example, two numeric columns with a shared x-axis)."
-        )
-        st.caption(f"Details: {str(e)}")
-        return None
-
     except pd.errors.ParserError:
-        st.error(
-            "There was a problem reading your file. "
-            "It might not be a valid CSV or text file. "
-            "Please re-check your format and try again."
+        show_feedback(
+            message="File parsing failed.",
+            severity="error",
+            suggestions=[
+                "Ensure file is valid CSV or TXT.",
+                "Check delimiter selection."
+            ]
         )
         return None
 
     except Exception:
-        # Mask all other system errors with a polite fallback
-        st.error(
-            "Something went wrong while loading your data. "
-            "Please confirm that the file type matches your selected option "
-            "and try again."
+        show_feedback(
+            message="Something went wrong while loading your file.",
+            severity="error",
+            suggestions=[
+                "Confirm the file format matches your selection.",
+                "Try re-saving the file as UTF-8."
+            ],
+            details=traceback.format_exc()
         )
         return None
 

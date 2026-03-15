@@ -4,9 +4,8 @@ import {
   ComponentProps,
 } from "streamlit-component-lib"
 import React, {
-  useCallback,
   useEffect,
-  useMemo,
+  useRef,
   useState,
   ReactElement,
 } from "react"
@@ -31,24 +30,36 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
 
   // Extract custom arguments passed from Python
   const action = args["action"]
-  const height = args["height"]
+  const heightOffset = args["height_offset"]
+  const heightMinimum = args["min_height"]
+  const visible = args["visible"]
 
   const { isSignedIn, user } = useUser()
   const { signOut } = useClerk()
   const params = new URLSearchParams(window.location.search);
   const mode = params.get("mode") == "signup" ? "signup" : "signin";
 
+  const containerRef = useRef(null)
 
+  // check for a resize
   useEffect(() => {
-    // Call this when the component's size might change
-    if (mode == "signup") {
-      Streamlit.setFrameHeight(730)
-    } else {
-      Streamlit.setFrameHeight(height)
-    }
-    // Adding the style and theme as dependencies since they might
-    // affect the visual size of the component.
-  }, [mode])
+    const element = containerRef.current;
+    if (!element) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const height = entry.contentRect.height + heightOffset > heightMinimum ? entry.contentRect.height + heightOffset : heightMinimum;
+        if (visible) {
+          Streamlit.setFrameHeight(height);
+        } else {
+          Streamlit.setFrameHeight(0);
+        }
+      }
+    });
+
+    observer.observe(element);
+
+  }, []);
 
   if (action == "logout") {
     signOut()
@@ -70,7 +81,7 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
     }
 
     if (isSignedIn && user) {
-      // Send the user object to Streamlit
+      // send user data to Streamlit
       const safeUser = {
         signedIn: isSignedIn,
         id: user.id,
@@ -86,18 +97,18 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
   if (!isSignedIn) {
     if (mode == "signin") {
       return (
-        <span>
+        <div ref={containerRef}>
           <SignIn 
             routing="virtual"
             forceRedirectUrl={COMPONENT_URL}
             signUpForceRedirectUrl={COMPONENT_URL}
             signUpUrl={`${COMPONENT_URL}?mode=signup`}
           />
-        </span>
+        </div>
       )
     } else if (mode == "signup") {
       return (
-        <span>
+        <div ref={containerRef}>
           <SignUp
             routing="virtual"
             forceRedirectUrl={COMPONENT_URL}
@@ -105,7 +116,7 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
             oauthFlow="popup"
             signInUrl={`${COMPONENT_URL}?mode=signin`}
           />
-        </span>
+        </div>
       )
     }
   }

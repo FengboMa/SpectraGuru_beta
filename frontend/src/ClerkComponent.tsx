@@ -6,7 +6,6 @@ import {
 import React, {
   useEffect,
   useRef,
-  useState,
   ReactElement,
 } from "react"
 import { SignIn, SignUp } from "@clerk/clerk-react"

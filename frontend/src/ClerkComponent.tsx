@@ -48,7 +48,10 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        const height = entry.contentRect.height + heightOffset > heightMinimum ? entry.contentRect.height + heightOffset : heightMinimum;
+        const height =
+          entry.contentRect.height + heightOffset > heightMinimum
+            ? entry.contentRect.height + heightOffset
+            : heightMinimum;
         if (visible) {
           Streamlit.setFrameHeight(height);
         } else {
@@ -59,7 +62,11 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
 
     observer.observe(element);
 
-  }, []);
+    return () => {
+      observer.unobserve(element);
+      observer.disconnect();
+    };
+  }, [heightOffset, heightMinimum, visible]);
 
   if (action == "logout") {
     signOut()

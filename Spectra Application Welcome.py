@@ -140,7 +140,7 @@ if st.session_state.show_login_modal:
         left, center, right = st.columns([2, 90, 1])
         
         with center:
-            user = clerk_component(key="login", action="login", height=500)
+            user = clerk_component(key="login", action="login")
 
             if populate(user):
                 print("POPULATED")

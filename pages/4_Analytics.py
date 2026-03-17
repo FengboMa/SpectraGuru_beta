@@ -39,6 +39,56 @@ if 'df' in st.session_state:
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
         st.sidebar.toggle(label='Show spectra you selected', value=True, key = 'stats_avg_act',help='Show or hide original selected spectra.')
         st.sidebar.toggle(label='Show Standard Deviation', value=True, key = 'stats_avg_std_act',help='Show or hide Standard Deviation.')
+    elif st.session_state.stats_plot_select == "Confidence Interval Plot":
+        # Interval method selector
+        interval_method = st.sidebar.radio(
+            label="Interval Method",
+            options=("Confidence Interval", "Standard Deviation"),
+            index=0,   # default to Confidence Interval
+            help=(
+                "Choose how the uncertainty band is computed.\n\n"
+                "Confidence Interval estimates the uncertainty of the mean using "
+                "the t-distribution.\n\n"
+                "Standard Deviation shows how replicate spectra vary from each other."
+            ),
+            key = "interval_method"
+        )
+
+        # If user selects Confidence Interval method
+        if interval_method == "Confidence Interval":
+            conf_lvl = st.sidebar.selectbox(
+                label="Confidence Level",
+                options=(90, 95, 99),
+                index=1,   # default to 95 percent
+                key="conf_lvl",
+                help=(
+                    "Choose the confidence level for the interval. "
+                    "Higher levels produce wider intervals. "
+                    "The interval is computed using the formula: "
+                    "$CI = \\bar{x} \\pm t \\cdot (s / \\sqrt{n})$, "
+                    "where $\\bar{x}$ is the mean, $s$ is the standard deviation of replicates, "
+                    "and $n$ is the number of spectra.\n\n"
+                    "This interval estimates **uncertainty of the mean spectrum**, not the "
+                    "spread of the raw spectra."
+                )
+            )
+
+        else:
+            # Standard deviation envelope
+            std_multiplier = st.sidebar.selectbox(
+                label="Number of Standard Deviations",
+                options=(1, 2, 3),
+                index=0,   # default to 1 SD
+                key="std_mult",
+                help=(
+                    "Choose how many standard deviations to use when forming the envelope. "
+                    "For example, 1 SD typically captures about 68 percent of spectra if data is "
+                    "normally distributed.\n\n"
+                    "This method visualizes **spread among individual spectra**, not the "
+                    "uncertainty of the mean."
+                )
+            )
+    
     elif st.session_state.stats_plot_select == "Spectra Derivation":
         st.sidebar.selectbox(label="Normalization Method",
             options=("None", "Min-Max Normalization"),
@@ -46,6 +96,23 @@ if 'df' in st.session_state:
             key="deriv_norm_method",
             help="Apply per-spectrum Min–Max scaling before taking derivatives.")
     elif st.session_state.stats_plot_select == "Correlation Heatmap":
+        
+        st.sidebar.selectbox(
+            label='Correlation Algorithm',
+            options=('Pearson Correlation', 'Cosine Similarity'),
+            index=0,
+            key='heatmap_corr_method',
+            help=(
+                "Choose the correlation/similarity algorithm:\n\n"
+                "**Pearson Correlation**: Measures linear correlation between variables. "
+                "Values range from -1 (perfect negative) to 1 (perfect positive). "
+                "Sensitive to scale and magnitude.\n\n"
+                "**Cosine Similarity**: Measures the cosine of the angle between vectors. "
+                "Values range from -1 to 1. Less sensitive to magnitude, focuses on direction/shape."
+            )
+        )
+        
+        st.sidebar.toggle(label='Compute Average', value=False, key='heatmap_compute_avg', help='Add an average row/column at the end of the heatmap.')
         
         if st.sidebar.toggle(label='Customize Heatmap scale', value=False, key = 'heatmap_scale',help='Customize heatmap scale manually.'):
             st.sidebar.number_input(label='Heatmap scale min',min_value= -1.0, max_value= 1.00, placeholder='Insert a number between -1 and 1',
@@ -140,7 +207,7 @@ else:
             
             if st.session_state.stats_avg_act:
                 avg_stats_base = alt.Chart(stats_data_melted).mark_line().encode(
-                        x=alt.X('Ramanshift', title='Raman shift/cm^-1', type='quantitative'),
+                        x=alt.X('Ramanshift', title='Raman shift/cm⁻¹', type='quantitative'),
                         y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
                         tooltip=alt.value(None),
                         color=alt.condition(
@@ -166,7 +233,7 @@ else:
             else:
                 filtered_avg_df = stats_data_melted[stats_data_melted['Sample ID'] == 'Average']
                 avg_stats_base2 = alt.Chart(filtered_avg_df).mark_line().encode(
-                        x=alt.X('Ramanshift', title='Raman shift/cm^-1', type='quantitative'),
+                        x=alt.X('Ramanshift', title='Raman shift/cm⁻¹', type='quantitative'),
                         y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
                         tooltip=alt.value(None),
                         color=alt.value('blue'),
@@ -200,7 +267,7 @@ else:
                 # st.write(std_df)
                 # Plot the results using Altair
                 std_plot = alt.Chart(std_df).mark_line().encode(
-                    x='Ramanshift',
+                    x=alt.X('Ramanshift', axis=alt.Axis(title='Raman shift/cm⁻¹')),
                     y='Standard Deviation'
                 ).properties(
                             width=1300,
@@ -253,28 +320,34 @@ else:
             std_df = st.session_state.df_stats.iloc[:, 1:]
             std_df = std_df.drop('Average', axis=1)
             
-            # st.write(std_df)
-            # Calculate mean and std deviation
-            mean_values = std_df.mean(axis=1)
-            std_values = std_df.std(axis=1)
+            if st.session_state.interval_method == "Confidence Interval":
+                threshold = st.session_state.conf_lvl     # 90, 95, 99
+                CI_title_text = f"{threshold} percent Confidence Interval Plot"
+            else:
+                threshold = st.session_state.std_mult     # 1, 2, 3
+                CI_title_text = f"±{threshold} Standard Deviation Envelope Plot"
 
-            ci_upper = mean_values + std_values
-            ci_lower = mean_values - std_values
-            
+            mean_values, ci_upper, ci_lower = function.confidence_interval(
+                df=std_df,
+                threshold=threshold,
+                interval_method=st.session_state.interval_method
+            )
+
             data = pd.DataFrame({
                 'Ramanshift': ramanshift,
                 'Mean': mean_values,
                 'CI_Upper': ci_upper,
                 'CI_Lower': ci_lower
             })
-            
+
             base = alt.Chart(data).encode(
-                x='Ramanshift'
+                x=alt.X('Ramanshift', axis=alt.Axis(title='Raman shift/cm⁻¹'))
             ).properties(
                             width=1300,
                             height=600,
+                            title = CI_title_text
                 )
-
+            
             # Line for mean values
             mean_line = base.mark_line(color='blue').encode(
                 y='Mean'
@@ -434,16 +507,27 @@ else:
                 st.error(f"Error during processing: {e}")
         
         elif st.session_state.stats_plot_select == "Correlation Heatmap":
-            # Select only the columns we need for standard deviation calculation
+            # Select only the columns we need for correlation calculation
             # Filter out the columns
             columns_to_include = [col for col in st.session_state.temp.columns if col not in ["Ramanshift", "Average","Standard Deviation"]]
-            df_filtered = st.session_state.temp[columns_to_include]
-            df_filtered['Average'] = df_filtered.mean(axis=1)
+            df_filtered = st.session_state.temp[columns_to_include].copy()
             
-            # st.write(df_filtered)
-
-            # Calculate the correlation matrix
-            corr_matrix = df_filtered.corr()
+            # Add average column if toggle is enabled
+            if st.session_state.heatmap_compute_avg:
+                df_filtered['Average'] = df_filtered.mean(axis=1)
+            
+            # Calculate the correlation matrix based on selected method
+            if st.session_state.heatmap_corr_method == "Pearson Correlation":
+                corr_matrix = df_filtered.corr(method='pearson')
+            else:  # Cosine Similarity
+                from sklearn.metrics.pairwise import cosine_similarity
+                # Calculate cosine similarity between columns (transpose so columns become rows)
+                cosine_sim = cosine_similarity(df_filtered.T)
+                corr_matrix = pd.DataFrame(
+                    cosine_sim,
+                    index=df_filtered.columns,
+                    columns=df_filtered.columns
+                )
 
             # Display the correlation matrix
             # stats_row2.dataframe(corr_matrix, use_container_width=True)
@@ -723,7 +807,7 @@ else:
             
             # Step 3: Create the base interactive plot
             avg_stats_base2 = alt.Chart(filtered_avg_df).mark_line().encode(
-                x=alt.X('Ramanshift', title='Raman shift/cm^-1', type='quantitative'),
+                x=alt.X('Ramanshift', title='Raman shift/cm⁻¹', type='quantitative'),
                 y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
                 tooltip=alt.value(None),
                 color=alt.value('blue'),
@@ -740,9 +824,9 @@ else:
                 color='red',
                 size=100
             ).encode(
-                x=alt.X('Ramanshift', title='Raman shift/cm^-1', type='quantitative'),
+                x=alt.X('Ramanshift', title='Raman shift/cm⁻¹', type='quantitative'),
                 y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
-                tooltip=[alt.Tooltip('Ramanshift', title='Raman shift/cm^-1'),
+                tooltip=[alt.Tooltip('Ramanshift', title='Raman shift/cm⁻¹'),
                         alt.Tooltip('Intensity', title='Intensity/a.u.')]
             ).properties(
                 width=1300,

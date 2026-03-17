@@ -376,12 +376,13 @@ for idx in range(int(n_classes)):
 
         # ======================= 2-B. DATABASE QUERY ======================
         else:
-            if not st.session_state.user_logged_in:
-                st.warning("Please log in to SpectraGuru before querying the database.")
+            if not st.session_state.get('user_logged_in', False):
+                st.warning("🔒 **Database access requires a SpectraGuru account.** Please log in from the Welcome page to use this feature.")
+                st.info("You can still use **Manual Upload** to load your own data as a guest.")
                 all_ready = False
                 st.session_state.selected_counts[idx] = 0
-            elif not st.session_state.db_logged_in:
-                st.warning("Please log in to the database above before querying.")
+            elif not st.session_state.get('db_logged_in', False):
+                st.error("⚠️ Database connection is unavailable. Please contact the administrator.")
                 all_ready = False
                 st.session_state.selected_counts[idx] = 0
             else:

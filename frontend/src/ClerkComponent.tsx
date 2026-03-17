@@ -40,6 +40,7 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
   const mode = params.get("mode") == "signup" ? "signup" : "signin";
 
   const containerRef = useRef(null)
+  const startupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // check for a resize
   useEffect(() => {
@@ -74,13 +75,20 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
 
     // If no user data appears after a full second, assume the user is logged out.
     if (action == "startup" && !(isSignedIn && user)) {
-      let timeoutId: ReturnType<typeof setTimeout>;
-      timeoutId = setTimeout(() => {
-        Streamlit.setComponentValue("NO_USER");
-      }, 1000);
+      if (!startupTimeoutRef.current) {
+        startupTimeoutRef.current = setTimeout(() => {
+          Streamlit.setComponentValue("NO_USER");
+        }, 1000);
+      }
     }
 
     if (isSignedIn && user) {
+      // Clear any pending startup timeout once we have a signed-in user.
+      if (startupTimeoutRef.current) {
+        clearTimeout(startupTimeoutRef.current);
+        startupTimeoutRef.current = null;
+      }
+
       // send user data to Streamlit
       const safeUser = {
         signedIn: isSignedIn,
@@ -92,7 +100,15 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
       }
       Streamlit.setComponentValue(safeUser);
     }
-  }, [isSignedIn, user]);
+
+    // Cleanup: clear any pending startup timeout on effect cleanup.
+    return () => {
+      if (startupTimeoutRef.current) {
+        clearTimeout(startupTimeoutRef.current);
+        startupTimeoutRef.current = null;
+      }
+    }
+  }, [isSignedIn, user, action]);
 
   if (!isSignedIn) {
     if (mode == "signin") {

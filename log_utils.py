@@ -3,6 +3,8 @@ from filelock import FileLock
 import os
 import streamlit as st
 import datetime as dt
+import pandas as pd
+import numpy as np
 
 count_log_file_path = "log/count_log.txt"
 call_log_file_path = "log/call_log.txt"
@@ -49,6 +51,68 @@ def append_to_file(file_path, string):
         with lock: # prevents two users from writing to the same file at once.
             with open(file_path, "a") as file:
                 file.write(string)
+
+# Returns a DataFrame used to display the call frequency of each of the processing/analysis functions.
+def get_count_data():
+    counts = {}
+
+    lock = FileLock(count_log_file_path + ".lock")
+    with lock:
+        counts = read_counts_json(count_log_file_path)
+    
+    data = []
+    num_functions = 0
+    for key in counts.keys():
+        readable_name = get_readable_name(key)
+        reference = get_reference(key)
+        entry = [readable_name['feature'], readable_name['algorithm'], counts[key], reference]
+        data.append(entry)
+        num_functions += 1
+    
+    data.sort(key=lambda entry: entry[2], reverse=True)
+    
+    df = pd.DataFrame(data=data, index=pd.RangeIndex(start=1, stop=num_functions+1), columns=['Feature', 'Algorithm', 'Usage (Times Called)', 'Reference'])
+    return df
+
+# Returns a user-readable name for a function given its keyname, in terms of both its feature name and algorithm name, if applicable.
+def get_readable_name(keyname):
+    
+    names = {
+        'Processing_Despike_Auto':("Despike", "Automatic Despike"),
+        'Processing_Despike_Manual':("Despike", "Manual Despike"),
+        'Processing_Smoothing_Savgol_Filter':("Smoothening", "Savitzky-Golay filter"),
+        'Processing_Smoothing_FFT_Filter':("Smoothening", "1D Fast Fourier Transform filter"),
+        'Processing_Baseline_AirPLS':("Baseline Removal", "AirPLS"),
+        'Processing_Baseline_Mod_Poly':("Basline Removal", "Modified Polynomial Fitting"),
+        'Processing_Baseline_Gaussian_Lorentzian_Fitting':("Baseline Removal", "Gaussian-Lorentzian Fitting"),
+        'Processing_Normalization_Area':("Normalization", "Normalization by Area"),
+        'Processing_Normalization_Peak':("Normalizarion", "Normalization by Peak"),
+        'Processing_Normalization_Minmax':("Normalization", "Min-max normalization"),
+        'Processing_Remove_Outliers':("Outlier Removal", "Outlier Removal"),
+        'Analytics_Spectra_Derivation':("Spectra Derivation", "Spectra Derivation"),
+        'Analytics_Correlation_Heatmap':("Correlation Heatmap", "Correlation Heatmap"),
+        'Analytics_Peak_Identification':("Peak Identification", "Peak Identification"),
+        'Analytics_Clustering_Clustermap':("Hierarchical Clustering", "Clustermap"),
+        'Analytics_Clustering_Dendrogram':("Hierarchical Clustering", "Dendrogram"),
+        'Analytics_PCA':("PCA", "Principal Component Analysis"),
+        'Analytics_TSNE':("t-SNE", "t-Distributed Stochastic Neighbor Embedding")
+    }
+
+    readable_name = {}
+    if keyname in names:
+        readable_name = {
+            'feature':names[keyname][0],
+            'algorithm':names[keyname][1]
+        }
+    else:
+        readable_name = {
+            'feature':keyname,
+            'algorithm':keyname
+        }
+    return readable_name
+
+def get_reference(keyname):
+    return ""
 
 # Increments the counter for a specified metric in a given log file. Returns the new count and 
 # creates a new entry if the keyname doesn't already exist.

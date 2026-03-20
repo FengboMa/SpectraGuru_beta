@@ -308,6 +308,18 @@ st.markdown(
     """
     ---
 
+    ### Function Usage
+
+    The following table depicts the relative popularity of each of SpectraGuru's featured processing and analysis functions.
+"""
+)
+
+st.table(data=log.get_count_data())
+
+st.markdown(
+    """
+    ---
+
     ### About Us 
 
     - Find us here: [Zhao Nano Lab](https://www.zhao-nano-lab.com/)

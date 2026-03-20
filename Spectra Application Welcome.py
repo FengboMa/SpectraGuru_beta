@@ -39,6 +39,8 @@ function.wide_space_default()
 
 #####################
 
+CULL_FUNCTION_TABLE_REFRESH = False # If false, function count table updates after any user interaction. If true, it only updates after a full browser refesh.
+
 if 'user_decided' not in st.session_state:
     st.session_state.user_decided = False
 if 'user' not in st.session_state:
@@ -314,7 +316,10 @@ st.markdown(
 """
 )
 
-st.table(data=log.get_count_data())
+if 'function_count_data' not in st.session_state or not CULL_FUNCTION_TABLE_REFRESH:
+    st.session_state.function_count_data = log.get_count_data()
+
+st.table(data=st.session_state.function_count_data)
 
 st.markdown(
     """

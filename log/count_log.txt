@@ -1,1 +1,1 @@
-{"Processing_Smoothing_Savgol_Filter": 10, "Processing_Baseline_AirPLS": 2, "Processing_Remove_Outliers": 2, "Processing_Despike_Auto": 1}
+{}

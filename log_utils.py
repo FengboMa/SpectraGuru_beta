@@ -2,6 +2,7 @@ import json
 from filelock import FileLock
 import os
 import streamlit as st
+import datetime as dt
 
 count_log_file_path = "log/count_log.txt"
 call_log_file_path = "log/call_log.txt"
@@ -24,12 +25,15 @@ def log_function_call(f_name, f_params):
         }
     else:
         user = "Guest"
+    
+    time = dt.datetime.now(dt.UTC).isoformat(timespec='milliseconds')
 
     entry = {
         "function_name":f_name,
         "call_number":call_number,
         "parameters":f_params,
-        "user":user
+        "user":user,
+        "timestamp":time
     }
 
     json_str = json.dumps(entry)

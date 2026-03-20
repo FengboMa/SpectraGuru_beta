@@ -304,7 +304,6 @@ import streamlit.components.v1 as components
 p = open(r"element/traffic_heatmap.html")
 components.html(p.read(), scrolling=True, height=550)
 
-
 st.markdown(
     """
     ---

@@ -10,6 +10,8 @@ count_log_file_path = "log/count_log.txt"
 call_log_file_path = "log/call_log.txt"
 user_log_file_path = "log/user_log.txt"
 
+CULL_FUNCTION_TABLE_REFRESH = False # If false, function count table updates after any user interaction. If true, it only updates after a full browser refesh.
+
 # Creates a JSON String containing the details of a function call and appends the String to a file.
 # function_name: the canonical name of the function
 # function_params: a dictionary containing the parameters of interest used when calling the function

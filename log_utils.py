@@ -88,7 +88,7 @@ def get_readable_name(keyname):
         'Processing_Baseline_Mod_Poly':("Basline Removal", "Modified Polynomial Fitting"),
         'Processing_Baseline_Gaussian_Lorentzian_Fitting':("Baseline Removal", "Gaussian-Lorentzian Fitting"),
         'Processing_Normalization_Area':("Normalization", "Normalization by Area"),
-        'Processing_Normalization_Peak':("Normalizarion", "Normalization by Peak"),
+        'Processing_Normalization_Peak':("Normalization", "Normalization by Peak"),
         'Processing_Normalization_Minmax':("Normalization", "Min-max normalization"),
         'Processing_Remove_Outliers':("Outlier Removal", "Outlier Removal"),
         'Analytics_Spectra_Derivation':("Spectra Derivation", "Spectra Derivation"),

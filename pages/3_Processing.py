@@ -794,5 +794,14 @@ else:
             st.write("**Following spectra has been detected and removed by the outlier removal function**")
             st.table(st.session_state.remove_outliers_log)
                 
-    except:
-        pass
+    except Exception as e:
+        show_feedback(
+            message="Plot could not be generated.",
+            severity="error",
+            suggestions=[
+                "Try selecting fewer spectra.",
+                "Check that preprocessing steps produced valid data.",
+                "Try resetting processing."
+            ],
+            details=str(e)
+        )

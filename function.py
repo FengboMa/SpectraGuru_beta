@@ -1383,61 +1383,39 @@ def spectra_derivation(
 #------------------------
 def show_feedback(
     message: str,
-    severity: str = "info",
+    severity: str = "error",
     details: str = None,
     suggestions: list[str] = None,
-    action_label: str = None,
-    action_callback=None,
 ):
-    """
-    Display standardized user-friendly feedback message.
-
-    Parameters
-    ----------
-    message : str
-        Main message shown to user.
-    severity : str
-        One of: "error", "warning", "info", "success".
-    details : str
-        Optional technical details displayed as a code block inside the alert.
-    suggestions : list[str]
-        List of actionable suggestions displayed inside the alert.
-    action_label : str
-        Label for optional recovery button (rendered below the alert).
-    action_callback : callable
-        Function to call when button is clicked.
-    """
     import streamlit as st
+
+    # 1. Map severity to the correct Streamlit function
     severity_map = {
         "error": st.error,
         "warning": st.warning,
         "info": st.info,
         "success": st.success
     }
-    
+    display_func = severity_map.get(severity, st.error)
 
-    display = severity_map.get(severity, st.info)
-
-    # Build full message as markdown
-    full_message = message
+    # 2. Build the string using standard Markdown
+    # We use \n for spacing to ensure Streamlit renders the lists and code blocks
+    full_content = f"**{message}**\n\n"
 
     if suggestions:
-        full_message += "\n\n### 💡 Suggestions\n"
+        full_content += "#### 💡 Suggestions\n"
         for s in suggestions:
-            full_message += f"- {s}\n"
+            full_content += f"- {s}\n"
+        full_content += "\n"
 
     if details:
-        full_message += (
-            "\n\n---\n"
-            "**Technical Details:**\n"
-            f"```\n{details}\n```"
-        )
+        full_content += "#### 🔧 Technical Details\n"
+        # Triple backticks work perfectly inside st.error as long as they are in the string
+        full_content += f"```text\n{details}\n```\n\n"
 
-    # Render alert box with everything inside
-    display(full_message)
+    # added documentation link
+    full_content += "📖 **Documentation:** [SpectraGuru Docs](https://fengboma.github.io/docs.spectraguru/)"
 
-    # Render action button separately (Streamlit limitation)
-    if action_label and action_callback:
-        if st.button(action_label):
-            action_callback()
+    # 3. Render the box
+    display_func(full_content)
 

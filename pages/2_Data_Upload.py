@@ -391,7 +391,14 @@ for idx in range(int(n_classes)):
                         st.session_state.class_data = [("Sample", df_sample)]
                         st.success("Sample data loaded.")
                     except Exception as e:
-                        st.error(f"Failed to load sample data: {e}")
+                        show_feedback(
+                            message="Sample data could not be loaded.",
+                            severity="error",
+                            suggestions=[
+                                "Ensure sampledata.csv exists in element folder."
+                            ],
+                            details=traceback.format_exc()
+                        )
 
             if df_this is not None:
                 st.success(f"{class_label} loaded. Shape: {df_this.shape}")

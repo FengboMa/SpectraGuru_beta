@@ -4,13 +4,11 @@ import {
   ComponentProps,
 } from "streamlit-component-lib"
 import React, {
-  useCallback,
   useEffect,
-  useMemo,
-  useState,
+  useRef,
   ReactElement,
 } from "react"
-import { SignIn } from "@clerk/clerk-react"
+import { SignIn, SignUp } from "@clerk/clerk-react"
 import { useUser, useClerk } from "@clerk/clerk-react"
 
 const COMPONENT_URL = import.meta.env.VITE_COMPONENT_HOST_URL
@@ -31,17 +29,44 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
 
   // Extract custom arguments passed from Python
   const action = args["action"]
-  const height = args["height"]
+  const heightOffset = args["height_offset"]
+  const heightMinimum = args["min_height"]
+  const visible = args["visible"]
 
   const { isSignedIn, user } = useUser()
   const { signOut } = useClerk()
+  const params = new URLSearchParams(window.location.search);
+  const mode = params.get("mode") == "signup" ? "signup" : "signin";
 
+  const containerRef = useRef(null)
+  const startupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // check for a resize
   useEffect(() => {
-    // Call this when the component's size might change
-    Streamlit.setFrameHeight(height)
-    // Adding the style and theme as dependencies since they might
-    // affect the visual size of the component.
-  }, [theme])
+    const element = containerRef.current;
+    if (!element) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const height =
+          entry.contentRect.height + heightOffset > heightMinimum
+            ? entry.contentRect.height + heightOffset
+            : heightMinimum;
+        if (visible) {
+          Streamlit.setFrameHeight(height);
+        } else {
+          Streamlit.setFrameHeight(0);
+        }
+      }
+    });
+
+    observer.observe(element);
+
+    return () => {
+      observer.unobserve(element);
+      observer.disconnect();
+    };
+  }, [heightOffset, heightMinimum, visible]);
 
   if (action == "logout") {
     signOut()
@@ -56,14 +81,21 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
 
     // If no user data appears after a full second, assume the user is logged out.
     if (action == "startup" && !(isSignedIn && user)) {
-      let timeoutId: ReturnType<typeof setTimeout>;
-      timeoutId = setTimeout(() => {
-        Streamlit.setComponentValue("NO_USER");
-      }, 1000);
+      if (!startupTimeoutRef.current) {
+        startupTimeoutRef.current = setTimeout(() => {
+          Streamlit.setComponentValue("NO_USER");
+        }, 1000);
+      }
     }
 
     if (isSignedIn && user) {
-      // Send the user object to Streamlit
+      // Clear any pending startup timeout once we have a signed-in user.
+      if (startupTimeoutRef.current) {
+        clearTimeout(startupTimeoutRef.current);
+        startupTimeoutRef.current = null;
+      }
+
+      // send user data to Streamlit
       const safeUser = {
         signedIn: isSignedIn,
         id: user.id,
@@ -74,17 +106,41 @@ function ClerkComponent({ args, theme }: ComponentProps): ReactElement {
       }
       Streamlit.setComponentValue(safeUser);
     }
-  }, [isSignedIn, user]);
+
+    // Cleanup: clear any pending startup timeout on effect cleanup.
+    return () => {
+      if (startupTimeoutRef.current) {
+        clearTimeout(startupTimeoutRef.current);
+        startupTimeoutRef.current = null;
+      }
+    }
+  }, [isSignedIn, user, action]);
 
   if (!isSignedIn) {
-    return (
-      <span>
-        <SignIn 
-          routing="virtual"
-          forceRedirectUrl={COMPONENT_URL}
-        />
-      </span>
-    )
+    if (mode == "signin") {
+      return (
+        <div ref={containerRef}>
+          <SignIn 
+            routing="virtual"
+            forceRedirectUrl={COMPONENT_URL}
+            signUpForceRedirectUrl={COMPONENT_URL}
+            signUpUrl={`${COMPONENT_URL}?mode=signup`}
+          />
+        </div>
+      )
+    } else if (mode == "signup") {
+      return (
+        <div ref={containerRef}>
+          <SignUp
+            routing="virtual"
+            forceRedirectUrl={COMPONENT_URL}
+            signInForceRedirectUrl={COMPONENT_URL}
+            oauthFlow="popup"
+            signInUrl={`${COMPONENT_URL}?mode=signin`}
+          />
+        </div>
+      )
+    }
   }
   return (
     <span>

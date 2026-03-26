@@ -65,6 +65,13 @@ print("User:", st.session_state.user)
 #log.clear_count_log()
 
 st.image(r"element/Application header picture-3.png")
+st.session_state.log_file_path = r"element/user_count.txt"
+
+# Initialize user count (logs +1 for each unique session)
+if 'current_user_count' not in st.session_state:
+    st.session_state.current_user_count = function.log_user_count(
+        st.session_state.log_file_path
+    )
 
 # --- Initial Setup ---
 hide_close_button_css = """
@@ -80,7 +87,6 @@ st.markdown(hide_close_button_css, unsafe_allow_html=True)
 def guest_entry():
     st.session_state.user_logged_in = False
     st.session_state.show_welcome_modal = False
-    st.session_state.current_user_count = log.log_user_count()
 
 print("Welcome:",st.session_state.show_welcome_modal)
 print("Logged in:",st.session_state.user_logged_in)
@@ -137,7 +143,7 @@ if st.session_state.show_login_modal:
         left, center, right = st.columns([2, 90, 1])
         
         with center:
-            user = clerk_component(key="login", action="login", height=500)
+            user = clerk_component(key="login", action="login")
 
             if populate(user):
                 print("POPULATED")
@@ -150,10 +156,7 @@ st.write("# SpectraGuru  - A Spectra Analysis Application ")
 
 # ---------- greet authenticated users ----------
 if st.session_state.user_logged_in:
-    if st.session_state.user['firstName']:
-        username = st.session_state.user['firstName']
-    else:
-        username = "Guest"
+    username = st.session_state.get('username', 'Guest')
     st.write(f"Welcome {username}! 👋")
 # -------------
 

@@ -1,0 +1,3 @@
+User	1776
+Plot_Generated	23882
+Spectra_Processed	442032

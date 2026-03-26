@@ -8,10 +8,10 @@ from streamlit_extras.row import row
 from datetime import datetime
 import pandas as pd
 import function
+import log_utils as log
 
 function.wide_space_default()
-st.session_state.log_file_path = r"element/user_count.txt"
-st.session_state.function_log_file_path = r"element/funct_count.txt"
+
 # hide_st_style = """
 #             <style>
 #             #MainMenu {visibility: hidden;}
@@ -228,7 +228,7 @@ else:
                 # avg_stats_base = function.style_altair_chart(avg_stats_base)
                 # st.altair_chart(avg_stats_base, use_container_width=False)  
                 show_plot = avg_stats_base
-                function.log_plot_generated_count(st.session_state.log_file_path)
+                log.log_plot_generated_count()
                 
             else:
                 filtered_avg_df = stats_data_melted[stats_data_melted['Sample ID'] == 'Average']
@@ -246,7 +246,7 @@ else:
                 
                 # st.altair_chart(avg_stats_base2, use_container_width=False)   
                 show_plot = avg_stats_base2
-                function.log_plot_generated_count(st.session_state.log_file_path)
+                log.log_plot_generated_count()
             
             if st.session_state.stats_avg_std_act:
                 ramanshift = st.session_state.df_stats["Ramanshift"]
@@ -279,7 +279,7 @@ else:
                                             )
                 combined_plot = function.style_altair_chart(combined_plot)
                 st.altair_chart(combined_plot, use_container_width=False)
-                function.log_plot_generated_count(st.session_state.log_file_path)
+                log.log_plot_generated_count()
             else:
                 show_plot = function.style_altair_chart(show_plot)    
                 st.altair_chart(show_plot, use_container_width=False)
@@ -363,7 +363,7 @@ else:
             confidence_plot = confidence_interval + mean_line
             confidence_plot = function.style_altair_chart(confidence_plot)
             st.altair_chart(confidence_plot, use_container_width=False)
-            function.log_plot_generated_count(st.session_state.log_file_path)
+            log.log_plot_generated_count()
 
         elif st.session_state.stats_plot_select == "Spectra Derivation":
             with st.sidebar:
@@ -498,11 +498,13 @@ else:
                 #         mime="text/csv",
                     # )
                 # optional: your logger
-                try:
-                    function.log_function_use_count(st.session_state.function_log_file_path, "Spectra_Derived", st.session_state.df[1:].shape[1])
-                    function.log_plot_generated_count(st.session_state.log_file_path)
-                except Exception:
-                    pass
+                log.log_function_call("Analytics_Spectra_Derivation",
+                                        f_params={
+                                            'norm_method':st.session_state.deriv_norm_method,
+                                            'sg_win':win,
+                                            'sg_poly':poly
+                                        })
+                log.log_plot_generated_count()
             except Exception as e:
                 st.error(f"Error during processing: {e}")
         
@@ -655,8 +657,12 @@ else:
             # Display the heatmap
             combined = function.style_altair_chart(combined)
             st.altair_chart(combined, use_container_width=False)
-            function.log_plot_generated_count(st.session_state.log_file_path)
-            function.log_function_use_count(st.session_state.function_log_file_path, "Correlation_Heatmaps_Generated")
+            log.log_plot_generated_count()
+            log.log_function_call("Analytics_Correlation_Heatmap",
+                                    f_params={
+                                        'method':st.session_state.heatmap_corr_method,
+                                        'compute_avg':st.session_state.heatmap_compute_avg
+                                    })
             
             @st.cache_data
             def download_df(df):
@@ -849,8 +855,16 @@ else:
             
             st.write(peak_df)
             
-            function.log_plot_generated_count(st.session_state.log_file_path)
-            function.log_function_use_count(st.session_state.function_log_file_path, "Peak_Identification_Called")
+            log.log_plot_generated_count()
+            log.log_function_call("Analytics_Peak_Identification",
+                                    f_params={
+                                        'auto':st.session_state.peak_iden_auto,
+                                        'height':st.session_state.peak_iden_height_p,
+                                        'threshold':st.session_state.peak_iden_threshold_p,
+                                        'distance':st.session_state.peak_iden_distance_p,
+                                        'prominence':st.session_state.peak_iden_prominence_p,
+                                        'width':st.session_state.peak_iden_width_p
+                                    })
         
         elif st.session_state.stats_plot_select == "Hierarchically-clustered Heatmap":
             
@@ -860,12 +874,12 @@ else:
             
             if st.session_state.HCA_heatmap:
                 st.pyplot(function.hierarchical_clustering_heatmap(temp))
-                function.log_function_use_count(st.session_state.function_log_file_path, "Clustermaps_Generated")
+                log.log_function_call("Analytics_Clustering_Clustermap", f_params={})
             else:
                 st.pyplot(function.hierarchical_clustering_tree(temp))
-                function.log_function_use_count(st.session_state.function_log_file_path, "Clustering_Dendrograms_Drawn")
+                log.log_function_call("Analytics_Clustering_Dendrogram", f_params={})
         
-            function.log_plot_generated_count(st.session_state.log_file_path)
+            log.log_plot_generated_count()
         
         elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)-Beta":
             
@@ -914,15 +928,15 @@ else:
             # 3.  Display results
             # ------------------------------------------------------------------
             st.altair_chart(function.style_altair_chart(pc1_vs_pc2_plot), use_container_width=False)
-            function.log_plot_generated_count(st.session_state.log_file_path)
+            log.log_plot_generated_count()
 
             st.altair_chart(function.style_altair_chart(cumulative_variance_plot), use_container_width=False)
-            function.log_plot_generated_count(st.session_state.log_file_path)
+            log.log_plot_generated_count()
 
             st.altair_chart(function.style_altair_chart(loading_plot), use_container_width=False)
-            function.log_plot_generated_count(st.session_state.log_file_path)
+            log.log_plot_generated_count()
 
-            function.log_function_use_count(st.session_state.function_log_file_path, "PCA_Used")
+            log.log_function_call("Analytics_PCA", f_params={})
 
             st.write("### PCA Scores Table")
             st.write(pca_result_df)
@@ -943,7 +957,11 @@ else:
             )
             st.altair_chart(function.style_altair_chart(tsne_plot), use_container_width=False)
 
-            function.log_plot_generated_count(st.session_state.log_file_path)
-            function.log_function_use_count(st.session_state.function_log_file_path, "TSNE_Used")
+            log.log_plot_generated_count()
+            log.log_function_call("Analytics_TSNE",
+                                    f_params={
+                                        'perplexity':st.session_state.tSNE_perplexity,
+                                        'n_iter':st.session_state.tSNE_n_iter,
+                                    })
 
             st.write(tsne_df)

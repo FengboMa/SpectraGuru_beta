@@ -5,6 +5,7 @@ from auth_utils import clerk_component
 # import streamlit.components.v1 as components
 
 import function
+import log_utils as log
 import os
 
 # Get the current script's directory
@@ -12,7 +13,6 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Change the working directory
 os.chdir(current_dir)
-
 
 function.wide_space_default()
 
@@ -60,6 +60,9 @@ else:
 
 #st.write(st.session_state.user)
 print("User:", st.session_state.user)
+
+#log.clear_call_log()
+#log.clear_count_log()
 
 st.image(r"element/Application header picture-3.png")
 st.session_state.log_file_path = r"element/user_count.txt"
@@ -304,6 +307,20 @@ import streamlit.components.v1 as components
 p = open(r"element/traffic_heatmap.html")
 components.html(p.read(), scrolling=True, height=550)
 
+st.markdown(
+    """
+    ---
+
+    ### Function Usage
+
+    The following table depicts the relative popularity of each of SpectraGuru's featured processing and analysis functions.
+"""
+)
+
+if 'function_count_data' not in st.session_state or not log.CULL_FUNCTION_TABLE_REFRESH:
+    st.session_state.function_count_data = log.get_count_data()
+
+st.table(data=st.session_state.function_count_data)
 
 st.markdown(
     """

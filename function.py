@@ -421,7 +421,6 @@ def log_spectra_processed_count(log_file_path):
 # Essentially a function rename for clarity
 def log_function_use_count(function_log_file_path, keyname, amount=1):
     return increment_count(function_log_file_path, keyname, amount)
-
 # Peak finding function
 def peak_identification(spectra, height=None, threshold=None, distance=None, 
                         prominence=None, width=None, wlen=None, 

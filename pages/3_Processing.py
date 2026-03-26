@@ -65,25 +65,18 @@ else:
         if crop_act:
             st.write("Spectra range: " ,c_crop_min, " - ", c_crop_max)
             st.number_input("Crop min", 
-                                    min_value=0.00, 
-                                    max_value=9999.00,
+                                    min_value=c_crop_min, 
+                                    max_value=c_crop_max,
                                     value=c_crop_min,
                                     step=1.00,
                                     key="crop_min")
             
             st.number_input("Crop max", 
-                                    min_value=0.00, 
-                                    max_value=9999.00,
+                                    min_value=c_crop_min, 
+                                    max_value=c_crop_max,
                                     value=c_crop_max,
                                     step=1.00,
                                     key="crop_max")
-            st.session_state.cropping  = st.slider("Select range for Spectra",float(st.session_state.df.iloc[:, 0].min()), float(st.session_state.df.iloc[:, 0].max()),
-                    (st.session_state.crop_min, st.session_state.crop_max), help="Crop spectra to the desired step size.")
-        
-        # cropping  = st.sidebar.slider("Select range for Spectra",st.session_state.df.iloc[:, 0].min(), st.session_state.df.iloc[:, 0].max(),
-        #         (st.session_state.df.iloc[:, 0].min(), st.session_state.df.iloc[:, 0].max()), help="Crop spectra to the desired step size.")
-        
-        
         
         # Despike
         # st.sidebar.markdown("**Despike**")
@@ -370,7 +363,12 @@ else:
             
         # crop act
         if st.session_state.crop_act:
-            st.session_state.df = st.session_state.df[(st.session_state.df.iloc[:, 0] >= st.session_state.cropping[0]) & (st.session_state.df.iloc[:, 0] <= st.session_state.cropping[1])]
+            crop_min = min(st.session_state.crop_min, st.session_state.crop_max)
+            crop_max = max(st.session_state.crop_min, st.session_state.crop_max)
+            st.session_state.df = st.session_state.df[
+                (st.session_state.df.iloc[:, 0] >= crop_min)
+                & (st.session_state.df.iloc[:, 0] <= crop_max)
+            ]
         
         # despike_act
         if st.session_state.despike_act:

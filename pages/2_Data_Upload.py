@@ -561,7 +561,7 @@ elif total_selected > 500:
 if total_selected > 1000:
     all_ready = False
 
-if all_ready and all(df is not None for _, df in class_dfs):
+if all_ready and all(df is not None for _, df in class_dfs) and int(n_classes) > 1:
     st.success(f"All {n_classes} classes loaded successfully.")
     mins, maxs = [], []
     for _, df in class_dfs:
@@ -608,7 +608,7 @@ if all_ready and all(df is not None for _, df in class_dfs):
             default_lbls_multi[col] = idx
     show_label_editor(combined_df, default_lbls_multi)
 
-elif all_ready and all(df is not None for _, df in class_dfs) and n_classes == 1:
+elif all_ready and all(df is not None for _, df in class_dfs) and int(n_classes) == 1:
     _, df = class_dfs[0]
     st.session_state.df     = df
     st.session_state.backup = df.copy() 

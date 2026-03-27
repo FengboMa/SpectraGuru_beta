@@ -1,1 +1,1 @@
-{}
+{"Analytics_Peak_Identification": 5, "Analytics_Correlation_Heatmap": 9, "Processing_Baseline_AirPLS": 1, "Analytics_Spectra_Derivation": 1, "Processing_Smoothing_Savgol_Filter": 1}

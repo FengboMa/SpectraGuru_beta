@@ -30,7 +30,7 @@ st.markdown(hide_st_style, unsafe_allow_html=True)
 
 @st.cache_data
 def load_data(file):
-    return pd.read_csv(file, encoding='utf-8')
+    return pd.read_csv(file, encoding='utf-8', comment='#')
 
 @st.cache_data
 def load_tab_data(file):

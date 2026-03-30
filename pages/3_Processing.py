@@ -36,6 +36,17 @@ def render_preprocessing_log(log_entries):
         params_text = format_preprocessing_parameters(entry["parameters"])
         st.write(f"{idx}. {entry['display_name']}, {params_text}")
 
+
+def build_preprocessing_log_line(log_entries):
+    if not log_entries:
+        return "No preprocessing applied."
+
+    formatted_steps = []
+    for idx, entry in enumerate(log_entries, start=1):
+        params_text = format_preprocessing_parameters(entry["parameters"])
+        formatted_steps.append(f"{idx}. {entry['display_name']}, {params_text}")
+    return " | ".join(formatted_steps)
+
 # hide_st_style = """
 #             <style>
 #             #MainMenu {visibility: hidden;}
@@ -925,12 +936,22 @@ else:
         
         # Download handlers
         @st.cache_data
-        def download_df(df):
-            return df.to_csv(index=False).encode("utf-8")
+        def download_df(df, export_timestamp, preprocessing_summary):
+            csv_data = df.to_csv(index=False)
+            metadata = [
+                "# Data processed with SpectraGuru™",
+                f"# Export timestamp: {export_timestamp}",
+                f"# Preprocessing Steps Applied: {preprocessing_summary}",
+                ""
+            ]
+            return ("\n".join(metadata) + csv_data).encode("utf-8")
 
-        csv = download_df(st.session_state.df)
+        export_dt = datetime.now()
+        export_timestamp = export_dt.isoformat(timespec="seconds")
+        preprocessing_summary = build_preprocessing_log_line(st.session_state.preprocessing_log)
+        csv = download_df(st.session_state.df, export_timestamp, preprocessing_summary)
 
-        current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        current_time = export_dt.strftime("%Y%m%d_%H%M%S")
         download_file_name = f"data_{current_time}.csv"
         download_plot_name = f"spectra_plot_{current_time}.png"
 

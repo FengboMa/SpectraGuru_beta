@@ -70,15 +70,48 @@ reference_map = {
     'Analytics_TSNE':[9,11,30]
 }
 
-=======
->>>>>>> b4cebc2 (creates new function_dict.py file to organize dictionaries)
-CULL_FUNCTION_TABLE_REFRESH = False # If false, function count table updates after any user interaction. If true, it only updates after a full browser refresh.
->>>>>>> 288ec7c (implements link-reference and multi-reference for function usage table; fills references based on SpectraGuru SI document)
 
-def _ensure_parent_dir(file_path):
-    dir_name = os.path.dirname(file_path)
-    if dir_name:
-        os.makedirs(dir_name, exist_ok=True)
+
+
+
+CULL_FUNCTION_TABLE_REFRESH = False # If false, function count table updates after any user interaction. If true, it only updates after a full browser refresh.
+
+
+names = {
+    'Processing_Despike_Auto':("Despike", "Automatic Despike"),
+    'Processing_Despike_Manual':("Despike", "Manual Despike"),
+    'Processing_Smoothing_Savgol_Filter':("Smoothening", "Savitzky-Golay filter"),
+    'Processing_Smoothing_FFT_Filter':("Smoothening", "1D Fast Fourier Transform filter"),
+    'Processing_Baseline_AirPLS':("Baseline Removal", "AirPLS"),
+    'Processing_Baseline_Mod_Poly':("Basline Removal", "Modified Polynomial Fitting"),
+    'Processing_Baseline_Gaussian_Lorentzian_Fitting':("Baseline Removal", "Gaussian-Lorentzian Fitting"),
+    'Processing_Normalization_Area':("Normalization", "Normalization by Area"),
+    'Processing_Normalization_Peak':("Normalization", "Normalization by Peak"),
+    'Processing_Normalization_Minmax':("Normalization", "Min-max normalization"),
+    'Processing_Remove_Outliers':("Outlier Removal", "Outlier Removal"),
+    'Analytics_Spectra_Derivation':("Spectra Derivation", "Spectra Derivation"),
+    'Analytics_Correlation_Heatmap':("Correlation Heatmap", "Correlation Heatmap"),
+    'Analytics_Peak_Identification':("Peak Identification", "Peak Identification"),
+    'Analytics_Clustering_Clustermap':("Hierarchical Clustering", "Clustermap"),
+    'Analytics_Clustering_Dendrogram':("Hierarchical Clustering", "Dendrogram"),
+    'Analytics_PCA':("PCA", "Principal Component Analysis"),
+    'Analytics_TSNE':("t-SNE", "t-Distributed Stochastic Neighbor Embedding")
+}
+
+references = {
+    'Processing_Smoothing_Savgol_Filter':"https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.savgol_filter.html",
+    'Processing_Smoothing_FFT_Filter':"https://numpy.org/doc/stable/reference/generated/numpy.fft.fft.html",
+    'Processing_Baseline_AirPLS':"Z.-M. Zhang, S. Chen, and Y.-Z. Liang, Baseline correction using adaptive iteratively reweighted penalized least squares. Analyst 135 (5), 1138-1146 (2010).",
+    'Analytics_Correlation_Heatmap':"https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.corr.html",
+    'Analytics_Peak_Identification':"https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.find_peaks.html",
+    'Analytics_Clustering_Clustermap':"https://seaborn.pydata.org/generated/seaborn.clustermap.html",
+    'Analytics_Clustering_Dendrogram':"https://seaborn.pydata.org/generated/seaborn.clustermap.html",
+    'Analytics_PCA':"https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html",
+    'Analytics_TSNE':"https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html"
+}
+
+CULL_FUNCTION_TABLE_REFRESH = False # If false, function count table updates after any user interaction. If true, it only updates after a full browser refesh.
+>>>>>>> 593c894 (implements some references to algorithm documentation)
 
 # Creates a JSON String containing the details of a function call and appends the String to a file.
 # function_name: the canonical name of the function
@@ -160,6 +193,7 @@ def get_readable_name(keyname):
             'algorithm':keyname
         }
     return readable_name
+
 
 # Returns a string representing reference(s) to the literature for a given algorithm.
 def get_reference(keyname):

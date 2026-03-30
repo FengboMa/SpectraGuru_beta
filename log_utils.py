@@ -5,10 +5,12 @@ import streamlit as st
 import datetime as dt
 import pandas as pd
 from function_dict import names, references, reference_map
+import numpy as np
 
 count_log_file_path = "log/count_log.txt"
 call_log_file_path = "log/call_log.txt"
 user_log_file_path = "log/user_log.txt"
+
 
 CULL_FUNCTION_TABLE_REFRESH = False # If false, function count table updates after any user interaction. If true, it only updates after a full browser refesh.
 
@@ -124,6 +126,7 @@ def get_reference(keyname):
                 refs += ", "
             refs += ref_string
     return refs
+
 
 # Increments the counter for a specified metric in a given log file. Returns the new count and 
 # creates a new entry if the keyname doesn't already exist.

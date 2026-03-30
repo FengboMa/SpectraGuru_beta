@@ -24,6 +24,7 @@ def reset_processing():
     st.session_state.despike_act = False
     st.session_state.normalization_act = False
     st.session_state.outlierremoval_act = False
+    st.session_state.preprocessing_log = []
 
 # airPLS function
 '''

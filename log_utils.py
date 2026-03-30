@@ -10,6 +10,39 @@ count_log_file_path = "log/count_log.txt"
 call_log_file_path = "log/call_log.txt"
 user_log_file_path = "log/user_log.txt"
 
+names = {
+    'Processing_Despike_Auto':("Despike", "Automatic Despike"),
+    'Processing_Despike_Manual':("Despike", "Manual Despike"),
+    'Processing_Smoothing_Savgol_Filter':("Smoothening", "Savitzky-Golay filter"),
+    'Processing_Smoothing_FFT_Filter':("Smoothening", "1D Fast Fourier Transform filter"),
+    'Processing_Baseline_AirPLS':("Baseline Removal", "AirPLS"),
+    'Processing_Baseline_Mod_Poly':("Basline Removal", "Modified Polynomial Fitting"),
+    'Processing_Baseline_Gaussian_Lorentzian_Fitting':("Baseline Removal", "Gaussian-Lorentzian Fitting"),
+    'Processing_Normalization_Area':("Normalization", "Normalization by Area"),
+    'Processing_Normalization_Peak':("Normalization", "Normalization by Peak"),
+    'Processing_Normalization_Minmax':("Normalization", "Min-max normalization"),
+    'Processing_Remove_Outliers':("Outlier Removal", "Outlier Removal"),
+    'Analytics_Spectra_Derivation':("Spectra Derivation", "Spectra Derivation"),
+    'Analytics_Correlation_Heatmap':("Correlation Heatmap", "Correlation Heatmap"),
+    'Analytics_Peak_Identification':("Peak Identification", "Peak Identification"),
+    'Analytics_Clustering_Clustermap':("Hierarchical Clustering", "Clustermap"),
+    'Analytics_Clustering_Dendrogram':("Hierarchical Clustering", "Dendrogram"),
+    'Analytics_PCA':("PCA", "Principal Component Analysis"),
+    'Analytics_TSNE':("t-SNE", "t-Distributed Stochastic Neighbor Embedding")
+}
+
+references = {
+    'Processing_Smoothing_Savgol_Filter':"https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.savgol_filter.html",
+    'Processing_Smoothing_FFT_Filter':"https://numpy.org/doc/stable/reference/generated/numpy.fft.fft.html",
+    'Processing_Baseline_AirPLS':"Z.-M. Zhang, S. Chen, and Y.-Z. Liang, Baseline correction using adaptive iteratively reweighted penalized least squares. Analyst 135 (5), 1138-1146 (2010).",
+    'Analytics_Correlation_Heatmap':"https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.corr.html",
+    'Analytics_Peak_Identification':"https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.find_peaks.html",
+    'Analytics_Clustering_Clustermap':"https://seaborn.pydata.org/generated/seaborn.clustermap.html",
+    'Analytics_Clustering_Dendrogram':"https://seaborn.pydata.org/generated/seaborn.clustermap.html",
+    'Analytics_PCA':"https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html",
+    'Analytics_TSNE':"https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html"
+}
+
 CULL_FUNCTION_TABLE_REFRESH = False # If false, function count table updates after any user interaction. If true, it only updates after a full browser refesh.
 
 # Creates a JSON String containing the details of a function call and appends the String to a file.
@@ -78,27 +111,6 @@ def get_count_data():
 
 # Returns a user-readable name for a function given its keyname, in terms of both its feature name and algorithm name, if applicable.
 def get_readable_name(keyname):
-    
-    names = {
-        'Processing_Despike_Auto':("Despike", "Automatic Despike"),
-        'Processing_Despike_Manual':("Despike", "Manual Despike"),
-        'Processing_Smoothing_Savgol_Filter':("Smoothening", "Savitzky-Golay filter"),
-        'Processing_Smoothing_FFT_Filter':("Smoothening", "1D Fast Fourier Transform filter"),
-        'Processing_Baseline_AirPLS':("Baseline Removal", "AirPLS"),
-        'Processing_Baseline_Mod_Poly':("Basline Removal", "Modified Polynomial Fitting"),
-        'Processing_Baseline_Gaussian_Lorentzian_Fitting':("Baseline Removal", "Gaussian-Lorentzian Fitting"),
-        'Processing_Normalization_Area':("Normalization", "Normalization by Area"),
-        'Processing_Normalization_Peak':("Normalization", "Normalization by Peak"),
-        'Processing_Normalization_Minmax':("Normalization", "Min-max normalization"),
-        'Processing_Remove_Outliers':("Outlier Removal", "Outlier Removal"),
-        'Analytics_Spectra_Derivation':("Spectra Derivation", "Spectra Derivation"),
-        'Analytics_Correlation_Heatmap':("Correlation Heatmap", "Correlation Heatmap"),
-        'Analytics_Peak_Identification':("Peak Identification", "Peak Identification"),
-        'Analytics_Clustering_Clustermap':("Hierarchical Clustering", "Clustermap"),
-        'Analytics_Clustering_Dendrogram':("Hierarchical Clustering", "Dendrogram"),
-        'Analytics_PCA':("PCA", "Principal Component Analysis"),
-        'Analytics_TSNE':("t-SNE", "t-Distributed Stochastic Neighbor Embedding")
-    }
 
     readable_name = {}
     if keyname in names:
@@ -113,7 +125,11 @@ def get_readable_name(keyname):
         }
     return readable_name
 
+# Returns a string representing a reference to the literature for a given algorithm.
 def get_reference(keyname):
+
+    if keyname in references:
+        return references[keyname]
     return ""
 
 # Increments the counter for a specified metric in a given log file. Returns the new count and 

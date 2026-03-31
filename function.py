@@ -13,10 +13,9 @@ def wide_space_default():
     st.set_page_config(layout="wide", 
                     page_icon=r"element/tab_bar_pic.png")
 
-# Reset button function
-def reset_processing():
+# Shared helper for processing-page toggles
+def clear_processing_toggles():
     import streamlit as st
-    st.session_state.df = st.session_state.backup.copy()
     st.session_state.interpolation_act = False
     st.session_state.crop_act = False
     st.session_state.smoothening_act = False
@@ -24,7 +23,14 @@ def reset_processing():
     st.session_state.despike_act = False
     st.session_state.normalization_act = False
     st.session_state.outlierremoval_act = False
+
+# Reset button function
+def reset_processing():
+    import streamlit as st
+    st.session_state.df = st.session_state.backup.copy()
+    clear_processing_toggles()
     st.session_state.preprocessing_log = []
+    st.session_state.pop("remove_outliers_log", None)
 
 # airPLS function
 '''

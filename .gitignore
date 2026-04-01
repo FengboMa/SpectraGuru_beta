@@ -10,6 +10,9 @@ build/
 .env
 .vscode/
 *.log
+log/*.txt
+log/*-RSPHYS-*.txt
+element/user_count-*.txt
 element/funct_count.txt
 log/call_log.txt
 *.lock

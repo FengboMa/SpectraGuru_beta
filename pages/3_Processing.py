@@ -79,6 +79,8 @@ def collect_current_preprocessing_entries():
                 }
             })
         elif st.session_state.despike_function == "Manual despike method":
+            if "despike_applied_range" not in st.session_state:
+                raise AttributeError("despike_applied_range")
             run_log_entries.append({
                 "step": "despike",
                 "display_name": "Despike",
@@ -86,8 +88,8 @@ def collect_current_preprocessing_entries():
                     "function": "Manual despike method",
                     "threshold": st.session_state.despike_act_threshold,
                     "zap_length": st.session_state.despike_act_zap_length,
-                    "window_start": st.session_state.despike_fitting_ranges[0][0],
-                    "window_end": st.session_state.despike_fitting_ranges[0][1]
+                    "window_start": st.session_state.despike_applied_range[0],
+                    "window_end": st.session_state.despike_applied_range[1]
                 }
             })
 
@@ -175,6 +177,7 @@ def apply_preprocessing_step(df, step_entry):
     step = step_entry["step"]
     params = step_entry["parameters"]
     result_df = df.copy()
+    remove_outliers_log = None
 
     if step == "interpolation":
         interpolated_df = pd.DataFrame(result_df.iloc[:, 0].round(), columns=[result_df.columns[0]])
@@ -187,13 +190,13 @@ def apply_preprocessing_step(df, step_entry):
                 fill_value="extrapolate"
             )
             interpolated_df[col] = interpolator(result_df.iloc[:, 0].round())
-        return interpolated_df.drop_duplicates()
+        return interpolated_df.drop_duplicates(), remove_outliers_log
 
     if step == "crop":
         return result_df[
             (result_df.iloc[:, 0] >= params["min"])
             & (result_df.iloc[:, 0] <= params["max"])
-        ]
+        ], remove_outliers_log
 
     if step == "despike":
         if params["function"] == "Auto despike method":
@@ -212,7 +215,7 @@ def apply_preprocessing_step(df, step_entry):
                 window_start=params["window_start"],
                 window_end=params["window_end"]
             )
-        return result_df
+        return result_df, remove_outliers_log
 
     if step == "smoothening":
         if params["function"] == "Savitzky-Golay filter":
@@ -231,7 +234,7 @@ def apply_preprocessing_step(df, step_entry):
                     padding_method=params["padding_method"]
                 )
             )
-        return result_df
+        return result_df, remove_outliers_log
 
     if step == "baseline_removal":
         if params["function"] == "airPLS":
@@ -256,7 +259,7 @@ def apply_preprocessing_step(df, step_entry):
                     fitting_ranges=params["fitting_ranges"]
                 )
             )
-        return result_df
+        return result_df, remove_outliers_log
 
     if step == "normalization":
         if params["function"] == "Normalize by area":
@@ -269,7 +272,7 @@ def apply_preprocessing_step(df, step_entry):
             result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(function.normalize_by_peak, axis=0)
         elif params["function"] == "Min max normalize":
             result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(function.min_max_normalize, axis=0)
-        return result_df
+        return result_df, remove_outliers_log
 
     if step == "outlier_removal":
         df_cleaned, remove_outliers_log = function.remove_outliers(
@@ -278,20 +281,28 @@ def apply_preprocessing_step(df, step_entry):
             distance_thresh=params["distance_threshold"],
             coeff_thresh=params["correlation_threshold"]
         )
-        st.session_state.remove_outliers_log = remove_outliers_log
-        return pd.concat([result_df.iloc[:, 0], df_cleaned], axis=1)
+        return pd.concat([result_df.iloc[:, 0], df_cleaned], axis=1), remove_outliers_log
 
-    return result_df
+    return result_df, remove_outliers_log
 
 
-def rebuild_dataframe_from_log():
+def rebuild_dataframe_from_log(log_entries=None):
+    if log_entries is None:
+        log_entries = st.session_state.preprocessing_log
+
     rebuilt_df = st.session_state.backup.copy()
-    st.session_state.pop("remove_outliers_log", None)
+    latest_remove_outliers_log = None
 
-    for step_entry in st.session_state.preprocessing_log:
-        rebuilt_df = apply_preprocessing_step(rebuilt_df, step_entry)
+    for step_entry in log_entries:
+        rebuilt_df, step_remove_outliers_log = apply_preprocessing_step(rebuilt_df, step_entry)
+        if step_remove_outliers_log is not None:
+            latest_remove_outliers_log = step_remove_outliers_log
 
     st.session_state.df = rebuilt_df
+    if latest_remove_outliers_log is None:
+        st.session_state.pop("remove_outliers_log", None)
+    else:
+        st.session_state.remove_outliers_log = latest_remove_outliers_log
 
 
 if st.session_state.pop("undo_pending", False):
@@ -344,7 +355,7 @@ else:
         if 'interpolation_act' not in st.session_state:
             st.session_state.interpolation_act = False
 
-        interpolation_act = st.toggle("Interpolation", value=False, help="Use Interpolation to transfer and round Ramanshift to its closest Integer.", key='interpolation_act')
+        interpolation_act = st.toggle("Interpolation", value=False, help="Use Interpolation to transfer and round Raman shift to its closest integer.", key='interpolation_act')
         # st.sidebar.write(interpolation_ref_x)
         
         # crop
@@ -384,7 +395,7 @@ else:
         
         if despike_act:
             
-            st.session_state.despike_function = st.selectbox(label="Select your despike Function",  options=["Auto despike method","Manual despike method"])
+            st.session_state.despike_function = st.selectbox(label="Select your despike function",  options=["Auto despike method","Manual despike method"])
             
             if st.session_state.despike_function == "Auto despike method":
                 # Add more functions to this selectbox if needed
@@ -406,36 +417,30 @@ else:
                                                                 step = 1, placeholder="Insert a number")
                 wavenumber_min = float(st.session_state.df.iloc[:, 0].min())
                 wavenumber_max = float(st.session_state.df.iloc[:, 0].max())
-                st.session_state.despike_fitting_ranges = []
                 with st.form("despike_fitting_range_form"):
                     col1, col2 = st.columns(2)
                     with col1:
                         start = st.number_input(f"Start of range", key=f"despike_start", step=1.0, format="%.2f",value=wavenumber_min)
                     with col2:
                         end = st.number_input(f"End of range", key=f"despike_end", step=1.0, format="%.2f", value=wavenumber_max)
-                    st.session_state.despike_fitting_ranges.append((start, end))
 
                     submitted = st.form_submit_button("Apply fitting ranges")
                     if submitted:
-                        clipped = False
-
                         # Clip start if needed
                         if start < wavenumber_min:
                             st.warning(f"Start value clipped from {start:.2f} to {wavenumber_min:.2f}")
                             start = wavenumber_min
-                            clipped = True
 
                         # Clip end if needed
                         if end > wavenumber_max:
                             st.warning(f"End value clipped from {end:.2f} to {wavenumber_max:.2f}")
                             end = wavenumber_max
-                            clipped = True
 
                         # Validate order
                         if start >= end:
                             st.error("Start value must be less than End value.")
                         else:
-                            st.session_state.despike_fitting_ranges.append((start, end))
+                            st.session_state.despike_applied_range = (start, end)
                             st.success(f"Fitting range ({start:.2f}, {end:.2f}) applied.")
         
         # Smoothening
@@ -451,7 +456,7 @@ else:
         
         if smoothening_act:
             # Add more functions to this selectbox if needed
-            st.session_state.smoothening_function = st.selectbox(label="Select your smoothening Function",  options=["Savitzky-Golay filter","1D Fast Fourier Transform filter"])
+            st.session_state.smoothening_function = st.selectbox(label="Select your smoothening function",  options=["Savitzky-Golay filter","1D Fast Fourier Transform filter"])
             
             if st.session_state.smoothening_function == "Savitzky-Golay filter":
             # Add more functions to this selectbox if needed
@@ -506,18 +511,18 @@ else:
         
         if baselineremoval_act:
             # Add more functions to this selectbox if needed
-            st.session_state.baselineremoval_function = st.selectbox(label="Select your Baseline Removal Function",  options=["airPLS", "ModPoly","Gaussian-Lorentzian Fitting"])
+            st.session_state.baselineremoval_function = st.selectbox(label="Select your baseline removal function",  options=["airPLS", "ModPoly","Gaussian-Lorentzian Fitting"])
             
             if st.session_state.baselineremoval_function == "airPLS":
                 st.session_state.baselineremoval_airPLS_lambda = st.number_input(label="AirPLS lambda", help="The larger lambda is,  the smoother the resulting background, z.",
                                                                         min_value = 1, max_value = 1000000, value = 100,
                                                                         step = 1, placeholder="Insert a number")
                 
-                st.session_state.baselineremoval_airPLS_porder = st.number_input(label="AirPLS p order", help="Adaptive iteratively reweighted penalized least squares for baseline fitting.",
+                st.session_state.baselineremoval_airPLS_porder = st.number_input(label="AirPLS p-order", help="Adaptive iteratively reweighted penalized least squares for baseline fitting.",
                                                                         min_value=1, max_value = 10, value = 1, 
                                                                         step = 1, placeholder="Insert a number")
                 
-                st.session_state.baselineremoval_airPLS_itermax = st.number_input(label="AirPLS max iteration",
+                st.session_state.baselineremoval_airPLS_itermax = st.number_input(label="AirPLS maximum iterations",
                                                                         min_value=5, max_value = 1000, value = 15, 
                                                                         step = 5, placeholder="Insert a number")
                 
@@ -530,7 +535,7 @@ else:
                                                                         min_value=1, max_value = 20, value = 5, 
                                                                         step = 1, placeholder="Insert a number") 
             elif st.session_state.baselineremoval_function == "Gaussian-Lorentzian Fitting":
-                st.session_state.baselineremoval_GLF_num_range = st.number_input(label="Number of fitting range",
+                st.session_state.baselineremoval_GLF_num_range = st.number_input(label="Number of fitting ranges",
                                                                         min_value=2, max_value = 10, value = 2, 
                                                                         step = 1, placeholder="Insert a number") 
                 wavenumber_min = float(st.session_state.df.iloc[:, 0].min())
@@ -606,12 +611,12 @@ else:
         
         normalization_act = st.toggle("Normalization", 
                                                 value=False, 
-                                                help="Normalize By Area(Area) simply divides each spectra's values by the area under the spectra then multiplies by the (Area) value. ie: It sets the area under each spectra equal to (Area)", 
+                                                help="Normalize by Area divides each spectrum's values by the area under the spectrum, effectively setting the area under each spectrum to a common value.", 
                                                 key='normalization_act')
         
         if normalization_act:
             # Add more functions to this selectbox if needed
-            st.session_state.normalization_function = st.selectbox(label="Select your Normalization Function",  options=["Normalize by area", 
+            st.session_state.normalization_function = st.selectbox(label="Select your normalization function",  options=["Normalize by area", 
                                                                                                                 "Normalize by peak",
                                                                                                                 "Min max normalize"])
         
@@ -634,7 +639,7 @@ else:
                                                             min_value = 0.01, max_value = 20.00, value = 6.00,
                                                             step = 0.01, placeholder="Insert a number")
             
-            st.session_state.outlierremoval_act_correlation_threshold = st.number_input(label="Outlier Removal correlation Threshold",
+            st.session_state.outlierremoval_act_correlation_threshold = st.number_input(label="Outlier Removal Correlation Threshold",
                                                             min_value = 0.01, max_value = 20.00, value = 4.00,
                                                             step = 0.01, placeholder="Insert a number")
     with st.sidebar:
@@ -647,7 +652,10 @@ else:
             run_log_entries = collect_current_preprocessing_entries()
         except AttributeError as e:
             if "fitting_ranges" in str(e):
-                st.error("⚠️ Please go to the sidebar and apply your fitting ranges before applying the Gaussian-Lorentzian Fitting.")
+                st.error("⚠️ Please go to the sidebar and set and apply your fitting ranges before applying Gaussian-Lorentzian fitting.")
+                run_log_entries = []
+            elif "despike_applied_range" in str(e):
+                st.error("⚠️ Please apply your manual despike range before processing.")
                 run_log_entries = []
             else:
                 raise e
@@ -707,8 +715,13 @@ else:
                 })
 
         if run_log_entries:
-            st.session_state.preprocessing_log.extend(run_log_entries)
-            rebuild_dataframe_from_log()
+            candidate_log = st.session_state.preprocessing_log + run_log_entries
+            try:
+                rebuild_dataframe_from_log(candidate_log)
+                st.session_state.preprocessing_log = candidate_log
+            except Exception as e:
+                failed_step = run_log_entries[-1]["display_name"] if run_log_entries else "Preprocessing"
+                st.toast(f"{failed_step} could not be applied. Details: {e}", icon="⚠️")
 
     if st.sidebar.button("Undo", type='secondary', key='undo'):
         if st.session_state.preprocessing_log:
@@ -1066,7 +1079,7 @@ else:
 
         # Outlier removal log
         if st.session_state.outlierremoval_act:
-            st.write("**Following spectra has been detected and removed by the outlier removal function**")
+            st.write("**The following spectra have been detected and removed by the outlier removal function**")
             st.table(st.session_state.remove_outliers_log)
                 
     except:

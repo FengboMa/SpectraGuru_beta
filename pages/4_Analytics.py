@@ -12,6 +12,9 @@ import log_utils as log
 
 function.wide_space_default()
 
+DEFAULT_X_AXIS_TITLE = "Raman shift/cm⁻¹"
+DEFAULT_Y_AXIS_TITLE = "Intensity/a.u."
+
 # hide_st_style = """
 #             <style>
 #             #MainMenu {visibility: hidden;}
@@ -194,6 +197,13 @@ else:
     if 'temp' not in st.session_state:
         st.error('Please process your data, and select Spectra you would like to use.')
     else:
+        if st.session_state.get("custom_axis_titles_act", False):
+            analytics_x_axis_title = st.session_state.get("custom_x_axis_title", DEFAULT_X_AXIS_TITLE)
+            analytics_y_axis_title = st.session_state.get("custom_y_axis_title", DEFAULT_Y_AXIS_TITLE)
+        else:
+            analytics_x_axis_title = DEFAULT_X_AXIS_TITLE
+            analytics_y_axis_title = DEFAULT_Y_AXIS_TITLE
+
         st.session_state.df_stats = st.session_state.temp
         st.session_state.df_stats['Average'] = st.session_state.df_stats.iloc[:, 1:].mean(axis=1)
         
@@ -207,8 +217,8 @@ else:
             
             if st.session_state.stats_avg_act:
                 avg_stats_base = alt.Chart(stats_data_melted).mark_line().encode(
-                        x=alt.X('Ramanshift', title='Raman shift/cm⁻¹', type='quantitative'),
-                        y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
+                        x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
+                        y=alt.Y('Intensity', title=analytics_y_axis_title, type='quantitative'),
                         tooltip=alt.value(None),
                         color=alt.condition(
                             alt.datum['Sample ID'] == 'Average',
@@ -233,8 +243,8 @@ else:
             else:
                 filtered_avg_df = stats_data_melted[stats_data_melted['Sample ID'] == 'Average']
                 avg_stats_base2 = alt.Chart(filtered_avg_df).mark_line().encode(
-                        x=alt.X('Ramanshift', title='Raman shift/cm⁻¹', type='quantitative'),
-                        y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
+                        x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
+                        y=alt.Y('Intensity', title=analytics_y_axis_title, type='quantitative'),
                         tooltip=alt.value(None),
                         color=alt.value('blue'),
                         size=alt.value(3)
@@ -267,7 +277,7 @@ else:
                 # st.write(std_df)
                 # Plot the results using Altair
                 std_plot = alt.Chart(std_df).mark_line().encode(
-                    x=alt.X('Ramanshift', axis=alt.Axis(title='Raman shift/cm⁻¹')),
+                    x=alt.X('Ramanshift', axis=alt.Axis(title=analytics_x_axis_title)),
                     y='Standard Deviation'
                 ).properties(
                             width=1300,
@@ -341,7 +351,7 @@ else:
             })
 
             base = alt.Chart(data).encode(
-                x=alt.X('Ramanshift', axis=alt.Axis(title='Raman shift/cm⁻¹'))
+                x=alt.X('Ramanshift', axis=alt.Axis(title=analytics_x_axis_title))
             ).properties(
                             width=1300,
                             height=600,
@@ -424,7 +434,7 @@ else:
                     alt.Chart(proc)
                     .mark_line()
                     .encode(
-                        x=alt.X("Ramanshift:Q", title="Raman shift / cm⁻¹"),
+                        x=alt.X("Ramanshift:Q", title=analytics_x_axis_title),
                         y=alt.Y("y1:Q", title="1st derivative (a.u./cm⁻¹)"),
                         color=alt.condition(highlight_cond, alt.value("blue"), alt.Color("Sample ID:N", title="Sample")),
                         # size=alt.condition(highlight_cond, alt.value(3), alt.value(1)),
@@ -437,7 +447,7 @@ else:
                     alt.Chart(proc)
                     .mark_line()
                     .encode(
-                        x=alt.X("Ramanshift:Q", title="Raman shift / cm⁻¹"),
+                        x=alt.X("Ramanshift:Q", title=analytics_x_axis_title),
                         y=alt.Y("y2:Q", title="2nd derivative (a.u./cm⁻²)"),
                         color=alt.condition(highlight_cond, alt.value("blue"), alt.Color("Sample ID:N", title="Sample")),
                         # size=alt.condition(highlight_cond, alt.value(3), alt.value(1)),
@@ -813,8 +823,8 @@ else:
             
             # Step 3: Create the base interactive plot
             avg_stats_base2 = alt.Chart(filtered_avg_df).mark_line().encode(
-                x=alt.X('Ramanshift', title='Raman shift/cm⁻¹', type='quantitative'),
-                y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
+                x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
+                y=alt.Y('Intensity', title=analytics_y_axis_title, type='quantitative'),
                 tooltip=alt.value(None),
                 color=alt.value('blue'),
                 size=alt.value(3)
@@ -830,10 +840,10 @@ else:
                 color='red',
                 size=100
             ).encode(
-                x=alt.X('Ramanshift', title='Raman shift/cm⁻¹', type='quantitative'),
-                y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
-                tooltip=[alt.Tooltip('Ramanshift', title='Raman shift/cm⁻¹'),
-                        alt.Tooltip('Intensity', title='Intensity/a.u.')]
+                x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
+                y=alt.Y('Intensity', title=analytics_y_axis_title, type='quantitative'),
+                tooltip=[alt.Tooltip('Ramanshift', title=analytics_x_axis_title),
+                        alt.Tooltip('Intensity', title=analytics_y_axis_title)]
             ).properties(
                 width=1300,
                 height=600,

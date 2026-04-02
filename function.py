@@ -1214,6 +1214,7 @@ def search_database(search_term, data_type_filter="Both"):
 
 # Better plot downloading
 def make_matplotlib_png(data, x_col,
+                        x_label="Raman shift/cm⁻¹", y_label="Intensity/a.u.",
                         plot_width_in=8.0, legend_width_in=4.5, height_in=6.0,
                         legend_fontsize=11):
     import io
@@ -1282,8 +1283,8 @@ def make_matplotlib_png(data, x_col,
                 ci += 1
 
         # Labels (no title)
-        ax.set_xlabel("Raman shift (cm$^{-1}$)")
-        ax.set_ylabel("Intensity (a.u.)")
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
 
         # Minor ticks
         ax.xaxis.set_minor_locator(AutoMinorLocator())

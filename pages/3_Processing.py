@@ -16,6 +16,23 @@ function.wide_space_default()
 if 'preprocessing_log' not in st.session_state:
     st.session_state.preprocessing_log = []
 
+DEFAULT_X_AXIS_TITLE = "Raman shift/cm⁻¹"
+DEFAULT_Y_AXIS_TITLE = "Intensity/a.u."
+
+if "custom_axis_titles_act" not in st.session_state:
+    st.session_state.custom_axis_titles_act = False
+if "custom_x_axis_title" not in st.session_state:
+    st.session_state.custom_x_axis_title = DEFAULT_X_AXIS_TITLE
+if "custom_y_axis_title" not in st.session_state:
+    st.session_state.custom_y_axis_title = DEFAULT_Y_AXIS_TITLE
+
+def store_widget_value(key):
+    st.session_state[key] = st.session_state[f"_{key}"]
+
+
+def load_widget_value(key):
+    st.session_state[f"_{key}"] = st.session_state[key]
+
 
 def format_preprocessing_parameters(parameters):
     parts = []
@@ -806,8 +823,8 @@ else:
 
         # Get cached selected data
         refresh_plot_pending = st.session_state.pop("refresh_plot_pending", False)
-        plot_row = row([0.1, 0.9])
-        if plot_row.button("Plot", type="primary", key="plot") or st.session_state.get("process") or refresh_plot_pending or st.session_state.get("reset"):
+        plot_button_col, fast_mode_col, custom_axis_col = st.columns([0.16, 0.44, 0.40])
+        if plot_button_col.button("Plot", type="primary", key="plot") or st.session_state.get("process") or refresh_plot_pending or st.session_state.get("reset"):
             st.session_state.temp = get_selected_columns(st.session_state.df, st.session_state.spectra_selected)
 
     
@@ -817,7 +834,42 @@ else:
     #     st.write("Test time (ms):")
     #     st.write(int(st.session_state.elapsed_time * 1000))
     # plot_row = row([0.1, 0.9])
-    mode_option = plot_row.toggle(label = 'Activate Fast Mode Plotting', value = st.session_state['update_mode_option'],  key = 'mode_option', help = 'Enable Fast Mode Plotting for faster plotting times by sacrificing interactive functions. If you upload more than 20 spectra, Fast Mode will be activated automatically.')
+    mode_option = fast_mode_col.toggle(label='Activate Fast Mode Plotting', value=st.session_state['update_mode_option'], key='mode_option', help='Enable Fast Mode Plotting for faster plotting times by sacrificing interactive functions. If you upload more than 20 spectra, Fast Mode will be activated automatically.')
+    
+    load_widget_value("custom_axis_titles_act")
+    custom_axis_col.toggle(
+        label="Custom Axis Titles",
+        key="_custom_axis_titles_act",
+        on_change=store_widget_value,
+        args=("custom_axis_titles_act",),
+        help="Enable custom X and Y axis labels for the plot and PNG export on this page."
+    )
+
+    if st.session_state.custom_axis_titles_act:
+        load_widget_value("custom_x_axis_title")
+        load_widget_value("custom_y_axis_title")
+        axis_title_col1, axis_title_col2 = st.columns(2)
+        with axis_title_col1:
+            st.text_input(
+                "Custom X title",
+                key="_custom_x_axis_title",
+                on_change=store_widget_value,
+                args=("custom_x_axis_title",)
+            )
+        with axis_title_col2:
+            st.text_input(
+                "Custom Y title",
+                key="_custom_y_axis_title",
+                on_change=store_widget_value,
+                args=("custom_y_axis_title",)
+            )
+
+    if st.session_state.custom_axis_titles_act:
+        x_axis_title = st.session_state.custom_x_axis_title
+        y_axis_title = st.session_state.custom_y_axis_title
+    else:
+        x_axis_title = DEFAULT_X_AXIS_TITLE
+        y_axis_title = DEFAULT_Y_AXIS_TITLE
         
     
     try:
@@ -955,10 +1007,10 @@ else:
 
             @st.cache_data
             # Generate the Altair plot
-            def generate_altair_plot(data):
+            def generate_altair_plot(data, x_axis_name, x_title, y_title):
                 base = alt.Chart(data).mark_line().encode(
-                x=alt.X(x_axis, title='Raman shift/cm⁻¹', type='quantitative'),
-                y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
+                x=alt.X(x_axis_name, title=x_title, type='quantitative'),
+                y=alt.Y('Intensity', title=y_title, type='quantitative'),
                 color='Sample ID:N',
                 size=alt.condition(
                     alt.datum['Sample ID'] == 'Average',
@@ -983,7 +1035,7 @@ else:
             if "temp" in st.session_state:
                 data_melted = melt_and_filter_data(st.session_state.temp, x_axis)
             
-            cached_plot = generate_altair_plot(data_melted)
+            cached_plot = generate_altair_plot(data_melted, x_axis, x_axis_title, y_axis_title)
             # st.write("yyyyy")
             # Display Plot
             st.altair_chart(cached_plot, use_container_width=False)
@@ -994,10 +1046,10 @@ else:
                 
             @st.cache_data
             # Generate the Altair plot
-            def generate_altair_plot_fastmode(data):
+            def generate_altair_plot_fastmode(data, x_axis_name, x_title, y_title):
                 base = base = alt.Chart(data).mark_line().encode(
-                x=alt.X(x_axis, title='Raman shift/cm⁻¹', type='quantitative'),
-                y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
+                x=alt.X(x_axis_name, title=x_title, type='quantitative'),
+                y=alt.Y('Intensity', title=y_title, type='quantitative'),
                 tooltip=alt.value(None),
                 color='Sample ID:N',
                 size=alt.condition(
@@ -1021,7 +1073,7 @@ else:
             if "temp" in st.session_state:
                 data_melted = melt_and_filter_data(st.session_state.temp, x_axis)
             
-            cached_plot = generate_altair_plot_fastmode(data_melted)
+            cached_plot = generate_altair_plot_fastmode(data_melted, x_axis, x_axis_title, y_axis_title)
             # st.write("1111")
             # Display Plot
             st.altair_chart(cached_plot, use_container_width=False)
@@ -1054,7 +1106,12 @@ else:
         download_file_name = f"data_{current_time}.csv"
         download_plot_name = f"spectra_plot_{current_time}.png"
 
-        png_bytes = function.make_matplotlib_png(data_melted, x_axis)
+        png_bytes = function.make_matplotlib_png(
+            data_melted,
+            x_axis,
+            x_label=x_axis_title,
+            y_label=y_axis_title
+        )
 
         # Create a single row with two columns
         dcol1,dcol2, col_spacer  = st.columns([1, 1, 3])

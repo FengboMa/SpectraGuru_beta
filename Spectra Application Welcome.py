@@ -5,6 +5,7 @@ from auth_utils import clerk_component
 # import streamlit.components.v1 as components
 
 import function
+import log_utils as log
 import os
 
 # Get the current script's directory
@@ -12,7 +13,6 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Change the working directory
 os.chdir(current_dir)
-
 
 function.wide_space_default()
 
@@ -61,8 +61,17 @@ else:
 #st.write(st.session_state.user)
 print("User:", st.session_state.user)
 
+#log.clear_call_log()
+#log.clear_count_log()
+
 st.image(r"element/Application header picture-3.png")
 st.session_state.log_file_path = r"element/user_count.txt"
+
+# Initialize user count (logs +1 for each unique session)
+if 'current_user_count' not in st.session_state:
+    st.session_state.current_user_count = function.log_user_count(
+        st.session_state.log_file_path
+    )
 
 # --- Initial Setup ---
 hide_close_button_css = """
@@ -78,9 +87,6 @@ st.markdown(hide_close_button_css, unsafe_allow_html=True)
 def guest_entry():
     st.session_state.user_logged_in = False
     st.session_state.show_welcome_modal = False
-    st.session_state.current_user_count = function.log_user_count(
-        st.session_state.log_file_path
-    )
 
 print("Welcome:",st.session_state.show_welcome_modal)
 print("Logged in:",st.session_state.user_logged_in)
@@ -137,7 +143,7 @@ if st.session_state.show_login_modal:
         left, center, right = st.columns([2, 90, 1])
         
         with center:
-            user = clerk_component(key="login", action="login", height=500)
+            user = clerk_component(key="login", action="login")
 
             if populate(user):
                 print("POPULATED")
@@ -301,6 +307,20 @@ import streamlit.components.v1 as components
 p = open(r"element/traffic_heatmap.html")
 components.html(p.read(), scrolling=True, height=550)
 
+st.markdown(
+    """
+    ---
+
+    ### Function Usage
+
+    The following table depicts the relative popularity of each of SpectraGuru's featured processing and analysis functions.
+"""
+)
+
+if 'function_count_data' not in st.session_state or not log.CULL_FUNCTION_TABLE_REFRESH:
+    st.session_state.function_count_data = log.get_count_data()
+
+st.table(data=st.session_state.function_count_data)
 
 st.markdown(
     """

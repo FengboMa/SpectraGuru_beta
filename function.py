@@ -13,10 +13,9 @@ def wide_space_default():
     st.set_page_config(layout="wide", 
                     page_icon=r"element/tab_bar_pic.png")
 
-# Reset button function
-def reset_processing():
+# Shared helper for processing-page toggles
+def clear_processing_toggles():
     import streamlit as st
-    st.session_state.df = st.session_state.backup.copy()
     st.session_state.interpolation_act = False
     st.session_state.crop_act = False
     st.session_state.smoothening_act = False
@@ -24,6 +23,14 @@ def reset_processing():
     st.session_state.despike_act = False
     st.session_state.normalization_act = False
     st.session_state.outlierremoval_act = False
+
+# Reset button function
+def reset_processing():
+    import streamlit as st
+    st.session_state.df = st.session_state.backup.copy()
+    clear_processing_toggles()
+    st.session_state.preprocessing_log = []
+    st.session_state.pop("remove_outliers_log", None)
 
 # airPLS function
 '''
@@ -391,8 +398,17 @@ def read_counts(log_file_path):
 def write_counts(log_file_path, counts):
     import os
 
+    # Clean up any incorrect keys (e.g., 'Spectra_processed' with lowercase p)
+    corrected_counts = {}
+    for key, value in counts.items():
+        # Map old incorrect keys to correct ones
+        if key == 'Spectra_processed':
+            corrected_counts['Spectra_Processed'] = value
+        else:
+            corrected_counts[key] = value
+    
     with open(log_file_path, "w") as file:
-        for key, value in counts.items():
+        for key, value in corrected_counts.items():
             file.write(f"{key}\t{value}\n")
 
 
@@ -412,7 +428,6 @@ def log_spectra_processed_count(log_file_path):
 # Essentially a function rename for clarity
 def log_function_use_count(function_log_file_path, keyname, amount=1):
     return increment_count(function_log_file_path, keyname, amount)
-
 # Peak finding function
 def peak_identification(spectra, height=None, threshold=None, distance=None, 
                         prominence=None, width=None, wlen=None, 
@@ -1199,6 +1214,7 @@ def search_database(search_term, data_type_filter="Both"):
 
 # Better plot downloading
 def make_matplotlib_png(data, x_col,
+                        x_label="Raman shift/cm⁻¹", y_label="Intensity/a.u.",
                         plot_width_in=8.0, legend_width_in=4.5, height_in=6.0,
                         legend_fontsize=11):
     import io
@@ -1267,8 +1283,8 @@ def make_matplotlib_png(data, x_col,
                 ci += 1
 
         # Labels (no title)
-        ax.set_xlabel("Raman shift (cm$^{-1}$)")
-        ax.set_ylabel("Intensity (a.u.)")
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
 
         # Minor ticks
         ax.xaxis.set_minor_locator(AutoMinorLocator())

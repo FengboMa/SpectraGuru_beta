@@ -65,6 +65,7 @@ print("User:", st.session_state.user)
 #log.clear_count_log()
 
 st.image(r"element/Application header picture-3.png")
+
 #st.session_state.log_file_path = r"element/user_count.txt"
 
 # Initialize user count (logs +1 for each unique session)
@@ -320,6 +321,7 @@ st.markdown(
 
 if 'function_count_data' not in st.session_state or not log.CULL_FUNCTION_TABLE_REFRESH:
     st.session_state.function_count_data = log.get_count_data()
+
 
 
 #st.dataframe(data=st.session_state.function_count_data, 

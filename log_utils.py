@@ -12,7 +12,47 @@ call_log_file_path = "log/call_log.txt"
 user_log_file_path = "log/user_log.txt"
 
 
+<<<<<<< HEAD
 CULL_FUNCTION_TABLE_REFRESH = False # If false, function count table updates after any user interaction. If true, it only updates after a full browser refesh.
+=======
+references = {
+    0:{"text":"Self-implemented", "link":False, "notes":None},
+    1:{"text":"https://doi.org/10.1038/s41592-019-0686-2", "link":True, "notes":"SciPy reference"},
+    2:{"text":"https://doi.org/10.1021/ac60214a047", "link":True, "notes":"Savitzky-Golay reference"},
+    3:{"text":"https://doi.org/10.1039/b922045c", "link":True, "notes":"AirPLS reference"},
+    4:{"text":"https://doi.org/10.1021/acs.analchem.5c01253", "link":True, "notes":"Optimized AirPLS reference"},
+    5:{"text":"https://doi.org/10.1366/000370203322554518", "link":True, "notes":"TITLE: Automated Method for Subtraction of Fluorescence from Biological Raman Spectra"},
+    6:{"text":"https://doi.org/10.1016/j.bios.2022.114721", "link":True, "notes":"TITLE: Rapid and quantitative detection of respiratory viruses using surface-enhanced Raman spectroscopy and machine learning"},
+    7:{"text":"https://doi.org/10.1039/D2NR01277D", "link":True, "notes":"TITLE: Differentiation and classification of bacterial endotoxins based on surface enhanced Raman scattering and advanced machine learning"},
+    8:{"text":"https://doi.org/10.1080/01621459.1963.10500845", "link":True, "notes":"Hierarchical clustering"},
+    9:{"text":"https://doi.org/10.48550/arXiv.1201.0490", "link":True, "notes":"Scikit-learn reference"},
+    10:{"text":"https://doi.org/10.1037/h0071325", "link":True, "notes":"PCA reference"},
+    11:{"text":"https://www.jmlr.org/papers/volume9/vandermaaten08a/vandermaaten08a.pdf", "link":True, "notes":"t-SNE reference"}
+}
+
+reference_map = {
+    'Processing_Despike_Auto':[0],
+    'Processing_Despike_Manual':[0],
+    'Processing_Smoothing_Savgol_Filter':[1,2],
+    'Processing_Smoothing_FFT_Filter':[0],
+    'Processing_Baseline_AirPLS':[3,4],
+    'Processing_Baseline_Mod_Poly':[5],
+    'Processing_Baseline_Gaussian_Lorentzian_Fitting':[6,7],
+    'Processing_Normalization_Area':[0],
+    'Processing_Normalization_Peak':[0],
+    'Processing_Normalization_Minmax':[0],
+    'Processing_Remove_Outliers':[0],
+    'Analytics_Spectra_Derivation':[0],
+    'Analytics_Correlation_Heatmap':[0],
+    'Analytics_Peak_Identification':[1],
+    'Analytics_Clustering_Clustermap':[1,8],
+    'Analytics_Clustering_Dendrogram':[1,8],
+    'Analytics_PCA':[9,10],
+    'Analytics_TSNE':[9,11]
+}
+
+CULL_FUNCTION_TABLE_REFRESH = False # If false, function count table updates after any user interaction. If true, it only updates after a full browser refresh.
+>>>>>>> 288ec7c (implements link-reference and multi-reference for function usage table; fills references based on SpectraGuru SI document)
 
 def _ensure_parent_dir(file_path):
     dir_name = os.path.dirname(file_path)
@@ -114,6 +154,7 @@ def get_reference(keyname):
             ref_string = ""
             # Decide whether the reference should be a link or raw text
             if references[ref_id]["link"]:
+
                 if references[ref_id]["doc_page"]:
                     ref_string = f"[Docs]({text})"
                 else:

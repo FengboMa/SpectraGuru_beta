@@ -66,7 +66,12 @@ print("User:", st.session_state.user)
 
 st.image(r"element/Application header picture-3.png")
 
+<<<<<<< HEAD
 #st.session_state.log_file_path = r"element/user_count.txt"
+=======
+st.session_state.log_file_path = r"element/user_count.txt"
+
+>>>>>>> 7e2ac56 (sync)
 
 # Initialize user count (logs +1 for each unique session)
 if 'current_user_count' not in st.session_state:
@@ -324,6 +329,7 @@ if 'function_count_data' not in st.session_state or not log.CULL_FUNCTION_TABLE_
 
 
 
+
 #st.dataframe(data=st.session_state.function_count_data, 
 #                column_config={
 #                    "Feature":st.column_config.TextColumn(width=200),
@@ -332,7 +338,6 @@ if 'function_count_data' not in st.session_state or not log.CULL_FUNCTION_TABLE_
 #                    "References":st.column_config.TextColumn(width=100)
 #                })
 st.table(data=st.session_state.function_count_data)
-
 
 st.markdown(
     """

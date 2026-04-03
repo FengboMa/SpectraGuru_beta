@@ -14,6 +14,7 @@ call_log_file_path = "log/call_log.txt"
 user_log_file_path = "log/user_log.txt"
 
 
+
 CULL_FUNCTION_TABLE_REFRESH = False # If false, function count table updates after any user interaction. If true, it only updates after a full browser refesh.
 references = {
     0:{"text":"Self-implemented", "link":False, "doc_page":False, "notes":None},
@@ -76,7 +77,6 @@ reference_map = {
 
 CULL_FUNCTION_TABLE_REFRESH = False # If false, function count table updates after any user interaction. If true, it only updates after a full browser refresh.
 
-
 names = {
     'Processing_Despike_Auto':("Despike", "Automatic Despike"),
     'Processing_Despike_Manual':("Despike", "Manual Despike"),
@@ -111,7 +111,7 @@ references = {
 }
 
 CULL_FUNCTION_TABLE_REFRESH = False # If false, function count table updates after any user interaction. If true, it only updates after a full browser refesh.
->>>>>>> 593c894 (implements some references to algorithm documentation)
+
 
 # Creates a JSON String containing the details of a function call and appends the String to a file.
 # function_name: the canonical name of the function
@@ -195,6 +195,7 @@ def get_readable_name(keyname):
     return readable_name
 
 
+
 # Returns a string representing reference(s) to the literature for a given algorithm.
 def get_reference(keyname):
 
@@ -222,7 +223,6 @@ def get_reference(keyname):
                 refs += ", "
             refs += ref_string
     return refs
-
 
 # Increments the counter for a specified metric in a given log file. Returns the new count and 
 # creates a new entry if the keyname doesn't already exist.

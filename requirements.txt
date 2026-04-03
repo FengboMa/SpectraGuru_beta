@@ -1,6 +1,7 @@
 altair==5.5.0
 Authlib==1.6.5
 deprecation==2.1.0
+filelock==3.25.2
 matplotlib==3.10.6
 numpy==2.3.3
 pandas==2.3.2

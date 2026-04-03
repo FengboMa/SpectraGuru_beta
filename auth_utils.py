@@ -18,7 +18,7 @@ def populate(user):
         st.session_state.user_decided = True
         if not user == "NO_USER":
             st.session_state.user = user
-            st.session_state.user_logged_in = user['signedIn']
+            st.session_state.user_logged_in = user.get('signedIn', False)
             st.session_state.username = user.get('firstName') or "Guest"
 
             st.session_state.show_login_modal = False

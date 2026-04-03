@@ -80,13 +80,15 @@ def log_function_call(f_name, f_params):
 
     call_number = increment_count(count_log_file_path, f_name)
 
-    if st.session_state.get("user_logged_in", False) and st.session_state.get("user"):
-        #print(st.session_state.user)
-        user = {
-            "id":st.session_state.user['id'],
-            "name":st.session_state.user['firstName'] + " " + st.session_state.user['lastName'],
-            "email":st.session_state.user['email']
-        }
+    if st.session_state.get("user_logged_in", False) and st.session_state.get("user") and isinstance(st.session_state.user, dict):
+        try:
+            user = {
+                "id":st.session_state.user['id'],
+                "name":st.session_state.user['firstName'] + " " + st.session_state.user['lastName'],
+                "email":st.session_state.user['email']
+            }
+        except (KeyError, TypeError):
+            user = "Guest"
     else:
         user = "Guest"
     

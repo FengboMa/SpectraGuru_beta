@@ -31,15 +31,39 @@ names = {
 }
 
 references = {
-    'Processing_Smoothing_Savgol_Filter':"https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.savgol_filter.html",
-    'Processing_Smoothing_FFT_Filter':"https://numpy.org/doc/stable/reference/generated/numpy.fft.fft.html",
-    'Processing_Baseline_AirPLS':"Z.-M. Zhang, S. Chen, and Y.-Z. Liang, Baseline correction using adaptive iteratively reweighted penalized least squares. Analyst 135 (5), 1138-1146 (2010).",
-    'Analytics_Correlation_Heatmap':"https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.corr.html",
-    'Analytics_Peak_Identification':"https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.find_peaks.html",
-    'Analytics_Clustering_Clustermap':"https://seaborn.pydata.org/generated/seaborn.clustermap.html",
-    'Analytics_Clustering_Dendrogram':"https://seaborn.pydata.org/generated/seaborn.clustermap.html",
-    'Analytics_PCA':"https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html",
-    'Analytics_TSNE':"https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html"
+    0:{"text":"Self-implemented", "link":False, "notes":None},
+    1:{"text":"https://doi.org/10.1038/s41592-019-0686-2", "link":True, "notes":"SciPy reference"},
+    2:{"text":"https://doi.org/10.1021/ac60214a047", "link":True, "notes":"Savitzky-Golay reference"},
+    3:{"text":"https://doi.org/10.1039/b922045c", "link":True, "notes":"AirPLS reference"},
+    4:{"text":"https://doi.org/10.1021/acs.analchem.5c01253", "link":True, "notes":"Optimized AirPLS reference"},
+    5:{"text":"https://doi.org/10.1366/000370203322554518", "link":True, "notes":"TITLE: Automated Method for Subtraction of Fluorescence from Biological Raman Spectra"},
+    6:{"text":"https://doi.org/10.1016/j.bios.2022.114721", "link":True, "notes":"TITLE: Rapid and quantitative detection of respiratory viruses using surface-enhanced Raman spectroscopy and machine learning"},
+    7:{"text":"https://doi.org/10.1039/D2NR01277D", "link":True, "notes":"TITLE: Differentiation and classification of bacterial endotoxins based on surface enhanced Raman scattering and advanced machine learning"},
+    8:{"text":"https://doi.org/10.1080/01621459.1963.10500845", "link":True, "notes":"Hierarchical clustering"},
+    9:{"text":"https://doi.org/10.48550/arXiv.1201.0490", "link":True, "notes":"Scikit-learn reference"},
+    10:{"text":"https://doi.org/10.1037/h0071325", "link":True, "notes":"PCA reference"},
+    11:{"text":"https://www.jmlr.org/papers/volume9/vandermaaten08a/vandermaaten08a.pdf", "link":True, "notes":"t-SNE reference"}
+}
+
+reference_map = {
+    'Processing_Despike_Auto':[0],
+    'Processing_Despike_Manual':[0],
+    'Processing_Smoothing_Savgol_Filter':[1,2],
+    'Processing_Smoothing_FFT_Filter':[0],
+    'Processing_Baseline_AirPLS':[3,4],
+    'Processing_Baseline_Mod_Poly':[5],
+    'Processing_Baseline_Gaussian_Lorentzian_Fitting':[6,7],
+    'Processing_Normalization_Area':[0],
+    'Processing_Normalization_Peak':[0],
+    'Processing_Normalization_Minmax':[0],
+    'Processing_Remove_Outliers':[0],
+    'Analytics_Spectra_Derivation':[0],
+    'Analytics_Correlation_Heatmap':[0],
+    'Analytics_Peak_Identification':[1],
+    'Analytics_Clustering_Clustermap':[1,8],
+    'Analytics_Clustering_Dendrogram':[1,8],
+    'Analytics_PCA':[9,10],
+    'Analytics_TSNE':[9,11]
 }
 
 CULL_FUNCTION_TABLE_REFRESH = False # If false, function count table updates after any user interaction. If true, it only updates after a full browser refesh.
@@ -128,12 +152,29 @@ def get_readable_name(keyname):
         }
     return readable_name
 
-# Returns a string representing a reference to the literature for a given algorithm.
+# Returns a string representing reference(s) to the literature for a given algorithm.
 def get_reference(keyname):
 
-    if keyname in references:
-        return references[keyname]
-    return ""
+    refs = ""
+
+    if keyname in reference_map:
+        ref_ids = reference_map[keyname]
+        for i in range(len(ref_ids)):
+            ref_id = ref_ids[i]
+            text = references[ref_id]["text"]
+
+            ref_string = ""
+            # Decide whether the reference should be a link or raw text
+            if references[ref_id]["link"]:
+                ref_string = f"[Ref{i+1}]({text})"
+            else:
+                ref_string = text
+
+            # Format as a comma-separated list
+            if i > 0:
+                refs += ", "
+            refs += ref_string
+    return refs
 
 # Increments the counter for a specified metric in a given log file. Returns the new count and 
 # creates a new entry if the keyname doesn't already exist.

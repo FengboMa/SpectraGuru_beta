@@ -320,14 +320,14 @@ st.markdown(
 if 'function_count_data' not in st.session_state or not log.CULL_FUNCTION_TABLE_REFRESH:
     st.session_state.function_count_data = log.get_count_data()
 
-st.dataframe(data=st.session_state.function_count_data, 
-                column_config={
-                    "Feature":st.column_config.TextColumn(width=200),
-                    "Algorithm":st.column_config.TextColumn(width=200),
-                    "Usage (Times Called)":st.column_config.NumberColumn(width=150),
-                    "References":st.column_config.TextColumn(width=100)
-                })
-#st.table(data=st.session_state.function_count_data)
+#st.dataframe(data=st.session_state.function_count_data, 
+#                column_config={
+#                    "Feature":st.column_config.TextColumn(width=200),
+#                    "Algorithm":st.column_config.TextColumn(width=200),
+#                    "Usage (Times Called)":st.column_config.NumberColumn(width=150),
+#                    "References":st.column_config.TextColumn(width=100)
+#                })
+st.table(data=st.session_state.function_count_data)
 
 st.markdown(
     """

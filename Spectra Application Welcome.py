@@ -65,13 +65,14 @@ print("User:", st.session_state.user)
 #log.clear_count_log()
 
 st.image(r"element/Application header picture-3.png")
-st.session_state.log_file_path = r"element/user_count.txt"
+#st.session_state.log_file_path = r"element/user_count.txt"
 
 # Initialize user count (logs +1 for each unique session)
 if 'current_user_count' not in st.session_state:
-    st.session_state.current_user_count = function.log_user_count(
-        st.session_state.log_file_path
-    )
+    #st.session_state.current_user_count = function.log_user_count(
+    #    st.session_state.log_file_path
+    #)
+    st.session_state.current_user_count = log.log_user_count()
 
 # --- Initial Setup ---
 hide_close_button_css = """

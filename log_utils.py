@@ -15,7 +15,7 @@ names = {
     'Processing_Smoothing_Savgol_Filter':("Smoothening", "Savitzky-Golay filter"),
     'Processing_Smoothing_FFT_Filter':("Smoothening", "1D Fast Fourier Transform filter"),
     'Processing_Baseline_AirPLS':("Baseline Removal", "AirPLS"),
-    'Processing_Baseline_Mod_Poly':("Basline Removal", "Modified Polynomial Fitting"),
+    'Processing_Baseline_Mod_Poly':("Baseline Removal", "Modified Polynomial Fitting"),
     'Processing_Baseline_Gaussian_Lorentzian_Fitting':("Baseline Removal", "Gaussian-Lorentzian Fitting"),
     'Processing_Normalization_Area':("Normalization", "Normalization by Area"),
     'Processing_Normalization_Peak':("Normalization", "Normalization by Peak"),

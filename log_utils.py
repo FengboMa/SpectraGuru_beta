@@ -5,16 +5,16 @@ import streamlit as st
 import datetime as dt
 import pandas as pd
 from function_dict import names, references, reference_map
+
 import numpy as np
+
 
 count_log_file_path = "log/count_log.txt"
 call_log_file_path = "log/call_log.txt"
 user_log_file_path = "log/user_log.txt"
 
 
-<<<<<<< HEAD
 CULL_FUNCTION_TABLE_REFRESH = False # If false, function count table updates after any user interaction. If true, it only updates after a full browser refesh.
-=======
 references = {
     0:{"text":"Self-implemented", "link":False, "doc_page":False, "notes":None},
     1:{"text":"https://doi.org/10.1038/s41592-019-0686-2", "link":True, "doc_page":False, "notes":"SciPy reference"},
@@ -70,6 +70,8 @@ reference_map = {
     'Analytics_TSNE':[9,11,30]
 }
 
+=======
+>>>>>>> b4cebc2 (creates new function_dict.py file to organize dictionaries)
 CULL_FUNCTION_TABLE_REFRESH = False # If false, function count table updates after any user interaction. If true, it only updates after a full browser refresh.
 >>>>>>> 288ec7c (implements link-reference and multi-reference for function usage table; fills references based on SpectraGuru SI document)
 

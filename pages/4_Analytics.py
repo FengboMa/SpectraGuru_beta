@@ -36,7 +36,8 @@ if 'df' in st.session_state:
                                 "Peak Identification and Stats",
                                 "Hierarchically-clustered Heatmap",
                                 "Principal Components Analysis (PCA)-Beta",
-                                "T-SNE Dimensionality Reduction-Beta"),
+                                "T-SNE Dimensionality Reduction-Beta",
+                                "Support Vector Machine"),
                         key="stats_plot_select")
 
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":

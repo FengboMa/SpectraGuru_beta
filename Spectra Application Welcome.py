@@ -129,6 +129,48 @@ col2.markdown(' :arrow_left: **Start with upload your data in Data Upload Page**
 
 st.divider()
 
+st.markdown(
+    """
+    <div style="
+        padding: 1.25rem 1.4rem;
+        border-radius: 18px;
+        background: #F0F2F6;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+        margin: 0.25rem 0 0.5rem 0;
+    ">
+        <div style="
+            display: inline-block;
+            padding: 0.28rem 0.7rem;
+            border-radius: 999px;
+            background: rgba(4, 99, 7, 0.10);
+            color: #046307;
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            margin-bottom: 0.7rem;
+        ">CITATION</div>
+        <h3 style="margin: 0 0 0.45rem 0; color: #046307;">If You Find SpectraGuru Useful</h3>
+        <p style="margin: 0 0 1rem 0; color: #1f2937; line-height: 1.55;">
+            If SpectraGuru contributes to your research, please consider citing our work. The references below can be copied directly into your manuscript.
+        </p>
+        <div style="padding: 0.9rem 1rem; background: rgba(255, 255, 255, 0.72); border-radius: 14px; border: 1px solid rgba(15, 23, 42, 0.08); margin-bottom: 0.85rem;">
+            <p style="margin: 0; line-height: 1.6;">
+                Fengbo Ma, Jiaheng Cui, Amit Kumar, Yanjun Yang, Xianyan Chen, and Yiping Zhao. <em>Comprehensive Open-Source Ecosystem for Raman and SERS Spectroscopy: Introducing SpectraGuru</em>. Analytical Chemistry. <a href="https://pubs.acs.org/doi/10.1021/acs.analchem.5c07799" target="_blank">Read online</a>
+            </p>
+        </div>
+        <div style="padding: 0.9rem 1rem; background: rgba(255, 255, 255, 0.72); border-radius: 14px; border: 1px solid rgba(15, 23, 42, 0.08);">
+            <p style="margin: 0;  line-height: 1.6;">
+                Fengbo Ma, Jiaheng Cui, Amit Kumar, Yanjun Yang, Jessica McCabe Hutcheson, Xianyan Chen, Haijian Sun, and Yiping Zhao. <em>SpectraGuru: a community-guided path toward scalable Raman and SERS analysis</em>. In <em>Biomedical Vibrational Spectroscopy 2026: Advances in Research and Industry</em>, vol. 13846, pp. 31-41. SPIE, 2026. <a href="https://www.spiedigitallibrary.org/conference-proceedings-of-spie/13846/1384608/SpectraGuru--a-community-guided-path-toward-scalable-Raman-and/10.1117/12.3086068.short" target="_blank">Read online</a>
+            </p>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.divider()
+
 col1, col3 = st.columns([2,3])
 
 col1.markdown(

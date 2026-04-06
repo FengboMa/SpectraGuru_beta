@@ -3,6 +3,7 @@
 [![Documentation Status](https://img.shields.io/badge/Documentation-latest-green)](https://fengboma.github.io/docs.spectraguru/) 
 [![License: Apache](https://img.shields.io/badge/License-Apache_2.0-yellow)](https://www.apache.org/licenses/LICENSE-2.0) 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_red.svg)](https://streamlit.io/)
+[![Publication](https://img.shields.io/badge/Publication-Analytical%20Chemistry-blue)](https://pubs.acs.org/doi/10.1021/acs.analchem.5c07799)
 
 # SpectraGuru - Spectra Analysis Application
 
@@ -14,6 +15,13 @@ Find our documentation page: [here](https://fengboma.github.io/docs.spectraguru/
 SpectraGuru is a spectra analysis application designed to provide user-friendly tools for processing and visualizing spectra, aimed at accelerating your research. It functions as a dashboard or a specialized tool within a Python environment, organized with various modular functions that allow users to process spectroscopy data in a pipeline. SpectraGuru is based on the Python streamlit framework. 
 
 ![Demo](element/demo.gif)
+
+## If You Find SpectraGuru™ Useful
+If SpectraGuru™ contributes to your research, please consider citing our work.
+
+Fengbo Ma, Jiaheng Cui, Amit Kumar, Yanjun Yang, Xianyan Chen, and Yiping Zhao. "Comprehensive Open-Source Ecosystem for Raman and SERS Spectroscopy: Introducing SpectraGuru," *Analytical Chemistry*. [https://pubs.acs.org/doi/10.1021/acs.analchem.5c07799](https://pubs.acs.org/doi/10.1021/acs.analchem.5c07799)
+
+Fengbo Ma, Jiaheng Cui, Amit Kumar, Yanjun Yang, Jessica McCabe Hutcheson, Xianyan Chen, Haijian Sun, and Yiping Zhao. "SpectraGuru: a community-guided path toward scalable Raman and SERS analysis." In *Biomedical Vibrational Spectroscopy 2026: Advances in Research and Industry*, vol. 13846, pp. 31-41. SPIE, 2026.
 
 
 ---
@@ -82,7 +90,6 @@ The project was started in Jun 2024 by Dr. Yiping Zhao and Dr. Xianyan Chen from
 ### Help and Support
 
 If you have any questions, comments, and observations, please let us know! Email: zhao-nano-lab@uga.edu.
-
 
 
 

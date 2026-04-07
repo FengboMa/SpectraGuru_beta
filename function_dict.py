@@ -1,6 +1,14 @@
 # This file contains all manually-implemented function metadata for the purposes of displaying the function usage table and relating
 # functions to their respective references/documentation.
 
+# To add a new function to the names dict, first determine its keyname
+#   Keynames should take the form DOMAIN_FEATURE_ALGORITHM with underscores used as spaces
+#     - for example: Processing_Baseline_AirPLS
+#     - DOMAIN should almost always be Processing or Analytics
+#   The pair of strings after each entry represent user-readable identifiers (FEATURE, ALGORITHM)
+#     - FEATURE and ALGORITHM may be the same if appropriate
+#   In the Processing/Analytics page, make sure log.log_function_call(keyname, parameters) is invoked appropriately when your
+#   algorithm is called. This increments the function usage counter for your algorithm. Use the keyname from this list.
 names = {
     'Processing_Despike_Auto':("Despike", "Automatic Despike"),
     'Processing_Despike_Manual':("Despike", "Manual Despike"),
@@ -19,9 +27,23 @@ names = {
     'Analytics_Clustering_Clustermap':("Hierarchical Clustering", "Clustermap"),
     'Analytics_Clustering_Dendrogram':("Hierarchical Clustering", "Dendrogram"),
     'Analytics_PCA':("PCA", "Principal Component Analysis"),
-    'Analytics_TSNE':("t-SNE", "t-Distributed Stochastic Neighbor Embedding")
+    'Analytics_TSNE':("t-SNE", "t-Distributed Stochastic Neighbor Embedding"),
+
+
+
+
 }
 
+# The list of references used by SpectraGuru. When adding entries to this list, use the blank templates at the bottom of the
+# dictionary. This ensures that the existing number assignments are never altered.
+#
+#   "text": Either a raw string of text or a link to a reference. If a link, set "link" to True.
+#   "link": True if the content of "text" is a link, and False otherwise. Be sure to replace its default value of None when filling
+#      an entry.
+#   "doc_page": True if the link contained in "text" is a link to a page on SpectraGuru's documentation website, and False otherwise. Make
+#      sure to replace its default value of None when filling an entry.
+#   "notes": Can be anything (it is not used by the application), but ideally it should provide some information to other developers about
+#      what this reference is for.
 references = {
     0:{"text":"Self-implemented", "link":False, "doc_page":False, "notes":None},
     1:{"text":"https://doi.org/10.1038/s41592-019-0686-2", "link":True, "doc_page":False, "notes":"SciPy reference"},
@@ -53,9 +75,40 @@ references = {
     27:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/Gaussian_Peak_Fitting/", "link":True, "doc_page":True, "notes":"Gaussian Peak Fitting doc page"},
     28:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/Clustermap/", "link":True, "doc_page":True, "notes":"Hierarchical Clustering doc page"},
     29:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/Principal_Component_Analysis/", "link":True, "doc_page":True, "notes":"PCA doc page"},
-    30:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/T-SNE/", "link":True, "doc_page":True, "notes":"t-SNE doc page"}
+    30:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/T-SNE/", "link":True, "doc_page":True, "notes":"t-SNE doc page"},
+    31:{"text":"", "link":None, "doc_page":None, "notes":""},
+    32:{"text":"", "link":None, "doc_page":None, "notes":""},
+    33:{"text":"", "link":None, "doc_page":None, "notes":""},
+    34:{"text":"", "link":None, "doc_page":None, "notes":""},
+    35:{"text":"", "link":None, "doc_page":None, "notes":""},
+    36:{"text":"", "link":None, "doc_page":None, "notes":""},
+    37:{"text":"", "link":None, "doc_page":None, "notes":""},
+    38:{"text":"", "link":None, "doc_page":None, "notes":""},
+    39:{"text":"", "link":None, "doc_page":None, "notes":""},
+    40:{"text":"", "link":None, "doc_page":None, "notes":""},
+    41:{"text":"", "link":None, "doc_page":None, "notes":""},
+    42:{"text":"", "link":None, "doc_page":None, "notes":""},
+    43:{"text":"", "link":None, "doc_page":None, "notes":""},
+    44:{"text":"", "link":None, "doc_page":None, "notes":""},
+    45:{"text":"", "link":None, "doc_page":None, "notes":""},
+    46:{"text":"", "link":None, "doc_page":None, "notes":""},
+    47:{"text":"", "link":None, "doc_page":None, "notes":""},
+    48:{"text":"", "link":None, "doc_page":None, "notes":""},
+    49:{"text":"", "link":None, "doc_page":None, "notes":""},
+    50:{"text":"", "link":None, "doc_page":None, "notes":""},
 }
 
+# This dictionary maps functions to a specific set of references from the references list. These references will be listed alongside
+# the algorithms featured in the function usage table.
+#
+#   - Use the same keynames from the names dict.
+#   - Entries are ordered arrays of integers corresponsing to rows of the references dict (see above)
+#   - 0 corresponds to "self-implemented." Make sure 0 is the first element of the array if it is included at all.
+#   - Try not to map functions to more than 5 references unless necessary; this could clutter the function usage table.
+#
+#  Example: 'Processing_Normalization_Area':[0, 18] means that Area Normalization is self-implemented and has a
+#  corresponding reference at references[18], which is a link to the documentation page for Area Normalization on SpectraGuru's
+#  documentation website.
 reference_map = {
     'Processing_Despike_Auto':[0,12],
     'Processing_Despike_Manual':[0,12],
@@ -74,5 +127,10 @@ reference_map = {
     'Analytics_Clustering_Clustermap':[1,8,28],
     'Analytics_Clustering_Dendrogram':[1,8,28],
     'Analytics_PCA':[9,10,29],
-    'Analytics_TSNE':[9,11,30]
+    'Analytics_TSNE':[9,11,30],
+
+
+
+
+
 }

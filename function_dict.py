@@ -40,7 +40,7 @@ names = {
 #   "text": Either a raw string of text or a link to a reference. If a link, set "link" to True.
 #   "link": True if the content of "text" is a link, and False otherwise. Be sure to replace its default value of None when filling
 #      an entry.
-#   "doc_page": True if the link contained in "text" is a link to a page on SpectraGuru's documentation website, and False otherwise. Make
+#   "doc_page": True if the link contained in "text" is a link to a page on SpectraGuru's documentation website, and False otherwise. Be
 #      sure to replace its default value of None when filling an entry.
 #   "notes": Can be anything (it is not used by the application), but ideally it should provide some information to other developers about
 #      what this reference is for.

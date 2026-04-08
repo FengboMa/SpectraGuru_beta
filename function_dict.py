@@ -102,7 +102,7 @@ references = {
 # the algorithms featured in the function usage table.
 #
 #   - Use the same keynames from the names dict.
-#   - Entries are ordered arrays of integers corresponsing to rows of the references dict (see above)
+#   - Entries are ordered arrays of integers corresponding to rows of the references dict (see above)
 #   - 0 corresponds to "self-implemented." Make sure 0 is the first element of the array if it is included at all.
 #   - Try not to map functions to more than 5 references unless necessary; this could clutter the function usage table.
 #

@@ -36,7 +36,8 @@ if 'df' in st.session_state:
                                 "Peak Identification and Stats",
                                 "Hierarchically-clustered Heatmap",
                                 "Principal Components Analysis (PCA)-Beta",
-                                "T-SNE Dimensionality Reduction-Beta"),
+                                "T-SNE Dimensionality Reduction-Beta",
+                                "K-Nearest Neighbors (KNN)"),
                         key="stats_plot_select")
 
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
@@ -181,6 +182,13 @@ if 'df' in st.session_state:
         max_perplexity = st.session_state.df.shape[1] - 1
         st.sidebar.select_slider(label="t-SNE Perplexity", options=list(range(1,max_perplexity)),value=2, key="tSNE_perplexity")
         st.sidebar.select_slider(label="t-SNE Maximum number of iterations", options=list(range(200,1001)), value=500, key="tSNE_n_iter")
+    elif st.session_state.stats_plot_select == "K-Nearest Neighbors (KNN)":
+        num_samples = len(st.session_state.df)
+        st.sidebar.number_input(label="Number of Neighbors (K)", min_value=1, max_value=num_samples-1, value=3, key="KNN_n_neighbors")
+        st.session_state["KNN_distance_metric"] = "euclidean"
+        st.session_state["KNN_weight"] = "uniform"
+        st.sidebar.write("Distance Metric: Euclidean")
+        st.sidebar.write("Weight: Uniform")
 
 # Stats section layout
 """"""""""""

@@ -183,11 +183,12 @@ if 'df' in st.session_state:
         st.sidebar.select_slider(label="t-SNE Perplexity", options=list(range(1,max_perplexity)),value=2, key="tSNE_perplexity")
         st.sidebar.select_slider(label="t-SNE Maximum number of iterations", options=list(range(200,1001)), value=500, key="tSNE_n_iter")
     elif st.session_state.stats_plot_select == "K-Nearest Neighbors (KNN)":
-        num_samples = len(st.session_state.df)
+        num_samples = int(len(st.session_state.temp.columns) * 0.8) - 1
         st.sidebar.number_input(
             label="Number of Neighbors (K)", 
             min_value=1, 
-            max_value=num_samples-1, 
+            max_value=num_samples, 
+            step=2,
             value=3, 
             key="KNN_n_neighbors",
             help="Number of closest known samples used to vote on the identity of an unknown sample.")
@@ -197,7 +198,7 @@ if 'df' in st.session_state:
         st.sidebar.write("Weight: Uniform")
         st.sidebar.write("**Tips for tuning KNN K Value:**")
         st.sidebar.markdown("""
-        * **K value** should typically be **odd** (e.g., 3, 5, 7) to prevent ties when deciding the identity of a sample.
+        * **K value** should typically be **odd**, typically between 3-9, to prevent ties when deciding the identity of a sample.
         * **K value shouldn't be too small:** Very low values (like `K=1`) can lead to **overfitting**, where the model is too sensitive to noise or outliers in your spectra.
         * **K value shouldn't be too large:** Very high values can lead to **underfitting**, where the model "over-smooths" and misses the unique signatures of specific virus strains. 
         * **Aim for a middle point** that maintains high accuracy on your testing set.
@@ -996,3 +997,27 @@ else:
                                     })
 
             st.write(tsne_df)
+        elif st.session_state.stats_plot_select == "K-Nearest Neighbors (KNN)":
+            st.write("**K-Nearest Neighbors (KNN) Analysis**")
+
+            temp = st.session_state.temp.drop(columns=["Average"])
+            label_df = st.session_state.get("label_df")   # could be None
+
+            chart, knn, df_report = function.k_nearest_neighbors(
+                temp,
+                n_neighbors=st.session_state.KNN_n_neighbors,
+                metric=st.session_state.KNN_distance_metric, 
+                weight=st.session_state.KNN_weight,
+            )
+            st.altair_chart(chart, use_container_width=True)
+
+            log.log_plot_generated_count()
+            log.log_function_call("Analytics_KNN",
+                                    f_params={
+                                        "n_neighbors": st.session_state.KNN_n_neighbors,
+                                        "metric": st.session_state.KNN_distance_metric,
+                                        "weight": st.session_state.KNN_weight
+                                    })
+
+            st.write("Performance Metrics")
+            st.dataframe(df_report, use_container_width=True)

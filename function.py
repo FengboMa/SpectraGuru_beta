@@ -1399,9 +1399,11 @@ def k_nearest_neighbors(df, n_neighbors, metric, weight):
     from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix, classification_report, accuracy_score
 
     # data cleaning
-    df_clean = df.drop(df.columns[0], axis=1)
-    y = df_clean.iloc[:, 0]
-    X = df_clean.iloc[:, 1:]
+    if "RamanShift" in df.columns:
+        df = df.set_index("RamanShift")
+    df_clean = df.T
+    y = df_clean.index.str.replace(".txt", "", regex=False)
+    X = df_clean.values
 
     # encode labels
     le = LabelEncoder()

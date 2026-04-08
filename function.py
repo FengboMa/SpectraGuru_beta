@@ -1,5 +1,8 @@
 # Functions for the support of the Application
 # Fast mode trigger
+from curses.ascii import alt
+
+
 def update_mode_option():
     import streamlit as st
     if st.session_state.backup.shape[1]>20:
@@ -1384,3 +1387,72 @@ def spectra_derivation(
     g["y1"] = y1
     g["y2"] = y2
     return g
+
+def k_nearest_neighbors(df, n_neighbors, metric, weight):
+    import altair as alt
+    import pandas as pd
+    import numpy as np
+    import seaborn as sns
+    from sklearn.neighbors import KNeighborsClassifier
+    from sklearn.preprocessing import LabelEncoder
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix, classification_report, accuracy_score
+
+    # data cleaning
+    df_clean = df.drop(df.columns[0], axis=1)
+    y = df_clean.iloc[:, 0]
+    X = df_clean.iloc[:, 1:]
+
+    # encode labels
+    le = LabelEncoder()
+    y_encoded = le.fit_transform(y)
+    all_viruses = le.classes_
+
+    # 80/20 stratified split
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y_encoded, test_size=0.2, random_state=42, stratify=y_encoded
+    )
+
+    # model training and prediction
+    knn = KNeighborsClassifier(n_neighbors=n_neighbors, metric=metric, weights=weight)
+    knn.fit(X_train, y_train)
+    y_pred = knn.predict(X_test)
+
+    # performance metrics report
+    report_dict = classification_report(y_test, y_pred, target_names=all_viruses, output_dict=True)
+    df_report = pd.DataFrame(report_dict).transpose()
+
+    # altair visualization of confusion matrix
+    cm = confusion_matrix(y_test, y_pred)
+    cm_df = pd.DataFrame(cm, index=all_viruses, columns=all_viruses).stack().reset_index()
+    cm_df.columns = ["Actual", "Predicted", "Count"]
+
+    # base for heatmap
+    base = alt.Chart(cm_df).encode(
+        x=alt.X("Predicted:O", title="Predicted"),
+        y=alt.Y("Actual:O", title="Actual")
+    ).properties(width=400, height=400)
+
+    # colored squares based on sample counts
+    heatmap = base.mark_rect().encode(
+        color=alt.Color("Count:Q", scale=alt.Scale(scheme="blues"))
+    )
+
+    # add counts inside the squares
+    text = base.mark_text(baseline="middle").encode(
+        text="Count:Q",
+        color=alt.condition(
+            alt.datum.Count > (cm.max() / 2), 
+            alt.value("white"), 
+            alt.value("black")
+        )
+    )
+
+    # combine layers and display final format
+    chart = (heatmap + text).properties(
+        width=400,
+        height=400,
+        title="Confusion Matrix"
+    )
+
+    return chart, knn, df_report

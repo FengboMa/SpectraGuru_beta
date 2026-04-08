@@ -1386,10 +1386,10 @@ def show_feedback(
     severity: str = "error",
     details: str = None,
     suggestions: list[str] = None,
+    doc_link: str = "https://fengboma.github.io/docs.spectraguru/"
 ):
     import streamlit as st
 
-    # 1. Map severity to the correct Streamlit function
     severity_map = {
         "error": st.error,
         "warning": st.warning,
@@ -1398,24 +1398,18 @@ def show_feedback(
     }
     display_func = severity_map.get(severity, st.error)
 
-    # 2. Build the string using standard Markdown
-    # We use \n for spacing to ensure Streamlit renders the lists and code blocks
-    full_content = f"**{message}**\n\n"
+    full_content = f"### {message}\n\n"
+
+    full_content += f"##### 📖 Documentation: [Documentation]({doc_link})\n\n"
 
     if suggestions:
-        full_content += "#### 💡 Suggestions\n"
+        full_content += "##### 💡 Suggestions\n"
         for s in suggestions:
             full_content += f"- {s}\n"
         full_content += "\n"
 
     if details:
-        full_content += "#### 🔧 Technical Details\n"
-        # Triple backticks work perfectly inside st.error as long as they are in the string
+        full_content += "##### 🔧 Technical Details\n"
         full_content += f"```text\n{details}\n```\n\n"
 
-    # added documentation link
-    full_content += "📖 **Documentation:** [SpectraGuru Docs](https://fengboma.github.io/docs.spectraguru/)"
-
-    # 3. Render the box
     display_func(full_content)
-

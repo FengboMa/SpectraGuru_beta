@@ -68,7 +68,8 @@ def load_multi_data(file_paths):
                     "Remove header text or comments.",
                     "Confirm the selected format matches the file type."
                 ],
-                details=traceback.format_exc()
+                details=traceback.format_exc(),
+                doc_link="https://fengboma.github.io/docs.spectraguru/docs/Data-Upload.html"
             )
             st.stop()
 
@@ -231,7 +232,8 @@ def process_upload(kind, uploaded):
         show_feedback(
             message="No file uploaded.",
             severity="warning",
-            suggestions=["Upload at least one file to continue."]
+            suggestions=["Upload at least one file to continue."],
+            doc_link="https://fengboma.github.io/docs.spectraguru/docs/Data-Upload.html"
         )
         return None
 
@@ -249,7 +251,8 @@ def process_upload(kind, uploaded):
             show_feedback(
                 message="Unsupported format selected.",
                 severity="error",
-                suggestions=["Choose a valid format from the dropdown."]
+                suggestions=["Choose a valid format from the dropdown."],
+                doc_link="https://fengboma.github.io/docs.spectraguru/docs/Data-Upload.html"
             )
             return None
 
@@ -260,7 +263,8 @@ def process_upload(kind, uploaded):
                 suggestions=[
                     "Ensure the file contains numeric values.",
                     "Check for blank rows."
-                ]
+                ],
+                doc_link="https://fengboma.github.io/docs.spectraguru/docs/Data-Upload.html"
             )
             return None
 
@@ -273,7 +277,8 @@ def process_upload(kind, uploaded):
             suggestions=[
                 "Ensure file is valid CSV or TXT.",
                 "Check delimiter selection."
-            ]
+            ],
+            doc_link="https://fengboma.github.io/docs.spectraguru/docs/Data-Upload.html"
         )
         return None
 
@@ -285,7 +290,8 @@ def process_upload(kind, uploaded):
                 "Confirm the file format matches your selection.",
                 "Try re-saving the file as UTF-8."
             ],
-            details=traceback.format_exc()
+            details=traceback.format_exc(),
+            doc_link="https://fengboma.github.io/docs.spectraguru/docs/Data-Upload.html"
         )
         return None
 
@@ -397,7 +403,8 @@ for idx in range(int(n_classes)):
                             suggestions=[
                                 "Ensure sampledata.csv exists in element folder."
                             ],
-                            details=traceback.format_exc()
+                            details=traceback.format_exc(),
+                            doc_link="https://fengboma.github.io/docs.spectraguru/docs/Data-Upload.html"
                         )
 
             if df_this is not None:

@@ -184,11 +184,24 @@ if 'df' in st.session_state:
         st.sidebar.select_slider(label="t-SNE Maximum number of iterations", options=list(range(200,1001)), value=500, key="tSNE_n_iter")
     elif st.session_state.stats_plot_select == "K-Nearest Neighbors (KNN)":
         num_samples = len(st.session_state.df)
-        st.sidebar.number_input(label="Number of Neighbors (K)", min_value=1, max_value=num_samples-1, value=3, key="KNN_n_neighbors")
+        st.sidebar.number_input(
+            label="Number of Neighbors (K)", 
+            min_value=1, 
+            max_value=num_samples-1, 
+            value=3, 
+            key="KNN_n_neighbors",
+            help="Number of closest known samples used to vote on the identity of an unknown sample.")
         st.session_state["KNN_distance_metric"] = "euclidean"
         st.session_state["KNN_weight"] = "uniform"
         st.sidebar.write("Distance Metric: Euclidean")
         st.sidebar.write("Weight: Uniform")
+        st.sidebar.write("**Tips for tuning KNN K Value:**")
+        st.sidebar.markdown("""
+        * **K value** should typically be **odd** (e.g., 3, 5, 7) to prevent ties when deciding the identity of a sample.
+        * **K value shouldn't be too small:** Very low values (like `K=1`) can lead to **overfitting**, where the model is too sensitive to noise or outliers in your spectra.
+        * **K value shouldn't be too large:** Very high values can lead to **underfitting**, where the model "over-smooths" and misses the unique signatures of specific virus strains. 
+        * **Aim for a middle point** that maintains high accuracy on your testing set.
+        """)
 
 # Stats section layout
 """"""""""""

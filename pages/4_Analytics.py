@@ -183,7 +183,10 @@ if 'df' in st.session_state:
         st.sidebar.select_slider(label="t-SNE Perplexity", options=list(range(1,max_perplexity)),value=2, key="tSNE_perplexity")
         st.sidebar.select_slider(label="t-SNE Maximum number of iterations", options=list(range(200,1001)), value=500, key="tSNE_n_iter")
     elif st.session_state.stats_plot_select == "K-Nearest Neighbors (KNN)":
+        # max samples in training set
         num_samples = int(len(st.session_state.temp.columns) * 0.8) - 1
+
+        # k value settings
         st.sidebar.number_input(
             label="Number of Neighbors (K)", 
             min_value=1, 
@@ -191,11 +194,15 @@ if 'df' in st.session_state:
             step=2,
             value=3, 
             key="KNN_n_neighbors",
-            help="Number of closest known samples used to vote on the identity of an unknown sample.")
+            help="Number of closest known samples used to vote on the identity of an unknown sample.") # description for K value
+        
+        # set parameters that users cannot change
         st.session_state["KNN_distance_metric"] = "euclidean"
         st.session_state["KNN_weight"] = "uniform"
         st.sidebar.write("Distance Metric: Euclidean")
         st.sidebar.write("Weight: Uniform")
+
+        # tips for choosing the best k value
         st.sidebar.write("**Tips for tuning KNN K Value:**")
         st.sidebar.markdown("""
         * **K value** should typically be **odd**, typically between 3-9, to prevent ties when deciding the identity of a sample.
@@ -998,19 +1005,25 @@ else:
 
             st.write(tsne_df)
         elif st.session_state.stats_plot_select == "K-Nearest Neighbors (KNN)":
+            # display subtitle
             st.write("**K-Nearest Neighbors (KNN) Analysis**")
 
+            # drop unnecessary average column
             temp = st.session_state.temp.drop(columns=["Average"])
             label_df = st.session_state.get("label_df")   # could be None
 
+            # run knn function using settings from the sidebar
             chart, knn, df_report = function.k_nearest_neighbors(
                 temp,
                 n_neighbors=st.session_state.KNN_n_neighbors,
                 metric=st.session_state.KNN_distance_metric, 
                 weight=st.session_state.KNN_weight,
             )
+
+            # display confusion matrix 
             st.altair_chart(chart, use_container_width=True)
 
+            # log plot generated count
             log.log_plot_generated_count()
             log.log_function_call("Analytics_KNN",
                                     f_params={
@@ -1019,5 +1032,6 @@ else:
                                         "weight": st.session_state.KNN_weight
                                     })
 
+            # display performance metrics
             st.write("Performance Metrics")
             st.dataframe(df_report, use_container_width=True)

@@ -1384,3 +1384,12 @@ def spectra_derivation(
     g["y1"] = y1
     g["y2"] = y2
     return g
+
+# Returns a DataFrame of spectra with the given structure
+#   Distinct: Each peak is separated
+#   Joint: Peaks are paired together
+#   Consecutive: Multiple peaks overlap in a sequence
+def generate_spectra(structure="Distinct", num_spectra=1):
+    import pandas as pd
+    import numpy as np
+    return pd.DataFrame() # Placeholder return value

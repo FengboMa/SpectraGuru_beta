@@ -28,6 +28,7 @@ names = {
     'Analytics_Clustering_Dendrogram':("Hierarchical Clustering", "Dendrogram"),
     'Analytics_PCA':("PCA", "Principal Component Analysis"),
     'Analytics_TSNE':("t-SNE", "t-Distributed Stochastic Neighbor Embedding"),
+    'Toolbox_Spectra_Simulation':("Spectra Simulation", "Spectra Simulation"),
 
 
 
@@ -128,6 +129,7 @@ reference_map = {
     'Analytics_Clustering_Dendrogram':[1,8,28],
     'Analytics_PCA':[9,10,29],
     'Analytics_TSNE':[9,11,30],
+    'Toolbox_Spectra_Simulation':[0]
 
 
 

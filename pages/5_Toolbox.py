@@ -2,6 +2,7 @@ import streamlit as st
 import altair as alt
 import pandas as pd
 import function
+import log_utils as log
 
 function.wide_space_default()
 
@@ -38,7 +39,13 @@ if st.session_state.tool_select == "Spectra Simulation":
         st.write("Click \"Generate Spectra\" to simulate random spectra.")
     else: 
         if st.session_state.simulation_button:
-            st.session_state.simulation_df = pd.DataFrame() #function.generate_spectra()
+            structure = st.session_state.simulation_structure_select
+            num_spectra = st.session_state.simulation_batch_size_select
+            st.session_state.simulation_df = function.generate_spectra(structure, num_spectra)
+            log.log_function_call("Toolbox_Spectra_Simulation", f_params={
+                'structure':structure,
+                'num_spectra':num_spectra
+            })
         
         simulation_df = st.session_state.simulation_df
         simulated_spectra = alt.Chart(simulation_df).mark_line().encode(

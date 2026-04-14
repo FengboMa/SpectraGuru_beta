@@ -131,6 +131,16 @@ def collect_current_preprocessing_entries():
                     "padding_method": st.session_state.smoothening_act_FFT_padding
                 }
             })
+        elif st.session_state.smoothening_function == "Median filter":
+            run_log_entries.append({
+                "step": "smoothening",
+                "display_name": "Smoothening",
+                "parameters": {
+                    "function": "Median filter",
+                    "window_size": st.session_state.smoothening_act_window_size,
+                    "padding_method": st.session_state.smoothening_act_padding_method
+                }
+            })
 
     if st.session_state.baselineremoval_act:
         if st.session_state.baselineremoval_function == "airPLS":
@@ -248,6 +258,14 @@ def apply_preprocessing_step(df, step_entry):
                 lambda col: function.FFT_spectra(
                     col,
                     FFT_threshold=params["fft_threshold"],
+                    padding_method=params["padding_method"]
+                )
+            )
+        elif params["function"] == "Median filter":
+            result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
+                lambda col: function.median_filter_spectra(
+                    col,
+                    window_size=params["window_size"],
                     padding_method=params["padding_method"]
                 )
             )
@@ -473,7 +491,7 @@ else:
         
         if smoothening_act:
             # Add more functions to this selectbox if needed
-            st.session_state.smoothening_function = st.selectbox(label="Select your smoothening function",  options=["Savitzky-Golay filter","1D Fast Fourier Transform filter"])
+            st.session_state.smoothening_function = st.selectbox(label="Select your smoothening function",  options=["Savitzky-Golay filter","1D Fast Fourier Transform filter", "Median filter"])
             
             if st.session_state.smoothening_function == "Savitzky-Golay filter":
             # Add more functions to this selectbox if needed
@@ -515,6 +533,27 @@ else:
                                                                                                                     "zero"],
                                                                 key = "smoothening_act_FFT_padding",
                                                                 help = help_txt2)
+            elif st.session_state.smoothening_function == "Median filter":
+                window_size_help = '''
+                The window size parameter specifies the length of the window for the median filter to use. A small window size can remove sharp spikes or outliers while minimizing artifacts. Larger window sizes may result in feature loss and distortion of the original spectra.
+
+                Window size must be odd. The max window size is 51, but smaller window sizes may still produce significant distortion and artifacts. Be sure to select an appropriate window size considering the width of features in your spectra.
+                '''
+
+                st.session_state.smoothening_act_window_size = st.number_input(label="Window size",
+                                                min_value = 3, max_value = 51, value = 3,
+                                                step=2, placeholder="Insert a number", help=window_size_help)
+                padding_help = '''
+                The padding method parameter specifies the method used to pad the signal before applying the median filter. Padding helps to reduce edge effects and minimize artifacts introduced by the filtering process.
+                
+                **Mirror Padding ('mirror'):** Reflects the signal at its edges, creating a smooth transition.
+                
+                **Edge Padding ('edge'):** Repeats the edge values of the signal.
+                
+                **Zero Padding ('zero'):** Adds zeros to the edges of the signal. May introduce artifacts at the edges.
+                '''
+                st.session_state.smoothening_act_padding_method = st.selectbox(label="Padding method", 
+                                                options=["mirror", "edge", "zero"], help=padding_help)
         # Baseline removal
         # st.markdown("**Baseline Removal**")
         
@@ -696,9 +735,14 @@ else:
                         'window_length': step_entry["parameters"]["window_length"],
                         'polyorder': step_entry["parameters"]["polynomial_order"]
                     })
-                else:
+                elif step_entry["parameters"]["function"] == "1D Fast Fourier Transform filter":
                     log.log_function_call("Processing_Smoothing_FFT_Filter", f_params={
                         'FFT_threshold': step_entry["parameters"]["fft_threshold"],
+                        'padding_method': step_entry["parameters"]["padding_method"]
+                    })
+                elif step_entry["parameters"]["function"] == "Median filter":
+                    log.log_function_call("Processing_Smoothing_Median_Filter", f_params={
+                        'window_size': step_entry["parameters"]["window_size"],
                         'padding_method': step_entry["parameters"]["padding_method"]
                     })
             elif step_entry["step"] == "baseline_removal":

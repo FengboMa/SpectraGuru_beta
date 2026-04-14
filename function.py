@@ -1388,33 +1388,36 @@ def spectra_derivation(
     g["y2"] = y2
     return g
 
-def k_nearest_neighbors(df, n_neighbors, metric, weight):
+def k_nearest_neighbors(df, n_neighbors, metric="euclidean", weight="uniform"):
     import altair as alt
     import pandas as pd
     import numpy as np
     import seaborn as sns
     from sklearn.neighbors import KNeighborsClassifier
-    from sklearn.preprocessing import LabelEncoder
+    from sklearn.preprocessing import LabelEncoder, StandardScaler
     from sklearn.model_selection import train_test_split
     from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix, classification_report, accuracy_score
 
     # data cleaning
-    if "RamanShift" in df.columns:
-        df = df.set_index("RamanShift")
-    df_clean = df.T
-    y = df_clean.index.str.replace(".txt", "", regex=False)
-    X = df_clean.values
+    # look at tsne func
+    # label df should only have 1 class 
+    df_t = df.set_index('Ramanshift').T 
+    scaler = StandardScaler()
+    X_std = scaler.fit_transform(df_t)
+    y = df_t.index.str.replace(".txt", "", regex=False)
 
     # encode labels
     le = LabelEncoder()
     y_encoded = le.fit_transform(y)
     all_viruses = le.classes_
 
-    # 80/20 stratified split
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y_encoded, test_size=0.2, random_state=42, stratify=y_encoded
-    )
 
+    # 80/20 stratified split
+    # stratify=y_encoded
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_std, y_encoded, test_size=0.2, random_state=42, stratify=y_encoded
+    )
+    
     # model training and prediction
     knn = KNeighborsClassifier(n_neighbors=n_neighbors, metric=metric, weights=weight)
     knn.fit(X_train, y_train)
@@ -1422,7 +1425,7 @@ def k_nearest_neighbors(df, n_neighbors, metric, weight):
 
     # performance metrics report
     report_dict = classification_report(y_test, y_pred, target_names=all_viruses, output_dict=True)
-    df_report = pd.DataFrame(report_dict).transpose()
+    df_report = pd.DataFrame(report_dict).transpose() # maybe print out instead
 
     # altair visualization of confusion matrix
     cm = confusion_matrix(y_test, y_pred)
@@ -1457,4 +1460,6 @@ def k_nearest_neighbors(df, n_neighbors, metric, weight):
         title="Confusion Matrix"
     )
 
-    return chart, knn, df_report
+    return chart, df_report 
+    # confusion matrix, perfomance metric, roc curve
+

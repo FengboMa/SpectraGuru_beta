@@ -186,6 +186,16 @@ if 'df' in st.session_state:
         # max samples in training set
         num_samples = int(len(st.session_state.temp.columns) * 0.8) - 1
 
+        # tips for choosing best k value
+        knn_help = """
+        Number of closest known samples used to vote on the identity of an unknown sample.
+
+        * **K value should typically be odd**, typically between 3-9, to prevent ties when deciding the identity of a sample.
+        * **K value shouldn't be too small:** Very low values (like `K=1`) can lead to **overfitting**, where the model is too sensitive to noise or outliers in your spectra.
+        * **K value shouldn't be too large:** Very high values can lead to **underfitting**, where the model "over-smooths" and misses the unique signatures of specific virus strains. 
+        * **Aim for a middle point** that maintains high accuracy on your testing set.
+        """
+
         # k value settings
         st.sidebar.number_input(
             label="Number of Neighbors (K)", 
@@ -194,22 +204,12 @@ if 'df' in st.session_state:
             step=2,
             value=3, 
             key="KNN_n_neighbors",
-            help="Number of closest known samples used to vote on the identity of an unknown sample.") # description for K value
+            help=knn_help) # description for K value
         
         # set parameters that users cannot change
-        st.session_state["KNN_distance_metric"] = "euclidean"
-        st.session_state["KNN_weight"] = "uniform"
         st.sidebar.write("Distance Metric: Euclidean")
         st.sidebar.write("Weight: Uniform")
 
-        # tips for choosing the best k value
-        st.sidebar.write("**Tips for tuning KNN K Value:**")
-        st.sidebar.markdown("""
-        * **K value** should typically be **odd**, typically between 3-9, to prevent ties when deciding the identity of a sample.
-        * **K value shouldn't be too small:** Very low values (like `K=1`) can lead to **overfitting**, where the model is too sensitive to noise or outliers in your spectra.
-        * **K value shouldn't be too large:** Very high values can lead to **underfitting**, where the model "over-smooths" and misses the unique signatures of specific virus strains. 
-        * **Aim for a middle point** that maintains high accuracy on your testing set.
-        """)
 
 # Stats section layout
 """"""""""""
@@ -1016,8 +1016,8 @@ else:
             chart, knn, df_report = function.k_nearest_neighbors(
                 temp,
                 n_neighbors=st.session_state.KNN_n_neighbors,
-                metric=st.session_state.KNN_distance_metric, 
-                weight=st.session_state.KNN_weight,
+                metric="euclidean", # hardcode
+                weight="uniform",
             )
 
             # display confusion matrix 
@@ -1028,8 +1028,8 @@ else:
             log.log_function_call("Analytics_KNN",
                                     f_params={
                                         "n_neighbors": st.session_state.KNN_n_neighbors,
-                                        "metric": st.session_state.KNN_distance_metric,
-                                        "weight": st.session_state.KNN_weight
+                                        "metric": "euclidean",
+                                        "weight": "uniform"
                                     })
 
             # display performance metrics

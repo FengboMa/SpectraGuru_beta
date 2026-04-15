@@ -955,258 +955,154 @@ def svm(df, kernel='Linear', C=1, class_weight='None', degree=0, gamma="scale", 
         Plot of Support Vectors, Confusion Matrix, ROC Curve
     '''
     import altair as alt
-    from sklearn.metrics import (
-        confusion_matrix, classification_report, accuracy_score, roc_curve, auc
-    )
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.svm import SVC
-    from sklearn.model_selection import (
-        train_test_split, GridSearchCV, RepeatedStratifiedKFold,
-        StratifiedShuffleSplit, cross_val_score,
-    )
-    from sklearn.pipeline import Pipeline
     import pandas as pd
     import numpy as np
-    
+    from sklearn.metrics import confusion_matrix, accuracy_score, roc_curve, auc
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.svm import SVC
+    from sklearn.model_selection import train_test_split, RepeatedStratifiedKFold, cross_val_score
+    from sklearn.pipeline import Pipeline
+
     if label_df is None:
         raise ValueError(
             "SVM classification requires labeled data. "
             "Please assign labels to your spectra before running SVM."
         )
-    # Step 1: Drop non-numeric or irrelevant columns
-    df = df.set_index('Ramanshift').T
 
-    # Step 2: Standardize the data
-    scaler = StandardScaler()
-    df = scaler.fit_transform(df)
-
-    X = df
+    # ── Prepare data ──
+    df_original = df.set_index('Ramanshift').T
+    X = StandardScaler().fit_transform(df_original)
     y = label_df['Label']
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y,
+    indices = np.arange(len(X))
+    X_train, X_test, y_train, y_test, idx_train, idx_test = train_test_split(
+        X, y, indices, test_size=0.2, random_state=42, stratify=y
     )
-    class_weight = 'balanced' if class_weight == 'Balanced' else None
-    svc = SVC(kernel=kernel.lower(),
-                       C=C,
-                       class_weight=class_weight,
-                       degree=degree,
-                       gamma=gamma)
+
+    # ── Fit ──
+    svc = SVC(
+        kernel='poly' if kernel == 'Polynomial' else kernel.lower(), C=C, degree=degree, gamma=gamma.lower(),
+        class_weight='balanced' if class_weight == 'Balanced' else None
+    )
     svc.fit(X_train, y_train)
     y_pred = svc.predict(X_test)
     print(f"SVM accuracy: {accuracy_score(y_test, y_pred):.3f}")
 
-    n_splits = 5
-    n_repeats = 10
-
-    pipe = Pipeline([
-        ('scaler', StandardScaler()),
-        ('svc', svc),
-    ])
-
-    cv = RepeatedStratifiedKFold(n_splits=n_splits, n_repeats=n_repeats, random_state=42)
-    scores = cross_val_score(pipe, X, y, cv=cv, scoring='accuracy', n_jobs=-1)
-
+    # ── Cross-validation ──
+    n_splits, n_repeats = 5, 10
+    scores = cross_val_score(
+        Pipeline([('scaler', StandardScaler()), ('svc', svc)]),
+        X, y,
+        cv=RepeatedStratifiedKFold(n_splits=n_splits, n_repeats=n_repeats, random_state=42),
+        scoring='accuracy', n_jobs=-1
+    )
     print(f"\nRepeated Stratified {n_splits}-Fold CV ({n_repeats} repeats):")
     print(f"  Mean accuracy : {scores.mean():.3f} ± {scores.std():.3f}")
 
-    # ── Identify min / max folds ──
-    min_idx = scores.argmin()
-    max_idx = scores.argmax()
-    min_fold   = (min_idx % n_splits) + 1
-    min_repeat = (min_idx // n_splits) + 1
-    max_fold   = (max_idx % n_splits) + 1
-    max_repeat = (max_idx // n_splits) + 1
+    min_idx, max_idx = scores.argmin(), scores.argmax()
+    min_fold,   min_repeat = (min_idx % n_splits) + 1, (min_idx // n_splits) + 1
+    max_fold,   max_repeat = (max_idx % n_splits) + 1, (max_idx // n_splits) + 1
 
-
-    # ── Histogram ──
-    def build_cv_score_hist():
-        scores_df = pd.DataFrame({'score': scores})
-        histogram = alt.Chart(scores_df).mark_bar(
-            opacity=0.7,
-            color='#4C72B0',
-            stroke='black',
-            strokeWidth=0.5
+    # ── Chart 1: CV Score Histogram ──
+    rules_df = pd.DataFrame([
+        {'value': scores.mean(), 'label': f'Mean = {scores.mean():.3f}',                              'color': 'red'},
+        {'value': scores.min(),  'label': f'Min  = {scores.min():.3f}  (R{min_repeat} F{min_fold})', 'color': 'orange'},
+        {'value': scores.max(),  'label': f'Max  = {scores.max():.3f}  (R{max_repeat} F{max_fold})', 'color': 'green'},
+    ])
+    cv_score_hist = (
+        alt.Chart(pd.DataFrame({'score': scores})).mark_bar(
+            opacity=0.7, color='#4C72B0', stroke='black', strokeWidth=0.5
         ).encode(
             alt.X('score:Q', bin=alt.Bin(maxbins=15), title='Accuracy'),
             alt.Y('count()', title='Count')
         )
-
-        rules_df = pd.DataFrame([
-            {'value': scores.mean(), 'label': f'Mean = {scores.mean():.3f}',          'color': 'red'},
-            {'value': scores.min(),  'label': f'Min  = {scores.min():.3f}  (R{min_repeat} F{min_fold})', 'color': 'orange'},
-            {'value': scores.max(),  'label': f'Max  = {scores.max():.3f}  (R{max_repeat} F{max_fold})', 'color': 'green'},
-        ])
-
-        rules = alt.Chart(rules_df).mark_rule(strokeWidth=2).encode(
+        + alt.Chart(rules_df).mark_rule(strokeWidth=2).encode(
             x='value:Q',
-            color=alt.Color('color:N', scale=None),  # scale=None → use raw hex/named values directly
-            strokeDash=alt.StrokeDash(
-                'label:N',
-                scale=alt.Scale(
-                    domain=[f'Mean = {scores.mean():.3f}',
-                            f'Min  = {scores.min():.3f}  (R{min_repeat} F{min_fold})',
-                            f'Max  = {scores.max():.3f}  (R{max_repeat} F{max_fold})'],
-                    range=[[4, 4], [2, 4], [2, 4]]   # dashed for mean, dotted for min/max
-                )
-            ),
+            color=alt.Color('color:N', scale=None),
+            strokeDash=alt.StrokeDash('label:N', scale=alt.Scale(
+                domain=[rules_df.iloc[0]['label'], rules_df.iloc[1]['label'], rules_df.iloc[2]['label']],
+                range=[[4, 4], [2, 4], [2, 4]]
+            )),
             tooltip=['label:N', 'value:Q']
         )
-
-        legend_points = alt.Chart(rules_df).mark_point(opacity=0).encode(
-            color=alt.Color(
-                'color:N',
-                scale=None,
-                legend=alt.Legend(title=None)
-            ),
+        + alt.Chart(rules_df).mark_point(opacity=0).encode(
+            color=alt.Color('color:N', scale=None, legend=alt.Legend(title=None)),
             tooltip='label:N'
         )
+    ).properties(title=alt.Title('Cross-Validation Score Distribution', fontSize=14), width=600, height=250)
 
-        chart = (histogram + rules + legend_points).properties(
-            title=alt.Title('Cross-Validation Score Distribution', fontSize=14),
-            width=600,
-            height=250
+    # ── Chart 2: Confusion Matrix ──
+    cm = confusion_matrix(y_test, y_pred)
+    labels = ['Class 1', 'Class 2']
+    cm_df = pd.DataFrame([
+        {'Actual': labels[i], 'Predicted': labels[j], 'Count': int(cm[i, j])}
+        for i in range(2) for j in range(2)
+    ])
+    cm_chart = (
+        alt.Chart(cm_df).mark_rect().encode(
+            x=alt.X('Predicted:N', sort=labels, axis=alt.Axis(title='Predicted', labelAngle=0)),
+            y=alt.Y('Actual:N',    sort=labels[::-1], axis=alt.Axis(title='Actual')),
+            color=alt.Color('Count:Q', scale=alt.Scale(scheme='bluepurple'), legend=None)  # fixed scheme name
         )
-
-        return chart
-    
-    cv_score_hist = build_cv_score_hist()
-
-    def build_confusion_matrix():
-        cm = confusion_matrix(y_test, y_pred)
-        labels = ['Class 1', 'Class 2']
-
-        # Altair needs one row per cell, so we unpack the 2×2 matrix
-        # into (actual, predicted, count) triples
-        cm_df = pd.DataFrame([
-            {'Actual': labels[i], 'Predicted': labels[j], 'Count': cm[i, j]}
-            for i in range(len(labels))
-            for j in range(len(labels))
-        ])
-
-        heatmap = alt.Chart(cm_df).mark_rect().encode(
-            x=alt.X('Predicted:N',
-                    sort=labels,
-                    axis=alt.Axis(title='Predicted', labelAngle=0)),
-            y=alt.Y('Actual:N',
-                    sort=labels[::-1],           # top-left = true positive for class 1
-                    axis=alt.Axis(title='Actual')),
-            color=alt.Color('Count:Q',
-                            scale=alt.Scale(scheme='bluepurple-6'),
-                            legend=None)
-        )
-
-        # Annotation layer — the count numbers printed on each cell
-        text = alt.Chart(cm_df).mark_text(fontSize=14).encode(
+        + alt.Chart(cm_df).mark_text(fontSize=14).encode(
             x=alt.X('Predicted:N', sort=labels),
             y=alt.Y('Actual:N',    sort=labels[::-1]),
             text='Count:Q',
             color=alt.condition(
-                alt.datum.Count > cm.max() / 2,  # dark background → white text
-                alt.value('white'),
-                alt.value('black')
+                alt.datum.Count > cm.max() / 2,
+                alt.value('white'), alt.value('black')
             )
         )
+    ).properties(title=alt.Title('Confusion Matrix', fontSize=14), width=300, height=250)
 
-        chart = (heatmap + text).properties(
-            title=alt.Title('Confusion Matrix', fontSize=14),
-            width=300,
-            height=250
-        )
-        return chart
+    # ── Chart 3: Support Vectors ──
+    sv_row_idx = idx_train[svc.support_]
+    print(f"Number of support vectors: {len(svc.support_)}")
+    print(f"Per class: {list(svc.n_support_)}")
 
-    confusion_matrix = build_confusion_matrix()
+    def to_long(source_df, label):
+        return (source_df.copy()
+                .assign(sample=source_df.index.astype(str))
+                .melt(id_vars='sample', var_name='raman_shift', value_name='intensity')
+                .assign(raman_shift=lambda d: d['raman_shift'].astype(float),
+                        label=label))
 
-    def build_support_vector_plot():
-        sv_indices = svc.support_
-        X_train = pd.DataFrame(X_train)
-        sv_names = X_train.index[sv_indices]
-
-        print(f"Number of support vectors: {len(sv_indices)}")
-        print(f"Per class: {list(svc.n_support_)}")
-        print(f"Support vectors: {sv_names.tolist()}")
-
-        # ── Reshape both sets from wide to long form ──
-        # df columns are Raman shift values; each row is one spectrum
-        def to_long(source_df, label):
-            long = (source_df
-                    .copy()
-                    .assign(sample=source_df.index)
-                    .melt(id_vars='sample', var_name='raman_shift', value_name='intensity'))
-            long['raman_shift'] = long['raman_shift'].astype(float)
-            long['label'] = label
-            return long
-
-        train_long = to_long(df.loc[X_train.index], 'background')
-        sv_long    = to_long(df.loc[sv_names],              'sv')
-        # ── Background layer — all training spectra in gray ──
-        background = alt.Chart(train_long).mark_line(
-            opacity=0.15,
-            color='gray',
-            strokeWidth=1
+    sv_chart = (
+        alt.Chart(to_long(df_original.iloc[idx_train], 'background')).mark_line(
+            opacity=0.15, color='gray', strokeWidth=1
         ).encode(
             x=alt.X('raman_shift:Q', title='Raman Shift (cm⁻¹)'),
             y=alt.Y('intensity:Q',   title='Intensity'),
-            detail='sample:N'    # draws one line per sample without creating a legend entry
+            detail='sample:N'
         )
-
-        # ── Support vector layer — one color per sample ──
-        sv_lines = alt.Chart(sv_long).mark_line(strokeWidth=2).encode(
-            x=alt.X('raman_shift:Q'),
-            y=alt.Y('intensity:Q'),
+        + alt.Chart(to_long(df_original.iloc[sv_row_idx], 'sv')).mark_line(strokeWidth=2).encode(
+            x='raman_shift:Q',
+            y='intensity:Q',
             color=alt.Color('sample:N', legend=alt.Legend(title='Support Vectors')),
             detail='sample:N'
         )
+    ).properties(title=alt.Title('Support Vectors Highlighted', fontSize=14), width=800, height=300)
 
-        chart = (background + sv_lines).properties(
-            title=alt.Title('Support Vectors Highlighted', fontSize=14),
-            width=800,
-            height=300
-        )
-        return chart
-    
-    support_vectors = build_support_vector_plot()
-
-    def build_roc_curve():
-        y_scores  = svc.decision_function(X_test)
-        fpr, tpr, _ = roc_curve(y_test, y_scores, pos_label=2)
-        auc_score = auc(fpr, tpr)
-
-        # ── ROC curve data ──
-        roc_df = pd.DataFrame({'fpr': fpr, 'tpr': tpr, 'label': f'ROC curve (AUC = {auc_score:.3f})'})
-
-        # ── Diagonal baseline — just two points defining the line ──
-        baseline_df = pd.DataFrame({'fpr': [0, 1], 'tpr': [0, 1], 'label': 'Random classifier'})
-
-        roc_line = alt.Chart(roc_df).mark_line(strokeWidth=2).encode(
+    # ── Chart 4: ROC Curve ──
+    fpr, tpr, _ = roc_curve(y_test, svc.decision_function(X_test), pos_label=2)
+    auc_score   = auc(fpr, tpr)
+    roc_chart = (
+        alt.Chart(pd.DataFrame({'fpr': fpr, 'tpr': tpr, 'label': f'ROC curve (AUC = {auc_score:.3f})'}))
+        .mark_line(strokeWidth=2).encode(
             x=alt.X('fpr:Q', title='False Positive Rate', scale=alt.Scale(domain=[0, 1])),
             y=alt.Y('tpr:Q', title='True Positive Rate',  scale=alt.Scale(domain=[0, 1])),
-            color=alt.Color('label:N', legend=alt.Legend(
-                title=None,
-                orient='bottom-right'   # closest Altair equivalent of loc='lower right'
-            ))
-        )
-
-        baseline = alt.Chart(baseline_df).mark_line(
-            strokeDash=[6, 4],
-            color='black'
-        ).encode(
-            x='fpr:Q',
-            y='tpr:Q',
             color=alt.Color('label:N', legend=alt.Legend(title=None, orient='bottom-right'))
         )
+        + alt.Chart(pd.DataFrame({'fpr': [0, 1], 'tpr': [0, 1], 'label': 'Random classifier'}))
+        .mark_line(strokeDash=[6, 4], color='black').encode(
+            x='fpr:Q', y='tpr:Q',
+            color=alt.Color('label:N', legend=alt.Legend(title=None, orient='bottom-right'))
+        )
+    ).properties(
+        title=alt.Title('ROC Curve', fontSize=14), width=350, height=300
+    ).resolve_scale(color='shared')
 
-        chart = (roc_line + baseline).properties(
-            title=alt.Title('ROC Curve', fontSize=14),
-            width=350,
-            height=300
-        ).resolve_scale(color='shared')   # merges both layers into a single legend
-
-        return chart
-    
-    roc_curve = build_roc_curve()
-
-    return cv_score_hist, confusion_matrix, support_vectors, roc_curve
+    return cv_score_hist, cm_chart, sv_chart, roc_chart
 
     
 

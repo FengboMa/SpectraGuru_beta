@@ -190,7 +190,7 @@ if 'df' in st.session_state:
         st.sidebar.select_slider(label="t-SNE Perplexity", options=list(range(1,max_perplexity)),value=2, key="tSNE_perplexity")
         st.sidebar.select_slider(label="t-SNE Maximum number of iterations", options=list(range(200,1001)), value=500, key="tSNE_n_iter")
     elif st.session_state.stats_plot_select == "Support Vector Machine":
-        svm_kernel = st.sidebar.selectbox(label="Select the Kernel for your Support Vector Machine", 
+        svm_kernel = st.sidebar.selectbox(label="Select the Kernel", 
                                 options = ["Linear", "RBF", "Polynomial", "Sigmoid"],
                                 key='svm_kernel',
                                 help=(
@@ -1080,7 +1080,9 @@ else:
                             label_df
                             )
             st.altair_chart(function.style_altair_chart(cv_score_hist), use_container_width=False)
-        
+            st.altair_chart(function.style_altair_chart(confusion_matrix), use_container_width=False)
+            st.altair_chart(function.style_altair_chart(support_vectors), use_container_width=False)
+            st.altair_chart(function.style_altair_chart(roc_curve), use_container_width=False)
             # st.write("SVM classification requires labeled data. Please assign labels to your spectra before running SVM.")
             
             

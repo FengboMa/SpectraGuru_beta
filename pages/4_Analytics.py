@@ -1071,7 +1071,7 @@ else:
                 label_df = label_df.rename(columns={first_col: 'Ramanshift'})
 
         
-            cv_score_hist, confusion_matrix, support_vectors, roc_curve = function.svm(temp,
+            svm_cv_score_hist, svm_confusion_matrix, svm_support_vectors, svm_roc_curve = function.svm(temp,
                             st.session_state.svm_kernel,
                             st.session_state.svm_C,
                             st.session_state.svm_class_weight,
@@ -1079,10 +1079,10 @@ else:
                             st.session_state.svm_gamma if st.session_state.get('svm_gamma') else "scale",
                             label_df
                             )
-            st.altair_chart(function.style_altair_chart(cv_score_hist), use_container_width=False)
-            st.altair_chart(function.style_altair_chart(confusion_matrix), use_container_width=False)
-            st.altair_chart(function.style_altair_chart(support_vectors), use_container_width=False)
-            st.altair_chart(function.style_altair_chart(roc_curve), use_container_width=False)
+            st.altair_chart(function.style_altair_chart(svm_cv_score_hist), use_container_width=True)
+            st.altair_chart(function.style_altair_chart(svm_confusion_matrix), use_container_width=True)
+            st.altair_chart(function.style_altair_chart(svm_support_vectors), use_container_width=True)
+            st.altair_chart(function.style_altair_chart(svm_roc_curve), use_container_width=False)
             # st.write("SVM classification requires labeled data. Please assign labels to your spectra before running SVM.")
             
             

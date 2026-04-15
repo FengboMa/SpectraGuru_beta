@@ -212,6 +212,16 @@ if 'df' in st.session_state:
                                             "Applies to all kernel options. "
                                             )
                                 )
+        if svm_kernel == "Polynomial":
+                    st.sidebar.number_input(label='Degree',min_value= 1, max_value= 10000, placeholder='Insert a number',
+                                    key = 'svm_degree', step = 1, value = 5,
+                                    help = ("Degree of the polynomial kernel\n\n"
+                                            "> For example: **degree=2** results in a decision boundary reflecting a parabola,"
+                                            " while **degree=3** would be a cubic decision boundary.\n\n"
+                                            "Higher degrees capture more complex patterns but risks overfitting.\n\n"
+                                            "*Only applicable to the polynomial kernel.*"
+                                            )
+                                )
         
 
 # Stats section layout

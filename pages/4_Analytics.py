@@ -192,8 +192,9 @@ if 'df' in st.session_state:
     elif st.session_state.stats_plot_select == "Support Vector Machine":
 
         st.sidebar.number_input(label='Regularization Term (C)',min_value= 1, max_value= 100, placeholder='Insert a number',
-                                    key = 'svm_C',step = 1, value = 5,
-                                    help = "Penalty for misclassified points")
+                                    key = 'svm_C', step = 1, value = 5,
+                                    help = "Penalty for misclassified points. Controls margin width vs misclassification tradeoff.")
+        
 
 # Stats section layout
 """"""""""""

@@ -938,8 +938,132 @@ def tsne(df, perplexity=5, n_iter=500, label_df=None):
     )
 
     return tsne_df, tsne_plot
-def svm(df, svm_kernel='Linear', svm_C=5, svm_class_weight='None', svm_degree=2, svm_gamma='Scale', label_df=None):
-    pass
+def svm(df, kernel='Linear', C=1, class_weight='None', degree=None, gamma=None, label_df=None):
+    '''
+    Support Vector Machine for classification.
+
+    input
+        df: input dataframe
+        kernel: Defines how the SVM maps data into a feature space
+        C: Regularization term
+        class_weight: Weigh classes inversely proportional to their frequency
+        degree: Degree of the polynomial kernel
+        gamma: Controls the "reach" of each training sample.
+        label_df: Class label dataframe. 2 class label columns required
+
+    output
+        Plot of Support Vectors, Confusion Matrix, ROC Curve
+    '''
+    import altair as alt
+    from sklearn.metrics import (
+        confusion_matrix, classification_report, accuracy_score,
+    )
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.svm import SVC
+    from sklearn.model_selection import (
+        train_test_split, GridSearchCV, RepeatedStratifiedKFold,
+        StratifiedShuffleSplit, cross_val_score,
+    )
+    from sklearn.pipeline import Pipeline
+    import pandas as pd
+    import numpy as np
+    
+    if label_df is None:
+        raise ValueError(
+            "SVM classification requires labeled data. "
+            "Please assign labels to your spectra before running SVM."
+        )
+    class1 = df.loc[[s for s in df.index if "Class_1" in s]]
+    class2 = df.loc[[s for s in df.index if "Class_2" in s]]
+    X = df
+    y = label_df['Label']
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y,
+    )
+    class_weight = 'balanced' if class_weight == 'Balanced' else None
+    svc = SVC(kernel=kernel.lower(),
+                       C=C,
+                       class_weight=class_weight,
+                       degree=degree,
+                       gamma=gamma)
+    svc.fit(X_train, y_train)
+    y_pred_baseline = svc.predict(X_test)
+    print(f"Baseline linear SVM accuracy: {accuracy_score(y_test, y_pred_baseline):.3f}")
+
+    n_splits = 5
+    n_repeats = 10
+
+    pipe = Pipeline([
+        ('scaler', StandardScaler()),
+        ('svc', svc),
+    ])
+
+    cv = RepeatedStratifiedKFold(n_splits=n_splits, n_repeats=n_repeats, random_state=42)
+    scores = cross_val_score(pipe, X, y, cv=cv, scoring='accuracy', n_jobs=-1)
+
+    print(f"\nRepeated Stratified {n_splits}-Fold CV ({n_repeats} repeats):")
+    print(f"  Mean accuracy : {scores.mean():.3f} ± {scores.std():.3f}")
+
+    # ── Identify min / max folds ──
+    min_idx = scores.argmin()
+    max_idx = scores.argmax()
+    min_fold   = (min_idx % n_splits) + 1
+    min_repeat = (min_idx // n_splits) + 1
+    max_fold   = (max_idx % n_splits) + 1
+    max_repeat = (max_idx // n_splits) + 1
+
+
+    # ── Histogram ──
+    scores_df = pd.DataFrame({'score': scores})
+    histogram = alt.Chart(scores_df).mark_bar(
+        opacity=0.7,
+        color='#4C72B0',
+        stroke='black',
+        strokeWidth=0.5
+    ).encode(
+        alt.X('score:Q', bin=alt.Bin(maxbins=15), title='Accuracy'),
+        alt.Y('count()', title='Count')
+    )
+
+    rules_df = pd.DataFrame([
+        {'value': scores.mean(), 'label': f'Mean = {scores.mean():.3f}',          'color': 'red'},
+        {'value': scores.min(),  'label': f'Min  = {scores.min():.3f}  (R{min_repeat} F{min_fold})', 'color': 'orange'},
+        {'value': scores.max(),  'label': f'Max  = {scores.max():.3f}  (R{max_repeat} F{max_fold})', 'color': 'green'},
+    ])
+
+    rules = alt.Chart(rules_df).mark_rule(strokeWidth=2).encode(
+        x='value:Q',
+        color=alt.Color('color:N', scale=None),  # scale=None → use raw hex/named values directly
+        strokeDash=alt.StrokeDash(
+            'label:N',
+            scale=alt.Scale(
+                domain=[f'Mean = {scores.mean():.3f}',
+                        f'Min  = {scores.min():.3f}  (R{min_repeat} F{min_fold})',
+                        f'Max  = {scores.max():.3f}  (R{max_repeat} F{max_fold})'],
+                range=[[4, 4], [2, 4], [2, 4]]   # dashed for mean, dotted for min/max
+            )
+        ),
+        tooltip=['label:N', 'value:Q']
+    )
+
+    legend_points = alt.Chart(rules_df).mark_point(opacity=0).encode(
+        color=alt.Color(
+            'color:N',
+            scale=None,
+            legend=alt.Legend(title=None)
+        ),
+        tooltip='label:N'
+    )
+
+    chart = (histogram + rules + legend_points).properties(
+        title=alt.Title('Cross-Validation Score Distribution', fontSize=14),
+        width=600,
+        height=250
+    )
+
+    return chart
+    
 
 def mixed_gauss_lorentz(x, A, v_g, sigma_g, L, v_l, sigma_l, I_0):
     '''

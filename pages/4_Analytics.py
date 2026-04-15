@@ -193,6 +193,7 @@ if 'df' in st.session_state:
         svm_kernel = st.sidebar.selectbox(label="Select the Kernel for your Support Vector Machine", 
                                 options = ["Linear", "RBF", "Polynomial", "Sigmoid"],
                                 key='svm_kernel',
+                                value='Linear',
                                 help=(
                                     "Defines how the SVM maps data into a feature space.\n\n"
                                     "- **Linear**: No mapping (hyperplane in original space). \n\n"
@@ -212,16 +213,42 @@ if 'df' in st.session_state:
                                             "Applies to all kernel options. "
                                             )
                                 )
+        
+        st.sidebar.selectbox(label='Class Weight',
+                                options = ["None", "Balanced"],
+                                value = "None",
+                                key = 'svm_class_weight',
+                                help = ("Change when class sizes are unequal.\n\n"
+                                        "- **None**: Treat all samples equally.\n\n"
+                                        "- **Balanced**: Weighs classes inversely proportional to their frequency, so the minority class gets more influence.\n\n"
+                                        "Applicable to all kernels."
+                                        )
+                            )
+        
         if svm_kernel == "Polynomial":
-                    st.sidebar.number_input(label='Degree',min_value= 1, max_value= 10000, placeholder='Insert a number',
-                                    key = 'svm_degree', step = 1, value = 5,
-                                    help = ("Degree of the polynomial kernel\n\n"
-                                            "> For example: **degree=2** results in a decision boundary reflecting a parabola,"
-                                            " while **degree=3** would be a cubic decision boundary.\n\n"
-                                            "Higher degrees capture more complex patterns but risks overfitting.\n\n"
-                                            "*Only applicable to the polynomial kernel.*"
-                                            )
+            st.sidebar.number_input(label='Degree',min_value= 1, max_value= 10000, placeholder='Insert a number',
+                            key = 'svm_degree', step = 1, value = 2,
+                            help = ("Degree of the polynomial kernel\n\n"
+                                    "> For example: **degree=2** results in a decision boundary reflecting a parabola,"
+                                    " while **degree=3** would be a cubic decision boundary.\n\n"
+                                    "Higher degrees capture more complex patterns but risks overfitting.\n\n"
+                                    "*Only applicable to polynomial kernel.*"
+                                    )
                                 )
+        if svm_kernel == "Polynomial" or svm_kernel == "RBF" or svm_kernel == "Sigmoid":
+            st.sidebar.selectbox(label='Gamma',
+                            options = ["Scale", "Auto"],
+                            key = 'svm_gamma', value = 'Scale',
+                            help = ("Controls the 'reach' of each training sample.\n\n"
+                                    "> High gamma → each sample only influences nearby points (complex, tight boundaries). \n\n"
+                                    "> Low gamma → each sample influences a wide area (smoother boundaries).\n\n"
+                                    "- **scale** = 1/(n_features * variance). Accounts for feature variance.\n\n"
+                                    "- **auto** = 1/n_features\n\n"
+                                    "*Only applicable to Polynomial, RBF, or Sigmoid kernels.*"
+                                    )
+                                )
+            
+        
         
 
 # Stats section layout

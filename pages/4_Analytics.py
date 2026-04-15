@@ -190,18 +190,18 @@ if 'df' in st.session_state:
         st.sidebar.select_slider(label="t-SNE Perplexity", options=list(range(1,max_perplexity)),value=2, key="tSNE_perplexity")
         st.sidebar.select_slider(label="t-SNE Maximum number of iterations", options=list(range(200,1001)), value=500, key="tSNE_n_iter")
     elif st.session_state.stats_plot_select == "Support Vector Machine":
-        svm_kernel = st.selectbox(label="Select the Kernel for your Support Vector Machine", 
-                                options = ["linear", "rbf", "polynomial", "sigmoid"],
+        svm_kernel = st.sidebar.selectbox(label="Select the Kernel for your Support Vector Machine", 
+                                options = ["Linear", "RBF", "Polynomial", "Sigmoid"],
                                 key='svm_kernel',
                                 help=(
                                     "Defines how the SVM maps data into a feature space.\n\n"
-                                    "- **linear**: no mapping (hyperplane in original space). \n\n"
+                                    "- **Linear**: No mapping (hyperplane in original space). \n\n"
                                     "> $K(\mathbf{x}_i, \mathbf{x}_j) = \mathbf{x}_i \cdot \mathbf{x}_j$ \n\n"
-                                    "- **rbf**: maps to infinite-dimensional space via Gaussian similarity. \n\n"
+                                    "- **RBF**: Maps to infinite-dimensional space via Gaussian similarity. \n\n"
                                     "> $K(\mathbf{x}_i, \mathbf{x}_j) = \exp(-\gamma \|\mathbf{x}_i - \mathbf{x}_j\|^2)$ \n\n"
-                                    "- **poly**: maps via polynomial combinations of features. \n\n"
+                                    "- **Polynomial**: Maps via polynomial combinations of features. \n\n"
                                     "> $K(\mathbf{x}_i, \mathbf{x}_j) = (\gamma \, \mathbf{x}_i \cdot \mathbf{x}_j + coef0)^{degree}$ \n\n"
-                                    "- **sigmoid**: tanh-based mapping, similar to a neural network activation. \n\n "
+                                    "- **Sigmoid**: Tanh-based mapping, similar to a neural network activation. \n\n "
                                     "> $K(\mathbf{x}_i, \mathbf{x}_j) = tanh(\gamma \, \mathbf{x}_i \cdot \mathbf{x}_j + coef0)$ \n\n"
                                     )
                                 )

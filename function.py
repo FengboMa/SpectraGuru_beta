@@ -1389,13 +1389,16 @@ def spectra_derivation(
 
 def lls_transform(y):
     """Log-Log-Square root transform"""
+    import numpy as np
     return np.log(np.log(np.sqrt(np.maximum(y, 0) + 1) + 1) + 1)
 
 def inv_lls_transform(v):
     """Inverse of the LLS transform."""
+    import numpy as np
     return (np.exp(np.exp(v) - 1) - 1)**2 - 1
 
 def polynomial_padding(v, pad_width, window_size=15, poly_deg=1):
+    import numpy as np
     """
     Extends the array using a polynomial fit of the edges.
     
@@ -1428,6 +1431,7 @@ def polynomial_padding(v, pad_width, window_size=15, poly_deg=1):
     return np.concatenate([left_extension, v, right_extension])
 
 def snip_1d(y, iterations=50, use_lls=True, poly_window=15, poly_deg=1, return_baseline=False):
+    import numpy as np
     
     """SNIP baseline correction with polynomial edge padding and optional LLS transform."""
     

@@ -190,10 +190,9 @@ if 'df' in st.session_state:
         st.sidebar.select_slider(label="t-SNE Perplexity", options=list(range(1,max_perplexity)),value=2, key="tSNE_perplexity")
         st.sidebar.select_slider(label="t-SNE Maximum number of iterations", options=list(range(200,1001)), value=500, key="tSNE_n_iter")
     elif st.session_state.stats_plot_select == "Support Vector Machine":
-        st.session_state.svm_c = 1.0
 
         st.sidebar.number_input(label='Regularization Term (C)',min_value= 1, max_value= 100, placeholder='Insert a number',
-                                    key = 'svm_C_auto_num',step = 1, value = 5,
+                                    key = 'svm_C',step = 1, value = 5,
                                     help = "Penalty for misclassified points")
 
 # Stats section layout

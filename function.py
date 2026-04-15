@@ -988,8 +988,8 @@ def svm(df, kernel='Linear', C=1, class_weight='None', degree=None, gamma=None, 
                        degree=degree,
                        gamma=gamma)
     svc.fit(X_train, y_train)
-    y_pred_baseline = svc.predict(X_test)
-    print(f"Baseline linear SVM accuracy: {accuracy_score(y_test, y_pred_baseline):.3f}")
+    y_pred = svc.predict(X_test)
+    print(f"SVM accuracy: {accuracy_score(y_test, y_pred):.3f}")
 
     n_splits = 5
     n_repeats = 10
@@ -1015,54 +1015,103 @@ def svm(df, kernel='Linear', C=1, class_weight='None', degree=None, gamma=None, 
 
 
     # ── Histogram ──
-    scores_df = pd.DataFrame({'score': scores})
-    histogram = alt.Chart(scores_df).mark_bar(
-        opacity=0.7,
-        color='#4C72B0',
-        stroke='black',
-        strokeWidth=0.5
-    ).encode(
-        alt.X('score:Q', bin=alt.Bin(maxbins=15), title='Accuracy'),
-        alt.Y('count()', title='Count')
-    )
+    def build_cv_score_hist():
+        scores_df = pd.DataFrame({'score': scores})
+        histogram = alt.Chart(scores_df).mark_bar(
+            opacity=0.7,
+            color='#4C72B0',
+            stroke='black',
+            strokeWidth=0.5
+        ).encode(
+            alt.X('score:Q', bin=alt.Bin(maxbins=15), title='Accuracy'),
+            alt.Y('count()', title='Count')
+        )
 
-    rules_df = pd.DataFrame([
-        {'value': scores.mean(), 'label': f'Mean = {scores.mean():.3f}',          'color': 'red'},
-        {'value': scores.min(),  'label': f'Min  = {scores.min():.3f}  (R{min_repeat} F{min_fold})', 'color': 'orange'},
-        {'value': scores.max(),  'label': f'Max  = {scores.max():.3f}  (R{max_repeat} F{max_fold})', 'color': 'green'},
-    ])
+        rules_df = pd.DataFrame([
+            {'value': scores.mean(), 'label': f'Mean = {scores.mean():.3f}',          'color': 'red'},
+            {'value': scores.min(),  'label': f'Min  = {scores.min():.3f}  (R{min_repeat} F{min_fold})', 'color': 'orange'},
+            {'value': scores.max(),  'label': f'Max  = {scores.max():.3f}  (R{max_repeat} F{max_fold})', 'color': 'green'},
+        ])
 
-    rules = alt.Chart(rules_df).mark_rule(strokeWidth=2).encode(
-        x='value:Q',
-        color=alt.Color('color:N', scale=None),  # scale=None → use raw hex/named values directly
-        strokeDash=alt.StrokeDash(
-            'label:N',
-            scale=alt.Scale(
-                domain=[f'Mean = {scores.mean():.3f}',
-                        f'Min  = {scores.min():.3f}  (R{min_repeat} F{min_fold})',
-                        f'Max  = {scores.max():.3f}  (R{max_repeat} F{max_fold})'],
-                range=[[4, 4], [2, 4], [2, 4]]   # dashed for mean, dotted for min/max
+        rules = alt.Chart(rules_df).mark_rule(strokeWidth=2).encode(
+            x='value:Q',
+            color=alt.Color('color:N', scale=None),  # scale=None → use raw hex/named values directly
+            strokeDash=alt.StrokeDash(
+                'label:N',
+                scale=alt.Scale(
+                    domain=[f'Mean = {scores.mean():.3f}',
+                            f'Min  = {scores.min():.3f}  (R{min_repeat} F{min_fold})',
+                            f'Max  = {scores.max():.3f}  (R{max_repeat} F{max_fold})'],
+                    range=[[4, 4], [2, 4], [2, 4]]   # dashed for mean, dotted for min/max
+                )
+            ),
+            tooltip=['label:N', 'value:Q']
+        )
+
+        legend_points = alt.Chart(rules_df).mark_point(opacity=0).encode(
+            color=alt.Color(
+                'color:N',
+                scale=None,
+                legend=alt.Legend(title=None)
+            ),
+            tooltip='label:N'
+        )
+
+        chart = (histogram + rules + legend_points).properties(
+            title=alt.Title('Cross-Validation Score Distribution', fontSize=14),
+            width=600,
+            height=250
+        )
+
+        return chart
+    
+    cv_score_hist = build_cv_score_hist()
+
+    def build_confusion_matrix():
+        cm = confusion_matrix(y_test, y_pred)
+        labels = ['Class 1', 'Class 2']
+
+        # Altair needs one row per cell, so we unpack the 2×2 matrix
+        # into (actual, predicted, count) triples
+        cm_df = pd.DataFrame([
+            {'Actual': labels[i], 'Predicted': labels[j], 'Count': cm[i, j]}
+            for i in range(len(labels))
+            for j in range(len(labels))
+        ])
+
+        heatmap = alt.Chart(cm_df).mark_rect().encode(
+            x=alt.X('Predicted:N',
+                    sort=labels,
+                    axis=alt.Axis(title='Predicted', labelAngle=0)),
+            y=alt.Y('Actual:N',
+                    sort=labels[::-1],           # top-left = true positive for class 1
+                    axis=alt.Axis(title='Actual')),
+            color=alt.Color('Count:Q',
+                            scale=alt.Scale(scheme='mako'),
+                            legend=None)
+        )
+
+        # Annotation layer — the count numbers printed on each cell
+        text = alt.Chart(cm_df).mark_text(fontSize=14).encode(
+            x=alt.X('Predicted:N', sort=labels),
+            y=alt.Y('Actual:N',    sort=labels[::-1]),
+            text='Count:Q',
+            color=alt.condition(
+                alt.datum.Count > cm.max() / 2,  # dark background → white text
+                alt.value('white'),
+                alt.value('black')
             )
-        ),
-        tooltip=['label:N', 'value:Q']
-    )
+        )
 
-    legend_points = alt.Chart(rules_df).mark_point(opacity=0).encode(
-        color=alt.Color(
-            'color:N',
-            scale=None,
-            legend=alt.Legend(title=None)
-        ),
-        tooltip='label:N'
-    )
+        chart = (heatmap + text).properties(
+            title=alt.Title('Confusion Matrix', fontSize=14),
+            width=300,
+            height=250
+        )
+        return chart
 
-    chart = (histogram + rules + legend_points).properties(
-        title=alt.Title('Cross-Validation Score Distribution', fontSize=14),
-        width=600,
-        height=250
-    )
+    
 
-    return chart
     
 
 def mixed_gauss_lorentz(x, A, v_g, sigma_g, L, v_l, sigma_l, I_0):

@@ -193,10 +193,10 @@ if 'df' in st.session_state:
         svm_kernel = st.selectbox(label="Select the Kernel for your Support Vector Machine", options = ["rbf", "polynomial", ""])
         st.sidebar.number_input(label='Regularization Term (C)',min_value= 1, max_value= 100, placeholder='Insert a number',
                                     key = 'svm_C', step = 1, value = 5,
-                                    help = ("Penalty for misclassified points. Controls margin width vs misclassification tradeoff.\n"
-                                            "Tradeoff between margin width and misclassification.\n" 
-                                            "Small C → wide margin, tolerates errors. Large C → narrow margin, fits training data tightly (risk of overfitting).\n"
-                                            "Applies to all kernel options"
+                                    help = ("Penalty for misclassified points. Controls margin width vs misclassification tradeoff.\n\n"
+                                            "Tradeoff between margin width and misclassification.\n\n" 
+                                            "**Small** C → wide margin, tolerates errors. **Large** C → narrow margin, fits training data tightly (risk of overfitting).\n\n"
+                                            "Applies to all kernel options. "
                                             )
                                 )
         

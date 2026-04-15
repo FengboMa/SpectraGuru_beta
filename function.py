@@ -1196,6 +1196,12 @@ def svm(df, kernel='Linear', C=1, class_weight='None', degree=None, gamma=None, 
             height=300
         ).resolve_scale(color='shared')   # merges both layers into a single legend
 
+        return chart
+    
+    roc_curve = build_roc_curve()
+
+    return cv_score_hist, confusion_matrix, support_vectors, roc_curve
+
     
 
     

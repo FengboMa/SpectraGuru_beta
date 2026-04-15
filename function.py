@@ -938,6 +938,8 @@ def tsne(df, perplexity=5, n_iter=500, label_df=None):
     )
 
     return tsne_df, tsne_plot
+def svm(df, svm_kernel='Linear', svm_C=5, svm_class_weight='None', svm_degree=2, svm_gamma='Scale', label_df=None):
+    pass
 
 def mixed_gauss_lorentz(x, A, v_g, sigma_g, L, v_l, sigma_l, I_0):
     '''
@@ -1462,3 +1464,4 @@ def snip_1d(y, iterations=50, use_lls=True, poly_window=15, poly_deg=1, return_b
         return baseline
     
     return y - baseline
+

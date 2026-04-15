@@ -1050,3 +1050,11 @@ else:
             st.write("**Support Vector Machine ‑ Beta**")
             temp = st.session_state.temp.drop(columns=['Average'])
             label_df = st.session_state.get('label_df')   # could be None
+            _ = function.svm(temp,
+                             st.session_state.svm_kernel,
+                             st.session_state.svm_C,
+                             st.session_state.svm_class_weight,
+                             st.session_state.svm_degree,
+                             st.session_state.svm_gamma,
+                             label_df
+                             )

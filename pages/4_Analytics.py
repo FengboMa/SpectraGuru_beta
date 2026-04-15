@@ -1046,3 +1046,7 @@ else:
                                     })
 
             st.write(tsne_df)
+        elif st.session_state.stats_plot_select == "Support Vector Machine":
+            st.write("**Support Vector Machine ‑ Beta**")
+            temp = st.session_state.temp.drop(columns=['Average'])
+            label_df = st.session_state.get('label_df')   # could be None

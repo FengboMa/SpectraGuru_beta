@@ -193,7 +193,6 @@ if 'df' in st.session_state:
         svm_kernel = st.sidebar.selectbox(label="Select the Kernel for your Support Vector Machine", 
                                 options = ["Linear", "RBF", "Polynomial", "Sigmoid"],
                                 key='svm_kernel',
-                                value='Linear',
                                 help=(
                                     "Defines how the SVM maps data into a feature space.\n\n"
                                     "- **Linear**: No mapping (hyperplane in original space). \n\n"
@@ -216,7 +215,6 @@ if 'df' in st.session_state:
         
         st.sidebar.selectbox(label='Class Weight',
                                 options = ["None", "Balanced"],
-                                value = "None",
                                 key = 'svm_class_weight',
                                 help = ("Change when class sizes are unequal.\n\n"
                                         "- **None**: Treat all samples equally.\n\n"
@@ -238,7 +236,7 @@ if 'df' in st.session_state:
         if svm_kernel == "Polynomial" or svm_kernel == "RBF" or svm_kernel == "Sigmoid":
             st.sidebar.selectbox(label='Gamma',
                             options = ["Scale", "Auto"],
-                            key = 'svm_gamma', value = 'Scale',
+                            key = 'svm_gamma',
                             help = ("Controls the 'reach' of each training sample.\n\n"
                                     "> High gamma → each sample only influences nearby points (complex, tight boundaries). \n\n"
                                     "> Low gamma → each sample influences a wide area (smoother boundaries).\n\n"

@@ -190,7 +190,21 @@ if 'df' in st.session_state:
         st.sidebar.select_slider(label="t-SNE Perplexity", options=list(range(1,max_perplexity)),value=2, key="tSNE_perplexity")
         st.sidebar.select_slider(label="t-SNE Maximum number of iterations", options=list(range(200,1001)), value=500, key="tSNE_n_iter")
     elif st.session_state.stats_plot_select == "Support Vector Machine":
-        svm_kernel = st.selectbox(label="Select the Kernel for your Support Vector Machine", options = ["rbf", "polynomial", ""])
+        svm_kernel = st.selectbox(label="Select the Kernel for your Support Vector Machine", 
+                                options = ["linear", "rbf", "polynomial", "sigmoid"],
+                                key='svm_kernel',
+                                help=(
+                                    "Defines how the SVM maps data into a feature space.\n\n"
+                                    "- **linear**: no mapping (hyperplane in original space). \n\n"
+                                    "> $K(\mathbf{x}_i, \mathbf{x}_j) = \mathbf{x}_i \cdot \mathbf{x}_j$ \n\n"
+                                    "- **rbf**: maps to infinite-dimensional space via Gaussian similarity. \n\n"
+                                    "> $K(\mathbf{x}_i, \mathbf{x}_j) = \exp(-\gamma \|\mathbf{x}_i - \mathbf{x}_j\|^2)$ \n\n"
+                                    "- **poly**: maps via polynomial combinations of features. \n\n"
+                                    "> $K(\mathbf{x}_i, \mathbf{x}_j) = (\gamma \, \mathbf{x}_i \cdot \mathbf{x}_j + coef0)^{degree}$ \n\n"
+                                    "- **sigmoid**: tanh-based mapping, similar to a neural network activation. \n\n "
+                                    "> $K(\mathbf{x}_i, \mathbf{x}_j) = tanh(\gamma \, \mathbf{x}_i \cdot \mathbf{x}_j + coef0)$ \n\n"
+                                    )
+                                )
         st.sidebar.number_input(label='Regularization Term (C)',min_value= 1, max_value= 100, placeholder='Insert a number',
                                     key = 'svm_C', step = 1, value = 5,
                                     help = ("Penalty for misclassified points. Controls margin width vs misclassification tradeoff.\n\n"

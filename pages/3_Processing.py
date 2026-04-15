@@ -641,10 +641,6 @@ else:
                                 st.session_state.fitting_ranges =cleaned_ranges
                                 # st.write(st.session_state.despike_fitting_ranges)
                                 st.success(f"Saved {len(cleaned_ranges)} valid fitting ranges.")
-            elif st.session_state.baselineremoval_function == "ModPoly":
-                st.session_state.baselineremoval_ModPoly_degree = st.number_input(label="ModPoly Polynomial degree",
-                                                                        min_value=1, max_value = 20, value = 5, 
-                                                                        step = 1, placeholder="Insert a number") 
             elif st.session_state.baselineremoval_function == "SNIP":
                 st.session_state.baselineremoval_SNIP_num_iterations = st.number_input(label="SNIP Iterations",
                                                                             min_value=10, max_value = 200, value = 50, 

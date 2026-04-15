@@ -956,7 +956,7 @@ def svm(df, kernel='Linear', C=1, class_weight='None', degree=None, gamma=None, 
     '''
     import altair as alt
     from sklearn.metrics import (
-        confusion_matrix, classification_report, accuracy_score,
+        confusion_matrix, classification_report, accuracy_score, roc_curve, auc
     )
     from sklearn.preprocessing import StandardScaler
     from sklearn.svm import SVC
@@ -1109,6 +1109,92 @@ def svm(df, kernel='Linear', C=1, class_weight='None', degree=None, gamma=None, 
             height=250
         )
         return chart
+
+    confusion_matrix = build_confusion_matrix()
+
+    def build_support_vector_plot():
+        sv_indices = svc.support_
+        sv_names   = X_train.index[sv_indices]
+
+        print(f"Number of support vectors: {len(sv_indices)}")
+        print(f"Per class: {list(svc.n_support_)}")
+        print(f"Support vectors: {sv_names.tolist()}")
+
+        # ── Reshape both sets from wide to long form ──
+        # df columns are Raman shift values; each row is one spectrum
+        def to_long(source_df, label):
+            long = (source_df
+                    .copy()
+                    .assign(sample=source_df.index)
+                    .melt(id_vars='sample', var_name='raman_shift', value_name='intensity'))
+            long['raman_shift'] = long['raman_shift'].astype(float)
+            long['label'] = label
+            return long
+
+        train_long = to_long(df.loc[X_train.index], 'background')
+        sv_long    = to_long(df.loc[sv_names],              'sv')
+        # ── Background layer — all training spectra in gray ──
+        background = alt.Chart(train_long).mark_line(
+            opacity=0.15,
+            color='gray',
+            strokeWidth=1
+        ).encode(
+            x=alt.X('raman_shift:Q', title='Raman Shift (cm⁻¹)'),
+            y=alt.Y('intensity:Q',   title='Intensity'),
+            detail='sample:N'    # draws one line per sample without creating a legend entry
+        )
+
+        # ── Support vector layer — one color per sample ──
+        sv_lines = alt.Chart(sv_long).mark_line(strokeWidth=2).encode(
+            x=alt.X('raman_shift:Q'),
+            y=alt.Y('intensity:Q'),
+            color=alt.Color('sample:N', legend=alt.Legend(title='Support Vectors')),
+            detail='sample:N'
+        )
+
+        chart = (background + sv_lines).properties(
+            title=alt.Title('Support Vectors Highlighted', fontSize=14),
+            width=800,
+            height=300
+        )
+        return chart
+    
+    support_vectors = build_support_vector_plot()
+
+    def build_roc_curve():
+        y_scores  = svc.decision_function(X_test)
+        fpr, tpr, _ = roc_curve(y_test, y_scores, pos_label=2)
+        auc_score = auc(fpr, tpr)
+
+        # ── ROC curve data ──
+        roc_df = pd.DataFrame({'fpr': fpr, 'tpr': tpr, 'label': f'ROC curve (AUC = {auc_score:.3f})'})
+
+        # ── Diagonal baseline — just two points defining the line ──
+        baseline_df = pd.DataFrame({'fpr': [0, 1], 'tpr': [0, 1], 'label': 'Random classifier'})
+
+        roc_line = alt.Chart(roc_df).mark_line(strokeWidth=2).encode(
+            x=alt.X('fpr:Q', title='False Positive Rate', scale=alt.Scale(domain=[0, 1])),
+            y=alt.Y('tpr:Q', title='True Positive Rate',  scale=alt.Scale(domain=[0, 1])),
+            color=alt.Color('label:N', legend=alt.Legend(
+                title=None,
+                orient='bottom-right'   # closest Altair equivalent of loc='lower right'
+            ))
+        )
+
+        baseline = alt.Chart(baseline_df).mark_line(
+            strokeDash=[6, 4],
+            color='black'
+        ).encode(
+            x='fpr:Q',
+            y='tpr:Q',
+            color=alt.Color('label:N', legend=alt.Legend(title=None, orient='bottom-right'))
+        )
+
+        chart = (roc_line + baseline).properties(
+            title=alt.Title('ROC Curve', fontSize=14),
+            width=350,
+            height=300
+        ).resolve_scale(color='shared')   # merges both layers into a single legend
 
     
 

@@ -1049,12 +1049,39 @@ else:
         elif st.session_state.stats_plot_select == "Support Vector Machine":
             st.write("**Support Vector Machine ‑ Beta**")
             temp = st.session_state.temp.drop(columns=['Average'])
-            label_df = st.session_state.get('label_df')   # could be None
-            _ = function.svm(temp,
-                             st.session_state.svm_kernel,
-                             st.session_state.svm_C,
-                             st.session_state.svm_class_weight,
-                             st.session_state.svm_degree,
-                             st.session_state.svm_gamma,
-                             label_df
-                             )
+
+            label_df = st.session_state.get('label_df')
+
+            if label_df is None:
+                st.warning(
+                    "No label table found in session. "
+                    "Proceeding with default label = 1 for every spectrum."
+                )
+                label_df = pd.DataFrame({
+                    'Spectrum': temp.columns[1:],   # skip RamanShift column
+                    'Label':    1,
+                    'Note':     ' '
+                })
+
+            # ------------------------------------------------------------------
+            # Ensure the first column is named exactly 'Ramanshift'
+            # ------------------------------------------------------------------
+            first_col = label_df.columns[0]
+            if first_col != 'Ramanshift':
+                label_df = label_df.rename(columns={first_col: 'Ramanshift'})
+
+        
+            cv_score_hist, confusion_matrix, support_vectors, roc_curve = function.svm(temp,
+                            st.session_state.svm_kernel,
+                            st.session_state.svm_C,
+                            st.session_state.svm_class_weight,
+                            st.session_state.svm_degree if st.session_state.get('svm_degree') else 0,
+                            st.session_state.svm_gamma if st.session_state.get('svm_gamma') else "scale",
+                            label_df
+                            )
+            st.altair_chart(function.style_altair_chart(cv_score_hist), use_container_width=False)
+        
+            # st.write("SVM classification requires labeled data. Please assign labels to your spectra before running SVM.")
+            
+            
+            

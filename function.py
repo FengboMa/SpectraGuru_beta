@@ -938,7 +938,7 @@ def tsne(df, perplexity=5, n_iter=500, label_df=None):
     )
 
     return tsne_df, tsne_plot
-def svm(df, kernel='Linear', C=1, class_weight='None', degree=None, gamma=None, label_df=None):
+def svm(df, kernel='Linear', C=1, class_weight='None', degree=0, gamma="scale", label_df=None):
     '''
     Support Vector Machine for classification.
 
@@ -973,8 +973,13 @@ def svm(df, kernel='Linear', C=1, class_weight='None', degree=None, gamma=None, 
             "SVM classification requires labeled data. "
             "Please assign labels to your spectra before running SVM."
         )
-    class1 = df.loc[[s for s in df.index if "Class_1" in s]]
-    class2 = df.loc[[s for s in df.index if "Class_2" in s]]
+    # Step 1: Drop non-numeric or irrelevant columns
+    df = df.set_index('Ramanshift').T
+
+    # Step 2: Standardize the data
+    scaler = StandardScaler()
+    df = scaler.fit_transform(df)
+
     X = df
     y = label_df['Label']
 
@@ -1087,7 +1092,7 @@ def svm(df, kernel='Linear', C=1, class_weight='None', degree=None, gamma=None, 
                     sort=labels[::-1],           # top-left = true positive for class 1
                     axis=alt.Axis(title='Actual')),
             color=alt.Color('Count:Q',
-                            scale=alt.Scale(scheme='mako'),
+                            scale=alt.Scale(scheme='bluepurple-6'),
                             legend=None)
         )
 
@@ -1114,7 +1119,8 @@ def svm(df, kernel='Linear', C=1, class_weight='None', degree=None, gamma=None, 
 
     def build_support_vector_plot():
         sv_indices = svc.support_
-        sv_names   = X_train.index[sv_indices]
+        X_train = pd.DataFrame(X_train)
+        sv_names = X_train.index[sv_indices]
 
         print(f"Number of support vectors: {len(sv_indices)}")
         print(f"Per class: {list(svc.n_support_)}")

@@ -738,6 +738,10 @@ else:
                     log.log_function_call("Processing_Baseline_Mod_Poly", f_params={
                         'degree': step_entry["parameters"]["degree"]
                     })
+                elif step_entry["parameters"]["function"] == "SNIP":
+                    log.log_function_call("Processing_Baseline_SNIP", f_params={
+                        'num_iterations': step_entry["parameters"]["num_iterations"]
+                    })
                 else:
                     log.log_function_call("Processing_Baseline_Gaussian_Lorentzian_Fitting", f_params={
                         'fitting_ranges': step_entry["parameters"]["fitting_ranges"]

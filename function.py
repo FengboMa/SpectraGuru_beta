@@ -1389,7 +1389,32 @@ def spectra_derivation(
 #   Distinct: Each peak is separated
 #   Joint: Peaks are paired together
 #   Consecutive: Multiple peaks overlap in a sequence
-def generate_spectra(structure="Distinct", num_spectra=1):
+def generate_spectra(structure="Distinct", num_spectra=1, resolution=1601):
     import pandas as pd
     import numpy as np
-    return pd.DataFrame() # Placeholder return value
+
+    x = np.linspace(400, 2000, resolution)
+    print(x)
+    y = np.zeros_like(x)
+    
+    def gaussian(a, mu, sigma):
+        return a * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
+
+    def add_random_gaussian(y, a_range=(5,100), mu_range=(400,2000), sigma_range=(10,20)):
+        a = np.random.uniform(a_range[0], a_range[1])
+        mu = np.random.uniform(mu_range[0], mu_range[1])
+        sigma = np.random.uniform(sigma_range[0], sigma_range[1])
+        return y + gaussian(a, mu, sigma)
+
+    def add_baseline():
+        pass
+
+    def add_noise():
+        pass
+
+    y = add_random_gaussian(y)
+
+    data = pd.DataFrame(np.array([x,y]).T, columns=["Ramanshift", "Intensity"])
+    print(data)
+
+    return data

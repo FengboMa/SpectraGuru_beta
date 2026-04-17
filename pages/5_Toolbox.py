@@ -52,7 +52,7 @@ if st.session_state.tool_select == "Spectra Simulation":
                             x=alt.X('Ramanshift', title=DEFAULT_X_AXIS_TITLE, type="quantitative"),
                             y=alt.Y('Intensity', title=DEFAULT_Y_AXIS_TITLE, type="quantitative"),
                             color="Sample ID:N",
-                            size=alt.value(1) # Line width
+                            size=alt.value(2) # Line width
                         ).properties(
                             width=1300,
                             height=600,

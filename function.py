@@ -1444,12 +1444,14 @@ def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, st
                     max_high = max(max_high, ex_range[1])
                 index += 1
             if max_high >= range[1]:
+                # TO DO: in this case, recursively call random_exclusive with the excluded ranges halved in size.
                 #print("Exclusion ranges cover the entire spectrum.")
                 return np.random.uniform(range[0], range[1])
             mapped_choice = max_high - random_choice
             return mapped_choice
 
         excluded_ranges = [(wavenumber_range[0], wavenumber_range[0] + BUFFER), (wavenumber_range[1] - BUFFER, wavenumber_range[1])] # This array must remain sorted
+        # TO DO: Remove the initial excluded ranges and simply use the modified range when calling random_exclusive
         for i in range(num_peaks):
             y, a, mu, sigma = add_gaussian(y, np.random.uniform(A_MIN, A_MAX), random_exclusive(wavenumber_range, excluded_ranges), np.random.uniform(SIGMA_MIN, SIGMA_MAX))
             # Determine the range in which new peaks should not appear

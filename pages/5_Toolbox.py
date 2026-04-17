@@ -43,7 +43,31 @@ if st.session_state.tool_select == "Spectra Simulation":
         st.sidebar.number_input("Average Peaks per Region", min_value=1, max_value=10, value=6, key="simulation_average_peaks_per_region_select", help="A region refers to a conjoined series of peaks.")
         st.sidebar.number_input("Per Region Peak Variance", min_value=0, max_value=10, value=2, key="simulation_per_region_peak_variance_select", help="The maximum variation in the number of peaks per region, centered at the 'Average Peaks per Region'.")
         st.sidebar.number_input("Clustering Factor", min_value=0.05, max_value=1.0, value=0.4, step=0.05, key="simulation_consecutive_clustering_factor_select", help="Specifies how closely clustered the peaks should be in each region, with lower values representing closer clustering.")
-
+    
+    # Baseline parameters
+    st.sidebar.toggle("Use Baseline", key="simulation_use_baseline")
+    if st.session_state.simulation_use_baseline:
+        st.sidebar.selectbox("Baseline Type",
+                                options=(
+                                    "Polynomial",
+                                    "Exponential",
+                                    "Gaussian",
+                                    "Sigmoidal"
+                                ),
+                                key="simulation_baseline_select",
+                                help="The shape of the baseline to be used."
+                            )
+        if st.session_state.simulation_baseline_select == "Polynomial":
+            limits = [1.0, 1.0, 1.0, 2.0, 4.0, 40.0]
+            sliders = [st.sidebar.slider(f"a{i}", min_value=-limits[i], max_value=limits[i], value=0.0, step=0.01, format="plain", key=f"simulation_baseline_polynomial_a{i}") for i in range(6)]
+        elif st.session_state.simulation_baseline_select == "Exponential":
+            st.sidebar.slider("Amplitude (a)", min_value=-1.0, max_value=1.0, value=0.0, key="simulation_baseline_exponential_amplitude")
+            st.sidebar.slider("Exponent (b)", min_value=-1.0, max_value=1.0, value=0.0, key="simulation_baseline_exponential_exponent")
+            st.sidebar.slider("Quadratic Term (c)", min_value=-1.0, max_value=1.0, value=0.0, key="simulation_baseline_exponential_quadratic_term")
+            st.sidebar.slider("Constant Term (d)", min_value=-1.0, max_value=1.0, value=0.0, key="simulation_baseline_exponential_constant_term")
+        elif st.session_state.simulation_baseline_select == "Gaussian":
+            pass
+            
     st.sidebar.button("Generate Spectra", key="simulation_button", type="primary")
 
 
@@ -58,25 +82,43 @@ if st.session_state.tool_select == "Spectra Simulation":
             structure = st.session_state.simulation_structure_select
             num_spectra = st.session_state.simulation_batch_size_select
             s_params = {} # Special parameters
-            if st.session_state.simulation_structure_select == "Distinct":
+            if structure == "Distinct":
                 s_params = {
                     "average_num_peaks":st.session_state.simulation_peak_number_select,
                     "peak_num_variance":st.session_state.simulation_peak_number_variance_select,
                     "separation_factor":st.session_state.simulation_separation_factor_select
                 }
-            elif st.session_state.simulation_structure_select == "Joint":
+            elif structure == "Joint":
                 s_params = {
                     "average_num_regions":st.session_state.simulation_region_number_select,
                     "region_num_variance":st.session_state.simulation_region_number_variance_select,
                     "clustering_factor":st.session_state.simulation_joint_clustering_factor_select
                 }
-            elif st.session_state.simulation_structure_select == "Consecutive":
+            elif structure == "Consecutive":
                 s_params = {
                     "average_peaks_per_region":st.session_state.simulation_average_peaks_per_region_select,
                     "per_region_peak_variance":st.session_state.simulation_per_region_peak_variance_select,
                     "clustering_factor":st.session_state.simulation_consecutive_clustering_factor_select
                 }
-            st.session_state.simulation_df = function.generate_spectra(structure=structure, num_spectra=num_spectra, s_params=s_params) # Call generating function
+            use_baseline = st.session_state.simulation_use_baseline
+            baseline_type = st.session_state.simulation_baseline_select
+            b_params = {} # Baseline parameters
+            if use_baseline:
+                if baseline_type == "Polynomial":
+                    for i in range(6):
+                        b_params[f"a{i}"] = st.session_state[f"simulation_baseline_polynomial_a{i}"]
+                elif baseline_type == "Exponential":
+                    pass
+                elif baseline_type == "Gaussian":
+                    pass
+            
+            # Call generating function
+            st.session_state.simulation_df = function.generate_spectra(structure=structure, 
+                                                                       num_spectra=num_spectra, 
+                                                                       s_params=s_params, 
+                                                                       use_baseline=use_baseline, 
+                                                                       baseline_type=baseline_type, 
+                                                                       b_params=b_params)
             log.log_function_call("Toolbox_Spectra_Simulation", f_params={
                 'structure':structure,
                 'num_spectra':num_spectra

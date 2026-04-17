@@ -1389,7 +1389,7 @@ def spectra_derivation(
 #   Distinct: Each peak is separated
 #   Joint: Peaks are paired together
 #   Consecutive: Multiple peaks overlap in a sequence
-def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, structure="Distinct", num_spectra=1):
+def generate_spectra(s_params, b_params, wavenumber_range=(400, 2000), resolution=1601, structure="Distinct", use_baseline=False, baseline_type=None, num_spectra=1):
     import pandas as pd
     import numpy as np
 
@@ -1422,7 +1422,7 @@ def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, st
             return a / (1 + np.exp(-k * (x - x0)))
         
         if type == "Polynomial":
-            a, b, c, d, e, f = (b_params[i] for i in ('a', 'b', 'c', 'd', 'e', 'f'))
+            f, e, d, c, b, a = (b_params[i] for i in [f"a{i}" for i in range(6)])
             y += polynomial(a, b, c, d, e, f)
         elif type == "Exponential":
             a, b, c, d = (b_params[i] for i in ('a', 'b', 'c', 'd'))
@@ -1505,7 +1505,7 @@ def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, st
         print(mu)
 
         for i in range(1, num_peaks):
-            leftmost_peak_center, rightmost_peak_center = np.min(mu[mu != 0]), np.max(mu[mu != 0])
+            leftmost_peak_center, rightmost_peak_center = mu[mu != 0].min(), mu[mu != 0].max()
             print("LPC, RPC", leftmost_peak_center, rightmost_peak_center)
             peak_spawning_range = clip((leftmost_peak_center - 4 * clustering_factor * SIGMA_MAX, rightmost_peak_center + 4 * clustering_factor * SIGMA_MAX), allowed_range)
             print("PSR", peak_spawning_range)
@@ -1575,6 +1575,13 @@ def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, st
             new_ex_range = clip((region_center - 30 * clustering_factor * SIGMA_MAX, region_center + 30 * clustering_factor * SIGMA_MAX), buffered_range)
             # Sort the excluded range by inserting at the correct index
             insert_sort_range(excluded_ranges, new_ex_range)
+    
+    # Normalize y
+    y /= y.max()
+
+    if use_baseline:
+        print("Trying to add baseline")
+        y = add_baseline(y, b_params, baseline_type)
 
     data = pd.DataFrame(np.array([x,y]).T, columns=["Ramanshift", "Intensity"])
     print(data)

@@ -940,8 +940,6 @@ def tsne(df, perplexity=5, n_iter=500, label_df=None):
     return tsne_df, tsne_plot
 def svm(df, test_size, kernel='RBF', C=1, class_weight='None', degree=0, gamma="scale", label_df=None):
     
-    # gamma defaults to auto
-    # Let user alter train test split
     # Add feature log
     # Fix labels_df
     # add classification report
@@ -975,14 +973,14 @@ def svm(df, test_size, kernel='RBF', C=1, class_weight='None', degree=0, gamma="
     from sklearn.model_selection import train_test_split, RepeatedStratifiedKFold, cross_val_score
     from sklearn.pipeline import Pipeline
 
-    if label_df is None:
-        raise ValueError(
-            "SVM classification requires labeled data. "
-            "Please assign labels to your spectra before running SVM."
-        )
-
+    # label_df = df.T['Label'] if 'Label' in df.T.columns else None
+    # print(df.T)
+    
+    print(label_df)
     # ── Prepare data ──
     df_original = df.set_index('Ramanshift').T
+    # Filter label_df to only spectra in current df, then reorder to match
+    label_df = label_df[label_df['Ramanshift'].isin(df_original.index)].set_index('Ramanshift').loc[df_original.index].reset_index()
     X = StandardScaler().fit_transform(df_original)
     y = label_df['Label']
 
@@ -1032,17 +1030,6 @@ def svm(df, test_size, kernel='RBF', C=1, class_weight='None', degree=0, gamma="
         )
     ).properties(width=400, height=400, title='Confusion Matrix')
 
-
-
-
-
-
-
-
-
-
-
-
     # ── Chart 3: Support Vectors ──
     sv_row_idx = idx_train[svc.support_]
     print(f"Number of support vectors: {len(svc.support_)}")
@@ -1072,7 +1059,7 @@ def svm(df, test_size, kernel='RBF', C=1, class_weight='None', degree=0, gamma="
     ).properties(title=alt.Title('Support Vectors Highlighted', fontSize=14), width=800, height=300)
 
     # ── Chart 4: ROC Curve ──
-    fpr, tpr, _ = roc_curve(y_test, svc.decision_function(X_test), pos_label=2)
+    fpr, tpr, _ = roc_curve(y_test, svc.decision_function(X_test), pos_label=None)
     auc_score   = auc(fpr, tpr)
     roc_plot = (
         alt.Chart(pd.DataFrame({'fpr': fpr, 'tpr': tpr, 'label': f'ROC curve (AUC = {auc_score:.3f})'}))

@@ -1058,21 +1058,12 @@ else:
             temp = st.session_state.temp.drop(columns=['Average'])
 
             label_df = st.session_state.get('label_df')
-
             if label_df is None:
-                st.warning(
-                    "No label table found in session. "
-                    "Proceeding with default label = 1 for every spectrum."
+                raise ValueError(
+                    "SVM classification requires labeled data. "
+                    "Please assign labels to your spectra before running SVM."
                 )
-                label_df = pd.DataFrame({
-                    'Spectrum': temp.columns[1:],   # skip RamanShift column
-                    'Label':    1,
-                    'Note':     ' '
-                })
-
-            # ------------------------------------------------------------------
-            # Ensure the first column is named exactly 'Ramanshift'
-            # ------------------------------------------------------------------
+            print(label_df)
             first_col = label_df.columns[0]
             if first_col != 'Ramanshift':
                 label_df = label_df.rename(columns={first_col: 'Ramanshift'})

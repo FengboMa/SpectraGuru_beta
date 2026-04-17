@@ -1389,9 +1389,13 @@ def spectra_derivation(
 #   Distinct: Each peak is separated
 #   Joint: Peaks are paired together
 #   Consecutive: Multiple peaks overlap in a sequence
-def generate_spectra(s_params, structure="Distinct", num_spectra=1, resolution=1601):
+def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, structure="Distinct", num_spectra=1):
     import pandas as pd
     import numpy as np
+
+    A_MIN, A_MAX = 5, 100
+    SIGMA_MIN, SIGMA_MAX = 10, 40
+    BUFFER = 100 # Should be greater than SIGMA_MAX
 
     x = np.linspace(400, 2000, resolution)
     print(x)
@@ -1400,11 +1404,8 @@ def generate_spectra(s_params, structure="Distinct", num_spectra=1, resolution=1
     def gaussian(a, mu, sigma):
         return a * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
 
-    def add_random_gaussian(y, a_range=(5,100), mu_range=(400,2000), sigma_range=(10,40)):
-        a = np.random.uniform(a_range[0], a_range[1])
-        mu = np.random.uniform(mu_range[0], mu_range[1])
-        sigma = np.random.uniform(sigma_range[0], sigma_range[1])
-        return y + gaussian(a, mu, sigma)
+    def add_gaussian(y, a, mu, sigma):
+        return y + gaussian(a, mu, sigma), a, mu, sigma
 
     def add_baseline():
         pass
@@ -1420,8 +1421,19 @@ def generate_spectra(s_params, structure="Distinct", num_spectra=1, resolution=1
 
         print(num_peaks)
 
+        # Uniformly chooses a value within the provided range, but excludes ranges listed as 'excluded ranges'
+        # The excluded ranges should fall within the general range, and should be sorted by the low end of the range
+        def random_exclusive(range, excluded_ranges=[]):
+            total_range_size = range[1] - range[0]
+
+        excluded_ranges = [(wavenumber_range[0], wavenumber_range[0] + BUFFER), (wavenumber_range[1] - BUFFER, wavenumber_range[1])] # Must remain sorted by first value of tuple
         for i in range(num_peaks):
-            y = add_random_gaussian(y)
+            y, a, mu, sigma = add_gaussian(y, np.random.uniform(A_MIN, A_MAX), random_exclusive(wavenumber_range, excluded_ranges), np.random.uniform(SIGMA_MIN, SIGMA_MAX))
+            # Sort the excluded range by inserting at the correct index
+            index = 0
+            while index < len(excluded_ranges) - 1 and excluded_ranges[index][0] < mu - sigma:
+                index += 1
+            excluded_ranges.insert(index, (mu - sigma, mu + sigma))
 
 
     #y = add_random_gaussian(y)

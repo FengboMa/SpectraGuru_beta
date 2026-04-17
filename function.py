@@ -1417,6 +1417,13 @@ def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, st
     def add_noise():
         pass
 
+    # Inserts a new entry to an array of ranges (2-tuples), sorted appropriately.
+    def insert_sort_range(range_array, entry):
+        index = 0
+        while index < len(range_array) and range_array[index][0] < entry[0]:
+            index += 1
+        range_array.insert(index, entry)
+
     # Uniformly chooses a value within the provided range, but excludes ranges listed as 'excluded ranges'
     # The excluded ranges should fall within the general range and be sorted by the low end of the range
     def random_exclusive(range, excluded_ranges=[]):
@@ -1478,10 +1485,7 @@ def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, st
             
             new_ex_range = clip((mu[i] - 2 * clumping_factor * SIGMA_MAX, mu[i] + 2 * clumping_factor * SIGMA_MAX), allowed_range)
             # Sort new excluded range by insertion
-            index = 0
-            while index < len(excluded_ranges) and excluded_ranges[index][0] < new_ex_range[0]:
-                index += 1
-            excluded_ranges.insert(index, new_ex_range)
+            insert_sort_range(excluded_ranges, new_ex_range)
             
         return y, a, mu, sigma
 
@@ -1506,10 +1510,7 @@ def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, st
             #        print("FAIL")
 
             # Sort the excluded range by inserting at the correct index
-            index = 0
-            while index < len(excluded_ranges) and excluded_ranges[index][0] < new_ex_range[0]:
-                index += 1
-            excluded_ranges.insert(index, new_ex_range)
+            insert_sort_range(excluded_ranges, new_ex_range)
             #print(excluded_ranges)
     
     elif structure == "Joint":
@@ -1526,10 +1527,7 @@ def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, st
 
             new_ex_range = clip((region_center - 16 * clumping_factor * SIGMA_MAX, region_center + 16 * clumping_factor * SIGMA_MAX), buffered_range)
             # Sort the excluded range by inserting at the correct index
-            index = 0
-            while index < len(excluded_ranges) and excluded_ranges[index][0] < new_ex_range[0]:
-                index += 1
-            excluded_ranges.insert(index, new_ex_range)
+            insert_sort_range(excluded_ranges, new_ex_range)
 
     elif structure == "Consecutive":
         pass

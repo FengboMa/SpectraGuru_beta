@@ -1416,27 +1416,56 @@ def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, st
     if structure == "Distinct":
         average_num_peaks = s_params['average_num_peaks']
         peak_num_variance = s_params['peak_num_variance']
+        separation_factor = s_params['separation_factor']
         peak_number_range = (max(average_num_peaks - np.floor(peak_num_variance / 2), 1), average_num_peaks + np.ceil(peak_num_variance / 2) + 1)
         num_peaks = np.random.randint(peak_number_range[0], peak_number_range[1])
 
-        print(num_peaks)
+        #print(num_peaks)
 
         # Uniformly chooses a value within the provided range, but excludes ranges listed as 'excluded ranges'
-        # The excluded ranges should fall within the general range, and should be sorted by the low end of the range
+        # The excluded ranges should fall within the general range and be sorted by the low end of the range
         def random_exclusive(range, excluded_ranges=[]):
-            total_range_size = range[1] - range[0]
+            total_exclusion_size = 0
+            max_high = range[0]
+            for ex_range in excluded_ranges:
+                if ex_range[1] > max_high:
+                    total_exclusion_size += ex_range[1] - max(ex_range[0], max_high)
+                    max_high = ex_range[1]
+            
+            random_choice = np.random.uniform(0, range[1] - range[0] - total_exclusion_size)
+            #print(random_choice)
+            max_high = range[0]
+            index = 0
+            while index < len(excluded_ranges) and random_choice >= 0:
+                ex_range = excluded_ranges[index]
+                if ex_range[0] > max_high:
+                    random_choice -= ex_range[0] - max_high
+                if random_choice >= 0:
+                    max_high = max(max_high, ex_range[1])
+                index += 1
+            if max_high >= range[1]:
+                #print("Exclusion ranges cover the entire spectrum.")
+                return np.random.uniform(range[0], range[1])
+            mapped_choice = max_high - random_choice
+            return mapped_choice
 
-        excluded_ranges = [(wavenumber_range[0], wavenumber_range[0] + BUFFER), (wavenumber_range[1] - BUFFER, wavenumber_range[1])] # Must remain sorted by first value of tuple
+        excluded_ranges = [(wavenumber_range[0], wavenumber_range[0] + BUFFER), (wavenumber_range[1] - BUFFER, wavenumber_range[1])] # This array must remain sorted
         for i in range(num_peaks):
             y, a, mu, sigma = add_gaussian(y, np.random.uniform(A_MIN, A_MAX), random_exclusive(wavenumber_range, excluded_ranges), np.random.uniform(SIGMA_MIN, SIGMA_MAX))
+            # Determine the range in which new peaks should not appear
+            low, high = max(mu - separation_factor * SIGMA_MAX, wavenumber_range[0]), min(mu + separation_factor * SIGMA_MAX, wavenumber_range[1])
+
+            #print(mu)
+            #for ex_range in excluded_ranges:
+            #    if ex_range[0] < mu and ex_range[1] > mu:
+            #        print("FAIL")
+
             # Sort the excluded range by inserting at the correct index
             index = 0
-            while index < len(excluded_ranges) - 1 and excluded_ranges[index][0] < mu - sigma:
+            while index < len(excluded_ranges) - 1 and excluded_ranges[index][0] < low:
                 index += 1
-            excluded_ranges.insert(index, (mu - sigma, mu + sigma))
-
-
-    #y = add_random_gaussian(y)
+            excluded_ranges.insert(index, (low, high))
+            #print(excluded_ranges)
 
     data = pd.DataFrame(np.array([x,y]).T, columns=["Ramanshift", "Intensity"])
     print(data)

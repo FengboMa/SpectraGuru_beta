@@ -33,6 +33,7 @@ if st.session_state.tool_select == "Spectra Simulation":
     if st.session_state.simulation_structure_select == "Distinct":
         st.sidebar.number_input("Average Number of Peaks", min_value=1, max_value=20, value=3, key="simulation_peak_number_select")
         st.sidebar.number_input("Peak Number Variance", min_value=0, max_value=10, value=0, help="The maximum variation in the number of peaks, centered at the 'Average Number of Peaks'.", key="simulation_peak_number_variance_select")
+        st.sidebar.number_input("Separation Factor", min_value=1.0, max_value=10.0, value=3.0, step=0.1, help="Specifies the extent to which peak centers should be separated at a minimum. Warning: if set too high, some peaks may be forced to disobey the rule.", key="simulation_separation_factor_select")
     elif st.session_state.simulation_structure_select == "Joint":
         #st.sidebar.selectbox('')
         pass
@@ -57,7 +58,8 @@ if st.session_state.tool_select == "Spectra Simulation":
             if st.session_state.simulation_structure_select == "Distinct":
                 s_params = {
                     "average_num_peaks":st.session_state.simulation_peak_number_select,
-                    "peak_num_variance":st.session_state.simulation_peak_number_variance_select
+                    "peak_num_variance":st.session_state.simulation_peak_number_variance_select,
+                    "separation_factor":st.session_state.simulation_separation_factor_select
                 }
             elif st.session_state.simulation_structure_select == "Joint":
                 s_params = {

@@ -1396,10 +1396,14 @@ def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, st
     A_MIN, A_MAX = 5, 100
     SIGMA_MIN, SIGMA_MAX = 10, 40
     BUFFER = 100 # Should be greater than SIGMA_MAX
+    buffered_range = (wavenumber_range[0] + BUFFER, wavenumber_range[1] - BUFFER)
 
     x = np.linspace(400, 2000, resolution)
     print(x)
     y = np.zeros_like(x)
+
+    def clip(range, allowed_range):
+        return (max(range[0], allowed_range[0]), min(range[1], allowed_range[1]))
     
     def gaussian(a, mu, sigma):
         return a * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
@@ -1413,6 +1417,74 @@ def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, st
     def add_noise():
         pass
 
+    # Uniformly chooses a value within the provided range, but excludes ranges listed as 'excluded ranges'
+    # The excluded ranges should fall within the general range and be sorted by the low end of the range
+    def random_exclusive(range, excluded_ranges=[]):
+        total_exclusion_size = 0
+        max_high = range[0]
+        for ex_range in excluded_ranges:
+            if ex_range[1] > max_high:
+                total_exclusion_size += ex_range[1] - max(ex_range[0], max_high)
+                max_high = ex_range[1]
+        
+        #print("TES", total_exclusion_size)
+        random_choice = np.random.uniform(0, range[1] - range[0] - total_exclusion_size)
+        #print(random_choice)
+        max_high = range[0]
+        index = 0
+        while index < len(excluded_ranges):
+            ex_range = excluded_ranges[index]
+            if ex_range[0] > max_high:
+                random_choice -= ex_range[0] - max_high
+            if random_choice >= 0:
+                max_high = max(max_high, ex_range[1])
+            else:
+                random_choice += ex_range[0] - max_high
+            index += 1
+        if max_high >= range[1]:
+            # Excluded ranges cover the entire spectrum.
+            # Half the size of each excluded range and try again.
+            reduced_excluded_ranges = []
+            for ex_range in excluded_ranges:
+                range_center = (ex_range[1] + ex_range[0]) / 2
+                reduced_ex_range = ((range_center + ex_range[0]) / 2, (range_center + ex_range[1]) / 2)
+                index = 0
+                while index < len(reduced_excluded_ranges) and reduced_excluded_ranges[index][0] < reduced_ex_range[0]:
+                    index += 1
+                reduced_excluded_ranges.insert(index, reduced_ex_range)
+            #print("REXR", reduced_excluded_ranges)
+            return random_exclusive(range, reduced_excluded_ranges)
+        #print("PEAK GENERATED.", max_high + random_choice)
+        return max_high + random_choice
+    
+    # Add a region of peaks clumped together by a clumping factor.
+    def add_region(y, allowed_range, seed, clumping_factor=0.5, num_peaks=2):
+
+        excluded_ranges = []
+
+        a, mu, sigma = np.zeros((3, num_peaks))
+        y, a[0], mu[0], sigma[0] = add_gaussian(y, np.random.uniform(A_MIN, A_MAX), seed, np.random.uniform(SIGMA_MIN, SIGMA_MAX))
+        excluded_ranges.append(clip((mu[0] - 2 * clumping_factor * SIGMA_MAX, mu[0] + 2 * clumping_factor * SIGMA_MAX), allowed_range))
+
+        print(mu)
+
+        for i in range(1, num_peaks):
+            leftmost_peak_center, rightmost_peak_center = np.min(mu[mu != 0]), np.max(mu[mu != 0])
+            print("LPC, RPC", leftmost_peak_center, rightmost_peak_center)
+            peak_spawning_range = clip((leftmost_peak_center - 4 * clumping_factor * SIGMA_MAX, rightmost_peak_center + 4 * clumping_factor * SIGMA_MAX), allowed_range)
+            print("PSR", peak_spawning_range)
+            
+            y, a[i], mu[i], sigma[i] = add_gaussian(y, np.random.uniform(A_MIN, A_MAX), random_exclusive(peak_spawning_range, excluded_ranges), np.random.uniform(SIGMA_MIN, SIGMA_MAX))
+            
+            new_ex_range = clip((mu[i] - 2 * clumping_factor * SIGMA_MAX, mu[i] + 2 * clumping_factor * SIGMA_MAX), allowed_range)
+            # Sort new excluded range by insertion
+            index = 0
+            while index < len(excluded_ranges) and excluded_ranges[index][0] < new_ex_range[0]:
+                index += 1
+            excluded_ranges.insert(index, new_ex_range)
+            
+        return y, a, mu, sigma
+
     if structure == "Distinct":
         average_num_peaks = s_params['average_num_peaks']
         peak_num_variance = s_params['peak_num_variance']
@@ -1422,40 +1494,11 @@ def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, st
 
         #print(num_peaks)
 
-        # Uniformly chooses a value within the provided range, but excludes ranges listed as 'excluded ranges'
-        # The excluded ranges should fall within the general range and be sorted by the low end of the range
-        def random_exclusive(range, excluded_ranges=[]):
-            total_exclusion_size = 0
-            max_high = range[0]
-            for ex_range in excluded_ranges:
-                if ex_range[1] > max_high:
-                    total_exclusion_size += ex_range[1] - max(ex_range[0], max_high)
-                    max_high = ex_range[1]
-            
-            random_choice = np.random.uniform(0, range[1] - range[0] - total_exclusion_size)
-            #print(random_choice)
-            max_high = range[0]
-            index = 0
-            while index < len(excluded_ranges) and random_choice >= 0:
-                ex_range = excluded_ranges[index]
-                if ex_range[0] > max_high:
-                    random_choice -= ex_range[0] - max_high
-                if random_choice >= 0:
-                    max_high = max(max_high, ex_range[1])
-                index += 1
-            if max_high >= range[1]:
-                # TO DO: in this case, recursively call random_exclusive with the excluded ranges halved in size.
-                #print("Exclusion ranges cover the entire spectrum.")
-                return np.random.uniform(range[0], range[1])
-            mapped_choice = max_high - random_choice
-            return mapped_choice
-
-        excluded_ranges = [(wavenumber_range[0], wavenumber_range[0] + BUFFER), (wavenumber_range[1] - BUFFER, wavenumber_range[1])] # This array must remain sorted
-        # TO DO: Remove the initial excluded ranges and simply use the modified range when calling random_exclusive
+        excluded_ranges = [] # This array must remain sorted
         for i in range(num_peaks):
-            y, a, mu, sigma = add_gaussian(y, np.random.uniform(A_MIN, A_MAX), random_exclusive(wavenumber_range, excluded_ranges), np.random.uniform(SIGMA_MIN, SIGMA_MAX))
+            y, a, mu, sigma = add_gaussian(y, np.random.uniform(A_MIN, A_MAX), random_exclusive(buffered_range, excluded_ranges), np.random.uniform(SIGMA_MIN, SIGMA_MAX))
             # Determine the range in which new peaks should not appear
-            low, high = max(mu - separation_factor * SIGMA_MAX, wavenumber_range[0]), min(mu + separation_factor * SIGMA_MAX, wavenumber_range[1])
+            new_ex_range = clip((mu - separation_factor * SIGMA_MAX, mu + separation_factor * SIGMA_MAX), buffered_range)
 
             #print(mu)
             #for ex_range in excluded_ranges:
@@ -1464,10 +1507,32 @@ def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, st
 
             # Sort the excluded range by inserting at the correct index
             index = 0
-            while index < len(excluded_ranges) - 1 and excluded_ranges[index][0] < low:
+            while index < len(excluded_ranges) and excluded_ranges[index][0] < new_ex_range[0]:
                 index += 1
-            excluded_ranges.insert(index, (low, high))
+            excluded_ranges.insert(index, new_ex_range)
             #print(excluded_ranges)
+    
+    elif structure == "Joint":
+        average_num_regions = 3#s_params['average_num_regions']
+        region_num_variance = 0#s_params['region_num_variance']
+        clumping_factor = 0.5#s_params['clumping_factor'] # Determines how closely the peak pairs are joined together
+        region_number_range = (max(average_num_regions - np.floor(region_num_variance / 2), 1), average_num_regions + np.ceil(region_num_variance / 2) + 1)
+        num_regions = np.random.randint(region_number_range[0], region_number_range[1])
+
+        excluded_ranges = []
+        for i in range(num_regions):
+            y, a, mu, sigma = add_region(y, buffered_range, random_exclusive(buffered_range, excluded_ranges), clumping_factor=clumping_factor)
+            region_center = np.average(mu)
+
+            new_ex_range = clip((region_center - 16 * clumping_factor * SIGMA_MAX, region_center + 16 * clumping_factor * SIGMA_MAX), buffered_range)
+            # Sort the excluded range by inserting at the correct index
+            index = 0
+            while index < len(excluded_ranges) and excluded_ranges[index][0] < new_ex_range[0]:
+                index += 1
+            excluded_ranges.insert(index, new_ex_range)
+
+    elif structure == "Consecutive":
+        pass
 
     data = pd.DataFrame(np.array([x,y]).T, columns=["Ramanshift", "Intensity"])
     print(data)

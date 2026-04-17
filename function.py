@@ -1389,7 +1389,7 @@ def spectra_derivation(
 #   Distinct: Each peak is separated
 #   Joint: Peaks are paired together
 #   Consecutive: Multiple peaks overlap in a sequence
-def generate_spectra(structure="Distinct", num_spectra=1, resolution=1601):
+def generate_spectra(s_params, structure="Distinct", num_spectra=1, resolution=1601):
     import pandas as pd
     import numpy as np
 
@@ -1400,7 +1400,7 @@ def generate_spectra(structure="Distinct", num_spectra=1, resolution=1601):
     def gaussian(a, mu, sigma):
         return a * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
 
-    def add_random_gaussian(y, a_range=(5,100), mu_range=(400,2000), sigma_range=(10,20)):
+    def add_random_gaussian(y, a_range=(5,100), mu_range=(400,2000), sigma_range=(10,40)):
         a = np.random.uniform(a_range[0], a_range[1])
         mu = np.random.uniform(mu_range[0], mu_range[1])
         sigma = np.random.uniform(sigma_range[0], sigma_range[1])
@@ -1412,7 +1412,19 @@ def generate_spectra(structure="Distinct", num_spectra=1, resolution=1601):
     def add_noise():
         pass
 
-    y = add_random_gaussian(y)
+    if structure == "Distinct":
+        average_num_peaks = s_params['average_num_peaks']
+        peak_num_variance = s_params['peak_num_variance']
+        peak_number_range = (max(average_num_peaks - np.floor(peak_num_variance / 2), 1), average_num_peaks + np.ceil(peak_num_variance / 2) + 1)
+        num_peaks = np.random.randint(peak_number_range[0], peak_number_range[1])
+
+        print(num_peaks)
+
+        for i in range(num_peaks):
+            y = add_random_gaussian(y)
+
+
+    #y = add_random_gaussian(y)
 
     data = pd.DataFrame(np.array([x,y]).T, columns=["Ramanshift", "Intensity"])
     print(data)

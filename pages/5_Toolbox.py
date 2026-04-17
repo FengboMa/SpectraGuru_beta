@@ -19,7 +19,9 @@ st.sidebar.selectbox('Select Tool',
 
 if st.session_state.tool_select == "Spectra Simulation":
     # Display parameter select interface
-    st.sidebar.selectbox('Select Spectra Structure',
+    st.sidebar.number_input("Number of Spectra to Generate", min_value=1, max_value=50, value=1, key="simulation_batch_size_select")
+    
+    st.sidebar.selectbox("Select Spectra Structure",
                          options=(
                              "Distinct",
                              "Joint",
@@ -27,8 +29,18 @@ if st.session_state.tool_select == "Spectra Simulation":
                          ),
                          help="Distinct: All peaks are separated. Joint: Peaks are joined in pairs. Consecutive: Multiple peaks appear overlapping each other.",
                          key="simulation_structure_select")
-    st.sidebar.number_input('Number of Spectra to generate', min_value=1, max_value=1000, value=1, key="simulation_batch_size_select")
-    st.sidebar.button('Generate Spectra', key="simulation_button", type="primary")
+    # Special parameters
+    if st.session_state.simulation_structure_select == "Distinct":
+        st.sidebar.number_input("Average Number of Peaks", min_value=1, max_value=20, value=3, key="simulation_peak_number_select")
+        st.sidebar.number_input("Peak Number Variance", min_value=0, max_value=10, value=0, help="The maximum variation in the number of peaks, centered at the 'Average Number of Peaks'.", key="simulation_peak_number_variance_select")
+    elif st.session_state.simulation_structure_select == "Joint":
+        #st.sidebar.selectbox('')
+        pass
+    elif st.session_state.simulation_structure_select == "Consecutive":
+        #st.sidebar.selectbox('')
+        pass
+
+    st.sidebar.button("Generate Spectra", key="simulation_button", type="primary")
 
 
 st.write("## Toolbox")
@@ -41,7 +53,21 @@ if st.session_state.tool_select == "Spectra Simulation":
         if st.session_state.simulation_button:
             structure = st.session_state.simulation_structure_select
             num_spectra = st.session_state.simulation_batch_size_select
-            st.session_state.simulation_df = function.generate_spectra(structure, num_spectra)
+            s_params = {} # Special parameters
+            if st.session_state.simulation_structure_select == "Distinct":
+                s_params = {
+                    "average_num_peaks":st.session_state.simulation_peak_number_select,
+                    "peak_num_variance":st.session_state.simulation_peak_number_variance_select
+                }
+            elif st.session_state.simulation_structure_select == "Joint":
+                s_params = {
+
+                }
+            elif st.session_state.simulation_structure_select == "Consecutive":
+                s_params = {
+
+                }
+            st.session_state.simulation_df = function.generate_spectra(structure=structure, num_spectra=num_spectra, s_params=s_params) # Call generating function
             log.log_function_call("Toolbox_Spectra_Simulation", f_params={
                 'structure':structure,
                 'num_spectra':num_spectra

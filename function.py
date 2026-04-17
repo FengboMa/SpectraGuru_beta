@@ -1411,11 +1411,40 @@ def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, st
     def add_gaussian(y, a, mu, sigma):
         return y + gaussian(a, mu, sigma), a, mu, sigma
 
-    def add_baseline():
-        pass
+    def add_baseline(y, b_params, type="Polynomial"):
+        def polynomial(a, b, c, d, e, f):
+            return a*x**5 + b*x**4 + c*x**3 + d*x**1.5 + e*x + f
+        def exponential(a, b, c, d):
+            return a * np.exp(-b * x**2) + c * x**2.2 + d
+        def gaussian_baseline(amp, c, w):
+            amp * np.exp(-((x - c) ** 2) / (2 * w ** 2))
+        def sigmoidal(a, k, x0):
+            return a / (1 + np.exp(-k * (x - x0)))
+        
+        if type == "Polynomial":
+            a, b, c, d, e, f = (b_params[i] for i in ('a', 'b', 'c', 'd', 'e', 'f'))
+            y += polynomial(a, b, c, d, e, f)
+        elif type == "Exponential":
+            a, b, c, d = (b_params[i] for i in ('a', 'b', 'c', 'd'))
+            y += exponential(a, b, c, d)
+        elif type == "Gaussian":
+            amp, c, w = (b_params[i] for i in ('amp', 'c', 'w'))
+            y += gaussian_baseline(amp, c, w)
+        elif type == "Sigmoidal":
+            a, k, x0 = (b_params[i] for i in ('a', 'k', 'x0'))
+            y += sigmoidal(a, k, x0)
+        
+        return y
 
     def add_noise():
         pass
+
+    def random_select_range(average, variance, minimum=1, maximum=None):
+        low = max(average - np.floor(variance / 2), minimum)
+        high = average + np.ceil(variance / 2) + 1
+        if maximum:
+            high = min(high, maximum)
+        return (low, high)
 
     # Inserts a new entry to an array of ranges (2-tuples), sorted appropriately.
     def insert_sort_range(range_array, entry):
@@ -1493,7 +1522,7 @@ def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, st
         average_num_peaks = s_params['average_num_peaks']
         peak_num_variance = s_params['peak_num_variance']
         separation_factor = s_params['separation_factor']
-        peak_number_range = (max(average_num_peaks - np.floor(peak_num_variance / 2), 1), average_num_peaks + np.ceil(peak_num_variance / 2) + 1)
+        peak_number_range = random_select_range(average=average_num_peaks, variance=peak_num_variance, maximum=20)
         num_peaks = np.random.randint(peak_number_range[0], peak_number_range[1])
 
         #print(num_peaks)
@@ -1517,7 +1546,7 @@ def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, st
         average_num_regions = s_params['average_num_regions']
         region_num_variance = s_params['region_num_variance']
         clustering_factor = s_params['clustering_factor'] # Determines how closely the peak pairs are joined together
-        region_number_range = (max(average_num_regions - np.floor(region_num_variance / 2), 1), average_num_regions + np.ceil(region_num_variance / 2) + 1)
+        region_number_range = random_select_range(average=average_num_regions, variance=region_num_variance, maximum=10)
         num_regions = np.random.randint(region_number_range[0], region_number_range[1])
 
         excluded_ranges = []
@@ -1530,19 +1559,20 @@ def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, st
             insert_sort_range(excluded_ranges, new_ex_range)
 
     elif structure == "Consecutive":
-        average_num_regions = 2
-        region_num_variance = 1
         average_peaks_per_region = s_params['average_peaks_per_region']
+        per_region_peak_variance = s_params['per_region_peak_variance']
         clustering_factor = s_params['clustering_factor'] # Determines how closely the peak pairs are joined together
-        region_number_range = (max(average_num_regions - np.floor(region_num_variance / 2), 1), average_num_regions + np.ceil(region_num_variance / 2) + 1)
+        region_number_range = random_select_range(average=2, variance=1)
+        peak_number_range = random_select_range(average=average_peaks_per_region, variance=per_region_peak_variance, maximum=10)
         num_regions = np.random.randint(region_number_range[0], region_number_range[1])
 
         excluded_ranges = []
         for i in range(num_regions):
+            num_peaks = np.random.randint(peak_number_range[0], peak_number_range[1])
             y, a, mu, sigma = add_region(y, buffered_range, random_exclusive(buffered_range, excluded_ranges), clustering_factor=clustering_factor, num_peaks=num_peaks)
             region_center = np.average(mu)
 
-            new_ex_range = clip((region_center - 18 * clustering_factor * SIGMA_MAX, region_center + 18 * clustering_factor * SIGMA_MAX), buffered_range)
+            new_ex_range = clip((region_center - 30 * clustering_factor * SIGMA_MAX, region_center + 30 * clustering_factor * SIGMA_MAX), buffered_range)
             # Sort the excluded range by inserting at the correct index
             insert_sort_range(excluded_ranges, new_ex_range)
 

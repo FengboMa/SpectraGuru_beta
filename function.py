@@ -938,7 +938,20 @@ def tsne(df, perplexity=5, n_iter=500, label_df=None):
     )
 
     return tsne_df, tsne_plot
-def svm(df, kernel='Linear', C=1, class_weight='None', degree=0, gamma="scale", label_df=None):
+def svm(df, test_size, kernel='Linear', C=1, class_weight='None', degree=0, gamma="scale", label_df=None):
+    
+    # kernel default should be rbf
+    # gamma defaults to auto
+    # Let user alter train test split
+    # Add feature log
+    # Fix labels_df
+    # add classification report
+    # add error message to restrict labels to >=2
+    # ensure multi class works
+    # add feature logs
+
+
+
     '''
     Support Vector Machine for classification.
 
@@ -975,9 +988,16 @@ def svm(df, kernel='Linear', C=1, class_weight='None', degree=0, gamma="scale", 
     y = label_df['Label']
 
     indices = np.arange(len(X))
-    X_train, X_test, y_train, y_test, idx_train, idx_test = train_test_split(
-        X, y, indices, test_size=0.2, random_state=42, stratify=y
-    )
+    
+    test_size = test_size / 100 if test_size > 1 else test_size
+    if test_size != 0:
+        X_train, X_test, y_train, y_test, idx_train, idx_test = train_test_split(
+            X, y, indices, test_size=test_size, random_state=42, stratify=y
+        )
+    else:
+        X_train, X_test, y_train, y_test, idx_train, idx_test = X, X, y, y, indices, indices
+    print("Test Size: ", test_size)
+    
 
     # ── Fit ──
     svc = SVC(
@@ -988,85 +1008,42 @@ def svm(df, kernel='Linear', C=1, class_weight='None', degree=0, gamma="scale", 
     y_pred = svc.predict(X_test)
     print(f"SVM accuracy: {accuracy_score(y_test, y_pred):.3f}")
 
-    # ── Cross-validation ──
-    n_splits, n_repeats = 5, 10
-    scores = cross_val_score(
-        Pipeline([('scaler', StandardScaler()), ('svc', svc)]),
-        X, y,
-        cv=RepeatedStratifiedKFold(n_splits=n_splits, n_repeats=n_repeats, random_state=42),
-        scoring='accuracy', n_jobs=-1
+    classes = y.unique()
+    cm = confusion_matrix(y_test, y_pred, labels=classes)
+    cm_df = pd.DataFrame(cm, index=classes, columns=classes).reset_index()
+    cm_df = cm_df.melt(id_vars='index', var_name='Predicted', value_name='Count')
+    cm_df.columns = ['Actual', 'Predicted', 'Count']
+
+    base_cm = alt.Chart(cm_df).encode(
+        x=alt.X('Predicted:N', title='Predicted Label'),
+        y=alt.Y('Actual:N', title='Actual Label')
     )
-
-    min_idx, max_idx = scores.argmin(), scores.argmax()
-    min_fold,   min_repeat = (min_idx % n_splits) + 1, (min_idx // n_splits) + 1
-    max_fold,   max_repeat = (max_idx % n_splits) + 1, (max_idx // n_splits) + 1
-    mean_score, min_score, max_score = scores.mean(), scores.min(), scores.max()
-
-    # ── Chart 1: CV Score Histogram ──
-    rules_df = pd.DataFrame({
-        'value': [mean_score, min_score, max_score],
-        'stat': ['Mean', 'Min', 'Max'],
-        'label': [
-            f'Mean: {mean_score:.3f}',
-            f'Min: {min_score:.3f} (R{min_repeat}, F{min_fold})',
-            f'Max: {max_score:.3f} (R{max_repeat}, F{max_fold})'
-        ],
-        'color': ['#D62728', '#FF9F1C', '#2CA02C']
-    })
-
-    x_scale = alt.Scale(domain=[max(0, min_score - 0.01), min(1.03, max_score + 0.02)])
-
-    cv_score_hist = (
-        alt.Chart(pd.DataFrame({'score': scores}))
-        .mark_bar(color='#4C78A8', opacity=0.65, stroke='#2F2F2F', strokeWidth=0.6)
-        .encode(
-            x=alt.X('score:Q',bin=alt.Bin(maxbins=12),scale=x_scale,axis=alt.Axis(format='.3f', tickCount=7, title='Accuracy')),
-            y=alt.Y('count():Q', title='Count')
-        )
-        + alt.Chart(rules_df).mark_rule(size=2).encode(
-            x=alt.X('value:Q', scale=x_scale),
-            color=alt.Color('color:N', scale=None, legend=None),
-            strokeDash=alt.StrokeDash('stat:N',scale=alt.Scale(domain=['Mean', 'Min', 'Max'], range=[[6, 4], [2, 3], [1, 0]]),legend=None),
-            tooltip=[
-                alt.Tooltip('stat:N', title='Statistic'),
-                alt.Tooltip('label:N', title='Value')
-            ]
-        )
-        + alt.Chart(rules_df).mark_text(align='left', dx=6, dy=-6, fontSize=11, fontWeight='bold'
-        ).encode(x=alt.X('value:Q', scale=x_scale), y=alt.value(18), text='label:N', color=alt.Color('color:N', scale=None, legend=None)
-        )
-    ).properties(title=alt.TitleParams(text='Cross-Validation Score Distribution', fontSize=16, anchor='middle'), width=700, height=320
-    ).configure_view(stroke=None
-    ).configure_axis(labelFontSize=11, titleFontSize=12, grid=True
-    ).configure_title(font='sans-serif')
-
-    # ── Chart 2: Confusion Matrix ──
-    cm = confusion_matrix(y_test, y_pred)
-    labels = ['Class 1', 'Class 2']
-    cm_df = pd.DataFrame([
-        {'Actual': labels[i], 'Predicted': labels[j], 'Count': int(cm[i, j])}
-        for i in range(2) for j in range(2)
-    ])
-    threshold = float(cm.max()) / 2
-    cm_df['TextColor'] = np.where(cm_df['Count'] > threshold, 'white', 'black')
-
-    cm_chart = (
-        alt.Chart(cm_df).mark_rect().encode(
-            x=alt.X('Predicted:N', sort=labels, axis=alt.Axis(title='Predicted', labelAngle=0)),
-            y=alt.Y('Actual:N', sort=labels[::-1], axis=alt.Axis(title='Actual')),
-            color=alt.Color('Count:Q', scale=alt.Scale(scheme='bluepurple'), legend=None)
-        )
-        + alt.Chart(cm_df).mark_text(fontSize=14).encode(
-            x=alt.X('Predicted:N', sort=labels),
-            y=alt.Y('Actual:N', sort=labels[::-1]),
+    cm_plot = (
+        base_cm.mark_rect().encode(
+            color=alt.Color('Count:Q', scale=alt.Scale(scheme='blues'), title='Count'),
+            tooltip=['Actual', 'Predicted', 'Count']
+        ) +
+        base_cm.mark_text(baseline='middle').encode(
             text='Count:Q',
-            color=alt.Color('TextColor:N', scale=None, legend=None)
+            color=alt.condition(
+                alt.datum.Count > int(cm.max() / 2),
+                alt.value('white'),
+                alt.value('black')
+            )
         )
-    ).properties(
-        title='Confusion Matrix',
-        width=300,
-        height=250
-    )
+    ).properties(width=400, height=400, title='Confusion Matrix')
+
+
+
+
+
+
+
+
+
+
+
+
     # ── Chart 3: Support Vectors ──
     sv_row_idx = idx_train[svc.support_]
     print(f"Number of support vectors: {len(svc.support_)}")
@@ -1079,7 +1056,7 @@ def svm(df, kernel='Linear', C=1, class_weight='None', degree=0, gamma="scale", 
                 .assign(raman_shift=lambda d: d['raman_shift'].astype(float),
                         label=label))
 
-    sv_chart = (
+    sv_plot = (
         alt.Chart(to_long(df_original.iloc[idx_train], 'background')).mark_line(
             opacity=0.15, color='gray', strokeWidth=1
         ).encode(
@@ -1098,7 +1075,7 @@ def svm(df, kernel='Linear', C=1, class_weight='None', degree=0, gamma="scale", 
     # ── Chart 4: ROC Curve ──
     fpr, tpr, _ = roc_curve(y_test, svc.decision_function(X_test), pos_label=2)
     auc_score   = auc(fpr, tpr)
-    roc_chart = (
+    roc_plot = (
         alt.Chart(pd.DataFrame({'fpr': fpr, 'tpr': tpr, 'label': f'ROC curve (AUC = {auc_score:.3f})'}))
         .mark_line(strokeWidth=2).encode(
             x=alt.X('fpr:Q', title='False Positive Rate', scale=alt.Scale(domain=[0, 1])),
@@ -1114,7 +1091,7 @@ def svm(df, kernel='Linear', C=1, class_weight='None', degree=0, gamma="scale", 
         title=alt.Title('ROC Curve', fontSize=14), width=350, height=300
     ).resolve_scale(color='shared')
 
-    return cv_score_hist, cm_chart, sv_chart, roc_chart
+    return cm_plot, sv_plot, roc_plot
 
     
 

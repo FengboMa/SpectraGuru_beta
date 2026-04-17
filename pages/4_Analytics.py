@@ -245,6 +245,13 @@ if 'df' in st.session_state:
                                     "*Only applicable to Polynomial, RBF, or Sigmoid kernels.*"
                                     )
                                 )
+        st.sidebar.number_input(label='Test Size (%)', min_value = 0, max_value = 80, placeholder='Insert a number',
+                                    key = 'svm_test_size', step = 10, value = 20,
+                                    help = ("Sets the ratio for train test split.\n\n"
+                                            "Setting to 0% results in training and testing on full dataset\n\n"
+                                            "Suggested: **20**"
+                                            )
+                                )
             
         
         
@@ -1071,7 +1078,8 @@ else:
                 label_df = label_df.rename(columns={first_col: 'Ramanshift'})
 
         
-            svm_cv_score_hist, svm_confusion_matrix, svm_support_vectors, svm_roc_curve = function.svm(temp,
+            svm_confusion_matrix, svm_support_vectors, svm_roc_curve = function.svm(temp,
+                            st.session_state.svm_test_size,
                             st.session_state.svm_kernel,
                             st.session_state.svm_C,
                             st.session_state.svm_class_weight,
@@ -1079,11 +1087,10 @@ else:
                             st.session_state.svm_gamma if st.session_state.get('svm_gamma') else "scale",
                             label_df
                             )
-            st.altair_chart(function.style_altair_chart(svm_cv_score_hist), use_container_width=True)
-            st.altair_chart(function.style_altair_chart(svm_confusion_matrix), use_container_width=True)
+            st.altair_chart(function.style_altair_chart(svm_confusion_matrix), use_container_width=False)
             st.altair_chart(function.style_altair_chart(svm_support_vectors), use_container_width=True)
             st.altair_chart(function.style_altair_chart(svm_roc_curve), use_container_width=False)
-            # st.write("SVM classification requires labeled data. Please assign labels to your spectra before running SVM.")
+            # st.write("SVM classification requires labeled data and atleast two classes. Please assign labels to your spectra before running SVM.")
             
             
             

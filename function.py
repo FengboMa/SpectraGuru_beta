@@ -1058,24 +1058,31 @@ def svm(df, test_size, kernel='RBF', C=1, class_weight='None', degree=0, gamma="
         )
     ).properties(title=alt.Title('Support Vectors Highlighted', fontSize=14), width=800, height=300)
 
-    # ── Chart 4: ROC Curve ──
-    fpr, tpr, _ = roc_curve(y_test, svc.decision_function(X_test), pos_label=None)
-    auc_score   = auc(fpr, tpr)
+    # ── Chart 4: ROC Curve, first two classes only ──
+    roc_classes = svc.classes_[:2]
+    mask = y_test.isin(roc_classes)
+
+    scores = svc.decision_function(X_test)
+    scores = scores if scores.ndim == 1 else scores[:, 1]
+
+    fpr, tpr, _ = roc_curve(y_test[mask], scores[mask], pos_label=roc_classes[1])
+    auc_score = auc(fpr, tpr)
+
+    roc_df = pd.DataFrame({
+        'fpr': fpr,
+        'tpr': tpr,
+        'label': f'{roc_classes[1]} vs {roc_classes[0]} (AUC = {auc_score:.3f})'
+    })
+
     roc_plot = (
-        alt.Chart(pd.DataFrame({'fpr': fpr, 'tpr': tpr, 'label': f'ROC curve (AUC = {auc_score:.3f})'}))
-        .mark_line(strokeWidth=2).encode(
+        alt.Chart(roc_df).mark_line(strokeWidth=2).encode(
             x=alt.X('fpr:Q', title='False Positive Rate', scale=alt.Scale(domain=[0, 1])),
-            y=alt.Y('tpr:Q', title='True Positive Rate',  scale=alt.Scale(domain=[0, 1])),
+            y=alt.Y('tpr:Q', title='True Positive Rate', scale=alt.Scale(domain=[0, 1])),
             color=alt.Color('label:N', legend=alt.Legend(title=None, orient='bottom-right'))
         )
-        + alt.Chart(pd.DataFrame({'fpr': [0, 1], 'tpr': [0, 1], 'label': 'Random classifier'}))
-        .mark_line(strokeDash=[6, 4], color='black').encode(
-            x='fpr:Q', y='tpr:Q',
-            color=alt.Color('label:N', legend=alt.Legend(title=None, orient='bottom-right'))
-        )
-    ).properties(
-        title=alt.Title('ROC Curve', fontSize=14), width=350, height=300
-    ).resolve_scale(color='shared')
+        + alt.Chart(pd.DataFrame({'fpr': [0, 1], 'tpr': [0, 1]}))
+        .mark_line(strokeDash=[6, 4], color='black').encode(x='fpr:Q', y='tpr:Q')
+    ).properties(title=alt.Title('ROC Curve', fontSize=14), width=350, height=300)
 
     return cm_plot, sv_plot, roc_plot
 

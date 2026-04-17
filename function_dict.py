@@ -31,6 +31,7 @@ names = {
     'Analytics_PCA':("PCA", "Principal Component Analysis"),
 
     'Analytics_TSNE':("t-SNE", "t-Distributed Stochastic Neighbor Embedding"),
+    'Analytics_SVM':("SVM", "Support Vector Machine"),
 
 
 
@@ -81,7 +82,7 @@ references = {
     29:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/Principal_Component_Analysis/", "link":True, "doc_page":True, "notes":"PCA doc page"},
 
     30:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/T-SNE/", "link":True, "doc_page":True, "notes":"t-SNE doc page"},
-    31:{"text":"", "link":None, "doc_page":None, "notes":""},
+    31:{"text":"https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html", "link":True, "doc_page":False, "notes":"Scikit-learn SVC documentation"},
     32:{"text":"", "link":None, "doc_page":None, "notes":""},
     33:{"text":"", "link":None, "doc_page":None, "notes":""},
     34:{"text":"", "link":None, "doc_page":None, "notes":""},
@@ -136,4 +137,6 @@ reference_map = {
     'Analytics_PCA':[9,10,29],
 
     'Analytics_TSNE':[9,11,30],
+
 }
+

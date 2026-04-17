@@ -1059,29 +1059,51 @@ else:
 
             label_df = st.session_state.get('label_df')
             if label_df is None:
-                raise ValueError(
+                st.error(
                     "SVM classification requires labeled data. "
                     "Please assign labels to your spectra before running SVM."
                 )
+                st.stop()
             print(label_df)
             first_col = label_df.columns[0]
             if first_col != 'Ramanshift':
                 label_df = label_df.rename(columns={first_col: 'Ramanshift'})
 
-        
-            svm_confusion_matrix, svm_support_vectors, svm_roc_curve = function.svm(temp,
-                            st.session_state.svm_test_size,
-                            st.session_state.svm_kernel,
-                            st.session_state.svm_C,
-                            st.session_state.svm_class_weight,
-                            st.session_state.svm_degree if st.session_state.get('svm_degree') else 0,
-                            st.session_state.svm_gamma if st.session_state.get('svm_gamma') else "scale",
-                            label_df
-                            )
+            svm_degree = st.session_state.svm_degree if st.session_state.get('svm_degree') else 0
+            svm_gamma = st.session_state.svm_gamma if st.session_state.get('svm_gamma') else "scale"
+
+            try:
+                svm_confusion_matrix, svm_support_vectors, svm_roc_curve, svm_classification_report = function.svm(temp,
+                                st.session_state.svm_test_size,
+                                st.session_state.svm_kernel,
+                                st.session_state.svm_C,
+                                st.session_state.svm_class_weight,
+                                svm_degree,
+                                svm_gamma,
+                                label_df
+                                )
+            except ValueError as e:
+                st.error(str(e))
+                st.stop()
+
             st.altair_chart(function.style_altair_chart(svm_confusion_matrix), use_container_width=False)
+            log.log_plot_generated_count()
+
             st.altair_chart(function.style_altair_chart(svm_support_vectors), use_container_width=True)
+            log.log_plot_generated_count()
+
             st.altair_chart(function.style_altair_chart(svm_roc_curve), use_container_width=False)
-            # st.write("SVM classification requires labeled data and atleast two classes. Please assign labels to your spectra before running SVM.")
-            
-            
-            
+            log.log_plot_generated_count()
+
+            st.write("### Classification Report")
+            st.dataframe(svm_classification_report, use_container_width=True)
+
+            log.log_function_call("Analytics_SVM",
+                                    f_params={
+                                        'kernel':st.session_state.svm_kernel,
+                                        'C':st.session_state.svm_C,
+                                        'class_weight':st.session_state.svm_class_weight,
+                                        'degree':svm_degree,
+                                        'gamma':svm_gamma,
+                                        'test_size':st.session_state.svm_test_size
+                                    })

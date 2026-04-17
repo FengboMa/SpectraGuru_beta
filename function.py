@@ -967,7 +967,7 @@ def svm(df, test_size, kernel='RBF', C=1, class_weight='None', degree=0, gamma="
     import altair as alt
     import pandas as pd
     import numpy as np
-    from sklearn.metrics import confusion_matrix, accuracy_score, roc_curve, auc
+    from sklearn.metrics import confusion_matrix, accuracy_score, roc_curve, auc, classification_report
     from sklearn.preprocessing import StandardScaler
     from sklearn.svm import SVC
     from sklearn.model_selection import train_test_split, RepeatedStratifiedKFold, cross_val_score
@@ -983,6 +983,8 @@ def svm(df, test_size, kernel='RBF', C=1, class_weight='None', degree=0, gamma="
     label_df = label_df[label_df['Ramanshift'].isin(df_original.index)].set_index('Ramanshift').loc[df_original.index].reset_index()
     X = StandardScaler().fit_transform(df_original)
     y = label_df['Label']
+    if y.nunique() < 2:
+        raise ValueError("SVM classification requires at least two different labels. Please assign labels from at least two classes before running SVM.")
 
     indices = np.arange(len(X))
     
@@ -1004,6 +1006,8 @@ def svm(df, test_size, kernel='RBF', C=1, class_weight='None', degree=0, gamma="
     svc.fit(X_train, y_train)
     y_pred = svc.predict(X_test)
     print(f"SVM accuracy: {accuracy_score(y_test, y_pred):.3f}")
+    report_df = pd.DataFrame(classification_report(y_test, y_pred, output_dict=True, zero_division=0)).T.reset_index()
+    report_df = report_df.rename(columns={'index': 'Class'})
 
     classes = y.unique()
     cm = confusion_matrix(y_test, y_pred, labels=classes)
@@ -1084,7 +1088,7 @@ def svm(df, test_size, kernel='RBF', C=1, class_weight='None', degree=0, gamma="
         .mark_line(strokeDash=[6, 4], color='black').encode(x='fpr:Q', y='tpr:Q')
     ).properties(title=alt.Title('ROC Curve', fontSize=14), width=350, height=300)
 
-    return cm_plot, sv_plot, roc_plot
+    return cm_plot, sv_plot, roc_plot, report_df
 
     
 

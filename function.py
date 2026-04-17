@@ -1464,26 +1464,26 @@ def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, st
         #print("PEAK GENERATED.", max_high + random_choice)
         return max_high + random_choice
     
-    # Add a region of peaks clumped together by a clumping factor.
-    def add_region(y, allowed_range, seed, clumping_factor=0.5, num_peaks=2):
+    # Add a region of peaks clumped together by a clustering factor.
+    def add_region(y, allowed_range, seed, clustering_factor=0.5, num_peaks=2):
 
         excluded_ranges = []
 
         a, mu, sigma = np.zeros((3, num_peaks))
         y, a[0], mu[0], sigma[0] = add_gaussian(y, np.random.uniform(A_MIN, A_MAX), seed, np.random.uniform(SIGMA_MIN, SIGMA_MAX))
-        excluded_ranges.append(clip((mu[0] - 2 * clumping_factor * SIGMA_MAX, mu[0] + 2 * clumping_factor * SIGMA_MAX), allowed_range))
+        excluded_ranges.append(clip((mu[0] - 2 * clustering_factor * SIGMA_MAX, mu[0] + 2 * clustering_factor * SIGMA_MAX), allowed_range))
 
         print(mu)
 
         for i in range(1, num_peaks):
             leftmost_peak_center, rightmost_peak_center = np.min(mu[mu != 0]), np.max(mu[mu != 0])
             print("LPC, RPC", leftmost_peak_center, rightmost_peak_center)
-            peak_spawning_range = clip((leftmost_peak_center - 4 * clumping_factor * SIGMA_MAX, rightmost_peak_center + 4 * clumping_factor * SIGMA_MAX), allowed_range)
+            peak_spawning_range = clip((leftmost_peak_center - 4 * clustering_factor * SIGMA_MAX, rightmost_peak_center + 4 * clustering_factor * SIGMA_MAX), allowed_range)
             print("PSR", peak_spawning_range)
             
             y, a[i], mu[i], sigma[i] = add_gaussian(y, np.random.uniform(A_MIN, A_MAX), random_exclusive(peak_spawning_range, excluded_ranges), np.random.uniform(SIGMA_MIN, SIGMA_MAX))
             
-            new_ex_range = clip((mu[i] - 2 * clumping_factor * SIGMA_MAX, mu[i] + 2 * clumping_factor * SIGMA_MAX), allowed_range)
+            new_ex_range = clip((mu[i] - 2 * clustering_factor * SIGMA_MAX, mu[i] + 2 * clustering_factor * SIGMA_MAX), allowed_range)
             # Sort new excluded range by insertion
             insert_sort_range(excluded_ranges, new_ex_range)
             
@@ -1514,23 +1514,37 @@ def generate_spectra(s_params, wavenumber_range=(400, 2000), resolution=1601, st
             #print(excluded_ranges)
     
     elif structure == "Joint":
-        average_num_regions = 3#s_params['average_num_regions']
-        region_num_variance = 0#s_params['region_num_variance']
-        clumping_factor = 0.5#s_params['clumping_factor'] # Determines how closely the peak pairs are joined together
+        average_num_regions = s_params['average_num_regions']
+        region_num_variance = s_params['region_num_variance']
+        clustering_factor = s_params['clustering_factor'] # Determines how closely the peak pairs are joined together
         region_number_range = (max(average_num_regions - np.floor(region_num_variance / 2), 1), average_num_regions + np.ceil(region_num_variance / 2) + 1)
         num_regions = np.random.randint(region_number_range[0], region_number_range[1])
 
         excluded_ranges = []
         for i in range(num_regions):
-            y, a, mu, sigma = add_region(y, buffered_range, random_exclusive(buffered_range, excluded_ranges), clumping_factor=clumping_factor)
+            y, a, mu, sigma = add_region(y, buffered_range, random_exclusive(buffered_range, excluded_ranges), clustering_factor=clustering_factor)
             region_center = np.average(mu)
 
-            new_ex_range = clip((region_center - 16 * clumping_factor * SIGMA_MAX, region_center + 16 * clumping_factor * SIGMA_MAX), buffered_range)
+            new_ex_range = clip((region_center - 16 * clustering_factor * SIGMA_MAX, region_center + 16 * clustering_factor * SIGMA_MAX), buffered_range)
             # Sort the excluded range by inserting at the correct index
             insert_sort_range(excluded_ranges, new_ex_range)
 
     elif structure == "Consecutive":
-        pass
+        average_num_regions = 2
+        region_num_variance = 1
+        average_peaks_per_region = s_params['average_peaks_per_region']
+        clustering_factor = s_params['clustering_factor'] # Determines how closely the peak pairs are joined together
+        region_number_range = (max(average_num_regions - np.floor(region_num_variance / 2), 1), average_num_regions + np.ceil(region_num_variance / 2) + 1)
+        num_regions = np.random.randint(region_number_range[0], region_number_range[1])
+
+        excluded_ranges = []
+        for i in range(num_regions):
+            y, a, mu, sigma = add_region(y, buffered_range, random_exclusive(buffered_range, excluded_ranges), clustering_factor=clustering_factor, num_peaks=num_peaks)
+            region_center = np.average(mu)
+
+            new_ex_range = clip((region_center - 18 * clustering_factor * SIGMA_MAX, region_center + 18 * clustering_factor * SIGMA_MAX), buffered_range)
+            # Sort the excluded range by inserting at the correct index
+            insert_sort_range(excluded_ranges, new_ex_range)
 
     data = pd.DataFrame(np.array([x,y]).T, columns=["Ramanshift", "Intensity"])
     print(data)

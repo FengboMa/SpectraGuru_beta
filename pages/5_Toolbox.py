@@ -22,21 +22,23 @@ if st.session_state.tool_select == "Spectra Simulation":
     st.sidebar.number_input("Number of Spectra to Generate", min_value=1, max_value=50, value=1, key="simulation_batch_size_select")
     
     st.sidebar.selectbox("Select Spectra Structure",
-                         options=(
-                             "Distinct",
-                             "Joint",
-                             "Consecutive"
-                         ),
-                         help="Distinct: All peaks are separated. Joint: Peaks are joined in pairs. Consecutive: Multiple peaks appear overlapping each other.",
-                         key="simulation_structure_select")
+                            options=(
+                                "Distinct",
+                                "Joint",
+                                "Consecutive"
+                            ),
+                            key="simulation_structure_select",
+                            help="Distinct: All peaks are separated. Joint: Peaks are joined in pairs. Consecutive: Multiple peaks appear overlapping each other."
+                        )
     # Special parameters
     if st.session_state.simulation_structure_select == "Distinct":
         st.sidebar.number_input("Average Number of Peaks", min_value=1, max_value=20, value=3, key="simulation_peak_number_select")
-        st.sidebar.number_input("Peak Number Variance", min_value=0, max_value=10, value=0, help="The maximum variation in the number of peaks, centered at the 'Average Number of Peaks'.", key="simulation_peak_number_variance_select")
-        st.sidebar.number_input("Separation Factor", min_value=1.0, max_value=10.0, value=3.0, step=0.1, help="Specifies the extent to which peak centers should be separated at a minimum. Warning: if set too high, some peaks may be forced to disobey the rule.", key="simulation_separation_factor_select")
+        st.sidebar.number_input("Peak Number Variance", min_value=0, max_value=10, value=0, key="simulation_peak_number_variance_select", help="The maximum variation in the number of peaks, centered at the 'Average Number of Peaks'.")
+        st.sidebar.number_input("Separation Factor", min_value=1.0, max_value=10.0, value=3.0, step=0.1, key="simulation_separation_factor_select", help="Specifies the extent to which peak centers should be separated at a minimum. Warning: if set too high, some peaks may be forced to disobey the rule.")
     elif st.session_state.simulation_structure_select == "Joint":
-        #st.sidebar.selectbox('')
-        pass
+        st.sidebar.number_input("Average Number of Regions", min_value=1, max_value=10, value=2, key="simulation_region_number_select", help="A region refers to a conjoined pair of peaks.")
+        st.sidebar.number_input("Region Number Variance", min_value=0, max_value=5, value=1, key="simulation_region_number_variance_select", help="The maximum variation in the number of regions, centered at the 'Average Number of Regions'.")
+        st.sidebar.number_input("Clustering Factor", min_value=0.01, max_value=1.0, value=0.5, step=0.05, key="simulation_clustering_factor_select", help="Specifies how closely clustered the peaks should be in each region, with lower values representing closer clustering.")
     elif st.session_state.simulation_structure_select == "Consecutive":
         #st.sidebar.selectbox('')
         pass
@@ -63,7 +65,9 @@ if st.session_state.tool_select == "Spectra Simulation":
                 }
             elif st.session_state.simulation_structure_select == "Joint":
                 s_params = {
-
+                    "average_num_regions":st.session_state.simulation_region_number_select,
+                    "region_num_variance":st.session_state.simulation_region_number_variance_select,
+                    "clustering_factor":st.session_state.simulation_clustering_factor_select
                 }
             elif st.session_state.simulation_structure_select == "Consecutive":
                 s_params = {

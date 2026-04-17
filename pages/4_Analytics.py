@@ -235,13 +235,13 @@ if 'df' in st.session_state:
                                 )
         if svm_kernel == "Polynomial" or svm_kernel == "RBF" or svm_kernel == "Sigmoid":
             st.sidebar.selectbox(label='Gamma',
-                            options = ["Scale", "Auto"],
+                            options = ["Auto", "Scale"],
                             key = 'svm_gamma',
                             help = ("Controls the 'reach' of each training sample.\n\n"
                                     "> High gamma → each sample only influences nearby points (complex, tight boundaries). \n\n"
                                     "> Low gamma → each sample influences a wide area (smoother boundaries).\n\n"
-                                    "- **scale** = 1/(n_features * variance). Accounts for feature variance.\n\n"
                                     "- **auto** = 1/n_features\n\n"
+                                    "- **scale** = 1/(n_features * variance). Accounts for feature variance.\n\n"
                                     "*Only applicable to Polynomial, RBF, or Sigmoid kernels.*"
                                     )
                                 )

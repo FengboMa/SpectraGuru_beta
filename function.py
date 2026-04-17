@@ -938,9 +938,8 @@ def tsne(df, perplexity=5, n_iter=500, label_df=None):
     )
 
     return tsne_df, tsne_plot
-def svm(df, test_size, kernel='Linear', C=1, class_weight='None', degree=0, gamma="scale", label_df=None):
+def svm(df, test_size, kernel='RBF', C=1, class_weight='None', degree=0, gamma="scale", label_df=None):
     
-    # kernel default should be rbf
     # gamma defaults to auto
     # Let user alter train test split
     # Add feature log

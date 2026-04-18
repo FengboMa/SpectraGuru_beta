@@ -89,7 +89,7 @@ if st.session_state.tool_select == "Spectra Simulation":
     use_noise = st.session_state.simulation_use_noise
 
     if use_noise:
-        st.sidebar.slider("Noise Amplifier", min_value=0.01, max_value=5.0, value=1.0, step=0.01, key="simulation_noise_amplifier")
+        st.sidebar.slider("Noise Amplifier", min_value=0.1, max_value=10.0, value=2.0, step=0.01, key="simulation_noise_amplifier")
 
     st.sidebar.button("Generate Spectra", key="simulation_button", type="primary")
 

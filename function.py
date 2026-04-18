@@ -1401,14 +1401,15 @@ def generate_spectra(s_params, b_params,
                      num_spectra=1):
     import pandas as pd
     import numpy as np
+    from itertools import chain
 
-    A_MIN, A_MAX = 5, 100
-    SIGMA_MIN, SIGMA_MAX = 10, 40
+    A_MIN, A_MAX = 5, 100 # Peak amplitude
+    SIGMA_MIN, SIGMA_MAX = 10, 40 # Peak width
     BUFFER = 100 # Should be greater than SIGMA_MAX
     buffered_range = (wavenumber_range[0] + BUFFER, wavenumber_range[1] - BUFFER)
 
     # Establish data shape
-    x = np.linspace(400, 2000, resolution)
+    x = np.linspace(wavenumber_range[0], wavenumber_range[1], resolution)
     y = np.zeros((num_spectra, resolution))
 
     # Cuts off a subrange if it exceeds the allowed range
@@ -1473,42 +1474,37 @@ def generate_spectra(s_params, b_params,
     # Uniformly chooses a value within the provided range, but excludes ranges listed as 'excluded ranges'
     # The excluded ranges should fall within the general range and be sorted by the low end of the range
     def random_exclusive(range, excluded_ranges=[]):
-        total_exclusion_size = 0
-        max_high = range[0]
-        for ex_range in excluded_ranges:
-            if ex_range[1] > max_high:
-                total_exclusion_size += ex_range[1] - max(ex_range[0], max_high)
-                max_high = ex_range[1]
-        
-        #print("TES", total_exclusion_size)
-        random_choice = np.random.uniform(0, range[1] - range[0] - total_exclusion_size)
-        #print(random_choice)
-        max_high = range[0]
-        index, exit_loop = 0, False
-        while index < len(excluded_ranges) and not exit_loop:
-            ex_range = excluded_ranges[index]
+        # Find the valid ranges
+        valid_ranges, total_valid_size, max_high = [], 0, range[0]
+        for ex_range in chain(excluded_ranges, [(range[1], range[1])]):
             if ex_range[0] > max_high:
-                if random_choice < ex_range[0] - max_high:
-                    exit_loop = True
-                else:
-                    random_choice -= ex_range[0] - max_high
-            if not exit_loop:
-                max_high = max(max_high, ex_range[1])
-                index += 1
+                valid_ranges.append((max_high, ex_range[0]))
+                total_valid_size += ex_range[0] - max_high
+            max_high = max(max_high, ex_range[1])
+
+        #print("V", valid_ranges)
         
-        if max_high >= range[1]:
-            # Excluded ranges cover the entire spectrum.
-            # Half the size of each excluded range and try again.
-            reduced_excluded_ranges = []
-            for ex_range in excluded_ranges:
-                range_center = (ex_range[1] + ex_range[0]) / 2
-                reduced_ex_range = ((range_center + ex_range[0]) / 2, (range_center + ex_range[1]) / 2)
-                insert_sort_range(reduced_excluded_ranges, reduced_ex_range)
-            #print("REXR", reduced_excluded_ranges)
-            return random_exclusive(range, reduced_excluded_ranges)
-        #print("PEAK GENERATED.", max_high + random_choice)
-        return max_high + random_choice
-    
+        if total_valid_size > 0:
+            random_choice = np.random.uniform(0, total_valid_size)
+            index, valid_range = 0, valid_ranges[0]
+            valid_range_size = valid_range[1] - valid_range[0]
+            while random_choice > valid_range_size and index + 1 < len(valid_ranges):
+                random_choice -= valid_range_size
+                index += 1
+                valid_range = valid_ranges[index]
+                valid_range_size = valid_range[1] - valid_range[0]
+            #print(valid_range, random_choice)
+            return valid_range[0] + random_choice
+        
+        # Else: excluded ranges cover the entire spectrum
+        # Half the size of each excluded range and try again.
+        reduced_excluded_ranges = []
+        for ex_range in excluded_ranges:
+            range_center = (ex_range[1] + ex_range[0]) / 2
+            reduced_ex_range = ((range_center + ex_range[0]) / 2, (range_center + ex_range[1]) / 2)
+            insert_sort_range(reduced_excluded_ranges, reduced_ex_range)
+        return random_exclusive(range, reduced_excluded_ranges)
+
     # Add a region of peaks clumped together by a clustering factor.
     def add_region(y, allowed_range, seed, clustering_factor=0.5, num_peaks=2):
 

@@ -82,7 +82,14 @@ if st.session_state.tool_select == "Spectra Simulation":
             st.sidebar.slider("Amplitude (a)", min_value=-1.0, max_value=1.0, value=0.5, key="simulation_baseline_sigmoidal_amplitude")
             st.sidebar.slider("Exponent (k)", min_value=-1.0, max_value=1.0, value=0.1, key="simulation_baseline_sigmoidal_exponent")
             st.sidebar.slider("Offset (x0)", min_value=-1.0, max_value=1.0, value=0.0, key="simulation_baseline_sigmoidal_offset")
-            
+    
+    st.sidebar.toggle("Use Noise", key="simulation_use_noise")
+
+    use_noise = st.session_state.simulation_use_noise
+
+    if use_noise:
+        st.sidebar.slider("Noise Amplifier", min_value=0.01, max_value=5.0, value=1.0, step=0.01, key="simulation_noise_amplifier")
+
     st.sidebar.button("Generate Spectra", key="simulation_button", type="primary")
 
 
@@ -107,8 +114,10 @@ if st.session_state.tool_select == "Spectra Simulation":
                 s_params["average_peaks_per_region"] = st.session_state.simulation_average_peaks_per_region_select
                 s_params["per_region_peak_variance"] = st.session_state.simulation_per_region_peak_variance_select
                 s_params["clustering_factor"] = st.session_state.simulation_consecutive_clustering_factor_select
+
             b_params = {} # Baseline parameters
             if use_baseline:
+                baseline_type = st.session_state.simulation_baseline_select
                 if baseline_type == "Polynomial":
                     for i in range(6):
                         b_params[f"a{i}"] = st.session_state[f"simulation_baseline_polynomial_a{i}"]
@@ -129,13 +138,24 @@ if st.session_state.tool_select == "Spectra Simulation":
             # Call generating function
             num_spectra = st.session_state.simulation_batch_size_select
             scale = st.session_state.simulation_scale_select
+
+            noise_amplifier = None
+            if use_noise:
+                noise_amplifier = st.session_state.simulation_noise_amplifier
+
+            baseline_type = None
+            if use_baseline:
+                baseline_type = st.session_state.simulation_baseline_select
+
             st.session_state.simulation_df = function.generate_spectra(structure=structure, 
                                                                        num_spectra=num_spectra, 
                                                                        scale=scale,
                                                                        s_params=s_params, 
                                                                        use_baseline=use_baseline, 
                                                                        baseline_type=baseline_type, 
-                                                                       b_params=b_params)
+                                                                       b_params=b_params,
+                                                                       use_noise=use_noise,
+                                                                       noise_amplifier=noise_amplifier)
             log.log_function_call("Toolbox_Spectra_Simulation", f_params={
                 'structure':structure,
                 'num_spectra':num_spectra

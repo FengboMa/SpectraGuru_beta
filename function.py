@@ -1389,7 +1389,16 @@ def spectra_derivation(
 #   Distinct: Each peak is separated
 #   Joint: Peaks are paired together
 #   Consecutive: Multiple peaks overlap in a sequence
-def generate_spectra(s_params, b_params, wavenumber_range=(400, 2000), resolution=1601, structure="Distinct", use_baseline=False, baseline_type=None, scale=1.0, num_spectra=1):
+def generate_spectra(s_params, b_params, 
+                     wavenumber_range=(400, 2000), 
+                     resolution=1601, 
+                     scale=1.0, 
+                     structure="Distinct", 
+                     use_baseline=False, 
+                     baseline_type=None, 
+                     use_noise=False, 
+                     noise_amplifier=1, 
+                     num_spectra=1):
     import pandas as pd
     import numpy as np
 
@@ -1402,6 +1411,7 @@ def generate_spectra(s_params, b_params, wavenumber_range=(400, 2000), resolutio
     print(x)
     y = np.zeros_like(x)
 
+    # Cut off a subrange if it exceeds the allowed range
     def clip(range, allowed_range):
         return (max(range[0], allowed_range[0]), min(range[1], allowed_range[1]))
     
@@ -1439,8 +1449,9 @@ def generate_spectra(s_params, b_params, wavenumber_range=(400, 2000), resolutio
         
         return y
 
-    def add_noise():
-        pass
+    # Adds Gaussian noise to y
+    def add_noise(y, noise_amplifier=1):
+        return y + np.random.normal(loc=0, scale=0.01*noise_amplifier, size=len(y))
 
     def random_select_range(average, variance, minimum=1, maximum=None):
         low = max(average - np.floor(variance / 2), minimum)
@@ -1585,6 +1596,9 @@ def generate_spectra(s_params, b_params, wavenumber_range=(400, 2000), resolutio
 
     if use_baseline:
         y = add_baseline(y, b_params, baseline_type)
+    
+    if use_noise:
+        y = add_noise(y, noise_amplifier)
     
     # Renormalize
     y -= y.min()

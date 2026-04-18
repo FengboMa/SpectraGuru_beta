@@ -148,21 +148,30 @@ if st.session_state.tool_select == "Spectra Simulation":
                 baseline_type = st.session_state.simulation_baseline_select
 
             st.session_state.simulation_df = function.generate_spectra(structure=structure, 
-                                                                       num_spectra=num_spectra, 
-                                                                       scale=scale,
-                                                                       s_params=s_params, 
-                                                                       use_baseline=use_baseline, 
-                                                                       baseline_type=baseline_type, 
-                                                                       b_params=b_params,
-                                                                       use_noise=use_noise,
-                                                                       noise_amplifier=noise_amplifier)
+                                                                        num_spectra=num_spectra, 
+                                                                        scale=scale,
+                                                                        s_params=s_params, 
+                                                                        use_baseline=use_baseline, 
+                                                                        baseline_type=baseline_type, 
+                                                                        b_params=b_params,
+                                                                        use_noise=use_noise,
+                                                                        noise_amplifier=noise_amplifier)
             log.log_function_call("Toolbox_Spectra_Simulation", f_params={
-                'structure':structure,
-                'num_spectra':num_spectra
-            })
+                                    'structure':structure,
+                                    's_params':s_params,
+                                    'num_spectra':num_spectra,
+                                    'scale':scale,
+                                    'use_baseline':use_baseline,
+                                    'baseline_type':baseline_type,
+                                    'b_params':b_params,
+                                    'use_noise':use_noise,
+                                    'noise_amplifier':noise_amplifier
+                                })
         
         simulation_df = st.session_state.simulation_df
-        simulated_spectra = alt.Chart(simulation_df).mark_line().encode(
+        simulation_df_melted = simulation_df.melt(id_vars="Ramanshift", var_name="Sample ID", value_name="Intensity")
+        print("Melted", simulation_df_melted)
+        simulated_spectra = alt.Chart(simulation_df_melted).mark_line().encode(
                             x=alt.X('Ramanshift', title=DEFAULT_X_AXIS_TITLE, type="quantitative"),
                             y=alt.Y('Intensity', title=DEFAULT_Y_AXIS_TITLE, type="quantitative"),
                             color="Sample ID:N",

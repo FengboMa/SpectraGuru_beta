@@ -1408,9 +1408,7 @@ def generate_spectra(s_params, b_params,
     buffered_range = (wavenumber_range[0] + BUFFER, wavenumber_range[1] - BUFFER)
 
     x = np.linspace(400, 2000, resolution)
-    print(x)
     y = np.zeros((num_spectra, resolution))
-    print("Y",y)
 
     # Cut off a subrange if it exceeds the allowed range
     def clip(range, allowed_range):
@@ -1517,13 +1515,13 @@ def generate_spectra(s_params, b_params,
         y, a[0], mu[0], sigma[0] = add_gaussian(y, np.random.uniform(A_MIN, A_MAX), seed, np.random.uniform(SIGMA_MIN, SIGMA_MAX))
         excluded_ranges.append(clip((mu[0] - 2 * clustering_factor * SIGMA_MAX, mu[0] + 2 * clustering_factor * SIGMA_MAX), allowed_range))
 
-        print(mu)
+        #print(mu)
 
         for i in range(1, num_peaks):
             leftmost_peak_center, rightmost_peak_center = mu[mu != 0].min(), mu[mu != 0].max()
-            print("LPC, RPC", leftmost_peak_center, rightmost_peak_center)
+            #print("LPC, RPC", leftmost_peak_center, rightmost_peak_center)
             peak_spawning_range = clip((leftmost_peak_center - 4 * clustering_factor * SIGMA_MAX, rightmost_peak_center + 4 * clustering_factor * SIGMA_MAX), allowed_range)
-            print("PSR", peak_spawning_range)
+            #print("PSR", peak_spawning_range)
             
             y, a[i], mu[i], sigma[i] = add_gaussian(y, np.random.uniform(A_MIN, A_MAX), random_exclusive(peak_spawning_range, excluded_ranges), np.random.uniform(SIGMA_MIN, SIGMA_MAX))
             
@@ -1620,7 +1618,6 @@ def generate_spectra(s_params, b_params,
         **{f"y{k}": y[k] for k in range(num_spectra)}
     })
 
-    #data = pd.DataFrame(np.array([x,y[1]]).T, columns=["Ramanshift", "Intensity"])
-    print(data)
+    #print(data)
 
     return data

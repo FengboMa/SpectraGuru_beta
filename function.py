@@ -1384,9 +1384,16 @@ def spectra_derivation(
     g["y1"] = y1
     g["y2"] = y2
     return g
+
 # Median filter smoothening function
 def median_filter_spectra (spectra, window_size = 3, padding_method = 'mirror'):
     from scipy.ndimage import median_filter
+    # correct padding_method value to match scipy values
+    # 'constant' uses a default cval of 0
+    if (padding_method == 'edge'):
+        padding_method = 'nearest'
+    elif (padding_method == 'zero'):
+        padding_method = 'constant'
     new_spectra = median_filter (input = spectra, 
                                 size=window_size,
                                 mode=padding_method)

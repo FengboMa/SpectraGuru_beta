@@ -137,8 +137,8 @@ def collect_current_preprocessing_entries():
                 "display_name": "Smoothening",
                 "parameters": {
                     "function": "Median filter",
-                    "window_size": st.session_state.smoothening_act_window_size,
-                    "padding_method": st.session_state.smoothening_act_padding_method
+                    "window_size": st.session_state.smoothening_act_median_filter_window_size,
+                    "padding_method": st.session_state.smoothening_act_median_filter_padding_method
                 }
             })
 
@@ -539,10 +539,17 @@ else:
 
                 Window size must be odd. The max window size is 51, but smaller window sizes may still produce significant distortion and artifacts. Be sure to select an appropriate window size considering the width of features in your spectra.
                 '''
-
-                st.session_state.smoothening_act_window_size = st.number_input(label="Window size",
-                                                min_value = 3, max_value = 51, value = 3,
-                                                step=2, placeholder="Insert a number", help=window_size_help)
+                if ('smoothening_act_median_filter_window_size' not in st.session_state):
+                    st.session_state.smoothening_act_median_filter_window_size = 3
+                def force_odd():
+                    val = st.session_state.smoothening_act_median_filter_window_size
+                    if (val % 2) == 0:
+                        val += 1
+                        st.session_state.smoothening_act_median_filter_window_size = val
+                st.number_input(label="Window size", key = "smoothening_act_median_filter_window_size",
+                                                min_value = 3, max_value = 51,
+                                                step=2, placeholder="Insert a number", help=window_size_help,
+                                                on_change=force_odd)
                 padding_help = '''
                 The padding method parameter specifies the method used to pad the signal before applying the median filter. Padding helps to reduce edge effects and minimize artifacts introduced by the filtering process.
                 
@@ -552,7 +559,7 @@ else:
                 
                 **Zero Padding ('zero'):** Adds zeros to the edges of the signal. May introduce artifacts at the edges.
                 '''
-                st.session_state.smoothening_act_padding_method = st.selectbox(label="Padding method", 
+                st.session_state.smoothening_act_median_filter_padding_method = st.selectbox(label="Padding method", 
                                                 options=["mirror", "edge", "zero"], help=padding_help)
         # Baseline removal
         # st.markdown("**Baseline Removal**")

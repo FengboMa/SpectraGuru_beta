@@ -1412,21 +1412,23 @@ def generate_spectra(s_params, b_params, wavenumber_range=(400, 2000), resolutio
         return y + gaussian(a, mu, sigma), a, mu, sigma
 
     def add_baseline(y, b_params, type="Polynomial"):
+        # Normalize x
+        x_ = 2 * (x - (wavenumber_range[0] + wavenumber_range[1]) / 2) / (wavenumber_range[1] - wavenumber_range[0])
         def polynomial(a, b, c, d, e, f):
-            return a*x**5 + b*x**4 + c*x**3 + d*x**1.5 + e*x + f
-        def exponential(a, b, c, d):
-            return a * np.exp(-b * x**2) + c * x**2.2 + d
+            return a*x_**5 + b*x_**4 + c*x_**3 + d*x_**2 + e*x_ + f
+        def exponential(a, b, c, x0):
+            return a * np.exp(-b * (x_ - x0)**2) + c * (x_ - x0)**2
         def gaussian_baseline(amp, c, w):
-            amp * np.exp(-((x - c) ** 2) / (2 * w ** 2))
+            return amp * np.exp(-((x_ - c) ** 2) / (2 * w ** 2))
         def sigmoidal(a, k, x0):
-            return a / (1 + np.exp(-k * (x - x0)))
+            return a / (1 + np.exp(-k*(30*(x_ - x0))))
         
         if type == "Polynomial":
             f, e, d, c, b, a = (b_params[i] for i in [f"a{i}" for i in range(6)])
             y += polynomial(a, b, c, d, e, f)
         elif type == "Exponential":
-            a, b, c, d = (b_params[i] for i in ('a', 'b', 'c', 'd'))
-            y += exponential(a, b, c, d)
+            a, b, c, x0 = (b_params[i] for i in ('a', 'b', 'c', 'x0'))
+            y += exponential(a, b, c, x0)
         elif type == "Gaussian":
             amp, c, w = (b_params[i] for i in ('amp', 'c', 'w'))
             y += gaussian_baseline(amp, c, w)
@@ -1577,11 +1579,15 @@ def generate_spectra(s_params, b_params, wavenumber_range=(400, 2000), resolutio
             insert_sort_range(excluded_ranges, new_ex_range)
     
     # Normalize y
+    y -= y.min()
     y /= y.max()
 
     if use_baseline:
-        print("Trying to add baseline")
         y = add_baseline(y, b_params, baseline_type)
+    
+    # Renormalize
+    y -= y.min()
+    y /= y.max()
 
     data = pd.DataFrame(np.array([x,y]).T, columns=["Ramanshift", "Intensity"])
     print(data)

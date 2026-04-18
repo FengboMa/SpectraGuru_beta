@@ -539,13 +539,12 @@ else:
 
                 Window size must be odd. The max window size is 51, but smaller window sizes may still produce significant distortion and artifacts. Be sure to select an appropriate window size considering the width of features in your spectra.
                 '''
-                if ('smoothening_act_median_filter_window_size' not in st.session_state):
-                    st.session_state.smoothening_act_median_filter_window_size = 3
                 def force_odd():
                     val = st.session_state.smoothening_act_median_filter_window_size
                     if (val % 2) == 0:
                         val += 1
                         st.session_state.smoothening_act_median_filter_window_size = val
+                # key is explicitly defined so the callback function will work
                 st.number_input(label="Window size", key = "smoothening_act_median_filter_window_size",
                                                 min_value = 3, max_value = 51,
                                                 step=2, placeholder="Insert a number", help=window_size_help,

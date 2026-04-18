@@ -3,6 +3,7 @@ import altair as alt
 import pandas as pd
 import function
 import log_utils as log
+import datetime as dt
 
 function.wide_space_default()
 
@@ -183,3 +184,20 @@ if st.session_state.tool_select == "Spectra Simulation":
                         )
         simulated_spectra = function.style_altair_chart(simulated_spectra)
         st.altair_chart(simulated_spectra, width="content")
+
+        @st.cache_data
+        def download_df(df):
+            return df.to_csv(index = False).encode("utf-8")
+        
+        # st.write(stats_download_df)
+        
+        stats_download_df = download_df(simulation_df)
+        current_time = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+        download_file_name = f"data_Simulated_{current_time}.csv"
+
+        st.download_button(
+            label="Download Simulated data as CSV",
+            data=stats_download_df,
+            file_name=download_file_name,
+            mime="text/csv",
+        )

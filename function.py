@@ -1407,22 +1407,25 @@ def generate_spectra(s_params, b_params,
     BUFFER = 100 # Should be greater than SIGMA_MAX
     buffered_range = (wavenumber_range[0] + BUFFER, wavenumber_range[1] - BUFFER)
 
+    # Establish data shape
     x = np.linspace(400, 2000, resolution)
     y = np.zeros((num_spectra, resolution))
 
-    # Cut off a subrange if it exceeds the allowed range
+    # Cuts off a subrange if it exceeds the allowed range
     def clip(range, allowed_range):
         return (max(range[0], allowed_range[0]), min(range[1], allowed_range[1]))
-    
-    def gaussian(a, mu, sigma):
-        return a * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
 
+    # Adds a Gaussian peak to y
     def add_gaussian(y, a, mu, sigma):
+        def gaussian(a, mu, sigma):
+            return a * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
         return y + gaussian(a, mu, sigma), a, mu, sigma
 
+    # Adds a baseline to y
     def add_baseline(y, b_params, type="Polynomial"):
-        # Normalize x
+        # Normalize x to span [-1, 1]
         x_ = 2 * (x - (wavenumber_range[0] + wavenumber_range[1]) / 2) / (wavenumber_range[1] - wavenumber_range[0])
+
         def polynomial(a, b, c, d, e, f):
             return a*x_**5 + b*x_**4 + c*x_**3 + d*x_**2 + e*x_ + f
         def exponential(a, b, c, x0):
@@ -1450,8 +1453,9 @@ def generate_spectra(s_params, b_params,
 
     # Adds Gaussian noise to y
     def add_noise(y, noise_amplifier=1):
-        return y + np.random.normal(loc=0, scale=0.01*noise_amplifier, size=len(y))
+        return y + np.random.normal(loc=0, scale=0.01*noise_amplifier, size=np.shape(y))
 
+    # Returns an integer range centered at 'average' and with a span equal to 'variance'
     def random_select_range(average, variance, minimum=1, maximum=None):
         low = max(average - np.floor(variance / 2), minimum)
         high = average + np.ceil(variance / 2) + 1
@@ -1480,16 +1484,18 @@ def generate_spectra(s_params, b_params,
         random_choice = np.random.uniform(0, range[1] - range[0] - total_exclusion_size)
         #print(random_choice)
         max_high = range[0]
-        index = 0
-        while index < len(excluded_ranges):
+        index, exit_loop = 0, False
+        while index < len(excluded_ranges) and not exit_loop:
             ex_range = excluded_ranges[index]
             if ex_range[0] > max_high:
-                random_choice -= ex_range[0] - max_high
-            if random_choice >= 0:
+                if random_choice < ex_range[0] - max_high:
+                    exit_loop = True
+                else:
+                    random_choice -= ex_range[0] - max_high
+            if not exit_loop:
                 max_high = max(max_high, ex_range[1])
-            else:
-                random_choice += ex_range[0] - max_high
-            index += 1
+                index += 1
+        
         if max_high >= range[1]:
             # Excluded ranges cover the entire spectrum.
             # Half the size of each excluded range and try again.
@@ -1497,10 +1503,7 @@ def generate_spectra(s_params, b_params,
             for ex_range in excluded_ranges:
                 range_center = (ex_range[1] + ex_range[0]) / 2
                 reduced_ex_range = ((range_center + ex_range[0]) / 2, (range_center + ex_range[1]) / 2)
-                index = 0
-                while index < len(reduced_excluded_ranges) and reduced_excluded_ranges[index][0] < reduced_ex_range[0]:
-                    index += 1
-                reduced_excluded_ranges.insert(index, reduced_ex_range)
+                insert_sort_range(reduced_excluded_ranges, reduced_ex_range)
             #print("REXR", reduced_excluded_ranges)
             return random_exclusive(range, reduced_excluded_ranges)
         #print("PEAK GENERATED.", max_high + random_choice)
@@ -1532,11 +1535,11 @@ def generate_spectra(s_params, b_params,
         return y, a, mu, sigma
 
     if structure == "Distinct":
+        # Extract special parameters
         average_num_peaks = s_params['average_num_peaks']
         peak_num_variance = s_params['peak_num_variance']
         separation_factor = s_params['separation_factor']
         peak_number_range = random_select_range(average=average_num_peaks, variance=peak_num_variance, maximum=20)
-        
         
         for k in range(num_spectra):
             num_peaks = np.random.randint(peak_number_range[0], peak_number_range[1])
@@ -1559,11 +1562,11 @@ def generate_spectra(s_params, b_params,
                 #print(excluded_ranges)
     
     elif structure == "Joint":
+        # Extract special parameters
         average_num_regions = s_params['average_num_regions']
         region_num_variance = s_params['region_num_variance']
         clustering_factor = s_params['clustering_factor'] # Determines how closely the peak pairs are joined together
         region_number_range = random_select_range(average=average_num_regions, variance=region_num_variance, maximum=10)
-        
         
         for k in range(num_spectra):
             num_regions = np.random.randint(region_number_range[0], region_number_range[1])
@@ -1578,6 +1581,7 @@ def generate_spectra(s_params, b_params,
                 insert_sort_range(excluded_ranges, new_ex_range)
 
     elif structure == "Consecutive":
+        # Extract special parameters
         average_peaks_per_region = s_params['average_peaks_per_region']
         per_region_peak_variance = s_params['per_region_peak_variance']
         clustering_factor = s_params['clustering_factor'] # Determines how closely the peak pairs are joined together
@@ -1605,8 +1609,7 @@ def generate_spectra(s_params, b_params,
         y = add_baseline(y, b_params, baseline_type)
     
     if use_noise:
-        for k in range(num_spectra):
-            y[k] = add_noise(y[k], noise_amplifier)
+        y = add_noise(y, noise_amplifier)
     
     # Renormalize
     y -= y.min()

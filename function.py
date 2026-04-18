@@ -1389,7 +1389,7 @@ def spectra_derivation(
 #   Distinct: Each peak is separated
 #   Joint: Peaks are paired together
 #   Consecutive: Multiple peaks overlap in a sequence
-def generate_spectra(s_params, b_params, wavenumber_range=(400, 2000), resolution=1601, structure="Distinct", use_baseline=False, baseline_type=None, num_spectra=1):
+def generate_spectra(s_params, b_params, wavenumber_range=(400, 2000), resolution=1601, structure="Distinct", use_baseline=False, baseline_type=None, scale=1.0, num_spectra=1):
     import pandas as pd
     import numpy as np
 
@@ -1423,6 +1423,7 @@ def generate_spectra(s_params, b_params, wavenumber_range=(400, 2000), resolutio
         def sigmoidal(a, k, x0):
             return a / (1 + np.exp(-k*(30*(x_ - x0))))
         
+        # Extract parameters
         if type == "Polynomial":
             f, e, d, c, b, a = (b_params[i] for i in [f"a{i}" for i in range(6)])
             y += polynomial(a, b, c, d, e, f)
@@ -1588,6 +1589,7 @@ def generate_spectra(s_params, b_params, wavenumber_range=(400, 2000), resolutio
     # Renormalize
     y -= y.min()
     y /= y.max()
+    y *= scale
 
     data = pd.DataFrame(np.array([x,y]).T, columns=["Ramanshift", "Intensity"])
     print(data)

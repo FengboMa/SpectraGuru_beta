@@ -20,6 +20,7 @@ st.sidebar.selectbox('Select Tool',
 if st.session_state.tool_select == "Spectra Simulation":
     # Display parameter select interface
     st.sidebar.number_input("Number of Spectra to Generate", min_value=1, max_value=50, value=1, key="simulation_batch_size_select")
+    st.sidebar.number_input("Scale", min_value=0.01, max_value=10000.0, value=1.0, step=1.0, key="simulation_scale_select")
     
     st.sidebar.selectbox("Select Spectra Structure",
                             options=(
@@ -69,17 +70,17 @@ if st.session_state.tool_select == "Spectra Simulation":
         if baseline_type == "Polynomial":
             sliders = [st.sidebar.slider(f"a{i}", min_value=-1.0, max_value=1.0, value=0.0, step=0.01, key=f"simulation_baseline_polynomial_a{i}") for i in range(6)]
         elif baseline_type == "Exponential":
-            st.sidebar.slider("Amplitude (a)", min_value=-2.0, max_value=2.0, value=0.0, key="simulation_baseline_exponential_amplitude")
-            st.sidebar.slider("Exponent (b)", min_value=-1.0, max_value=1.0, value=0.0, key="simulation_baseline_exponential_exponent")
+            st.sidebar.slider("Amplitude (a)", min_value=-2.0, max_value=2.0, value=1.0, key="simulation_baseline_exponential_amplitude")
+            st.sidebar.slider("Exponent (b)", min_value=-1.0, max_value=1.0, value=-0.25, key="simulation_baseline_exponential_exponent")
             st.sidebar.slider("Quadratic Term (c)", min_value=-1.0, max_value=1.0, value=0.0, key="simulation_baseline_exponential_quadratic_term")
-            st.sidebar.slider("Offset (x0)", min_value=-1.0, max_value=1.0, value=0.0, key="simulation_baseline_exponential_offset")
+            st.sidebar.slider("Offset (x0)", min_value=-1.0, max_value=1.0, value=-0.5, key="simulation_baseline_exponential_offset")
         elif baseline_type == "Gaussian":
-            st.sidebar.slider("Amplitude (a)", min_value=-1.0, max_value=1.0, value=0.0, key="simulation_baseline_gaussian_amplitude")
+            st.sidebar.slider("Amplitude (a)", min_value=-1.0, max_value=1.0, value=0.5, key="simulation_baseline_gaussian_amplitude")
             st.sidebar.slider("Center (mu)", min_value=-1.0, max_value=1.0, value=0.0, key="simulation_baseline_gaussian_center")
             st.sidebar.slider("Width (sigma)", min_value=0.1, max_value=1.0, value=0.5, key="simulation_baseline_gaussian_width")
         elif baseline_type == "Sigmoidal":
-            st.sidebar.slider("Amplitude (a)", min_value=-1.0, max_value=1.0, value=0.0, key="simulation_baseline_sigmoidal_amplitude")
-            st.sidebar.slider("Exponent (k)", min_value=-1.0, max_value=1.0, value=0.0, key="simulation_baseline_sigmoidal_exponent")
+            st.sidebar.slider("Amplitude (a)", min_value=-1.0, max_value=1.0, value=0.5, key="simulation_baseline_sigmoidal_amplitude")
+            st.sidebar.slider("Exponent (k)", min_value=-1.0, max_value=1.0, value=0.1, key="simulation_baseline_sigmoidal_exponent")
             st.sidebar.slider("Offset (x0)", min_value=-1.0, max_value=1.0, value=0.0, key="simulation_baseline_sigmoidal_offset")
             
     st.sidebar.button("Generate Spectra", key="simulation_button", type="primary")
@@ -127,8 +128,10 @@ if st.session_state.tool_select == "Spectra Simulation":
             
             # Call generating function
             num_spectra = st.session_state.simulation_batch_size_select
+            scale = st.session_state.simulation_scale_select
             st.session_state.simulation_df = function.generate_spectra(structure=structure, 
                                                                        num_spectra=num_spectra, 
+                                                                       scale=scale,
                                                                        s_params=s_params, 
                                                                        use_baseline=use_baseline, 
                                                                        baseline_type=baseline_type, 

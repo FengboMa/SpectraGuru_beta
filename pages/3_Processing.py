@@ -165,6 +165,17 @@ def collect_current_preprocessing_entries():
                     "fitting_ranges": st.session_state.fitting_ranges
                 }
             })
+        if st.session_state.baselineremoval_function == "ALS":
+            run_log_entries.append({
+                "step": "baseline_removal",
+                "display_name": "Baseline Removal",
+                "parameters": {
+                    "function": "ALS",
+                    "lambda": st.session_state.baselineremoval_ALS_lambda,
+                    "p": st.session_state.baselineremoval_ALS_p,
+                    "d": st.session_state.baselineremoval_ALS_d
+                }
+            })
 
     if st.session_state.normalization_act:
         run_log_entries.append({
@@ -276,6 +287,20 @@ def apply_preprocessing_step(df, step_entry):
                     fitting_ranges=params["fitting_ranges"]
                 )
             )
+        elif params["function"] == "ALS":
+            wavenumber = result_df.iloc[:, 0].values
+            for col_name in result_df.columns[1:]:
+                single_spectrum_df = pd.DataFrame({
+                    "Ramanshift": wavenumber,
+                    "Intensity": result_df[col_name].values
+                }).reset_index(drop=True)
+                corrected = function.als_baseline_removal(
+                    single_spectrum_df,
+                    lam=params["lambda"],
+                    p=params["p"],
+                    d=params["d"]
+                ).reset_index(drop=True)
+                result_df[col_name] = corrected["Intensity"].values
         return result_df, remove_outliers_log
 
     if step == "normalization":
@@ -528,7 +553,7 @@ else:
         
         if baselineremoval_act:
             # Add more functions to this selectbox if needed
-            st.session_state.baselineremoval_function = st.selectbox(label="Select your baseline removal function",  options=["airPLS", "ModPoly","Gaussian-Lorentzian Fitting"])
+            st.session_state.baselineremoval_function = st.selectbox(label="Select your baseline removal function",  options=["airPLS", "ModPoly","Gaussian-Lorentzian Fitting","ALS"])
             
             if st.session_state.baselineremoval_function == "airPLS":
                 st.session_state.baselineremoval_airPLS_lambda = st.number_input(label="AirPLS lambda", help="The larger lambda is,  the smoother the resulting background, z.",
@@ -620,6 +645,24 @@ else:
                                 st.session_state.fitting_ranges =cleaned_ranges
                                 # st.write(st.session_state.despike_fitting_ranges)
                                 st.success(f"Saved {len(cleaned_ranges)} valid fitting ranges.")
+            elif st.session_state.baselineremoval_function == "ALS":
+                st.session_state.baselineremoval_ALS_lambda = st.number_input(
+                    label="ALS lambda (smoothness)",
+                    help="Smoothness penalty λ. Larger values produce a smoother baseline. Typical range: 1e4 – 1e9.",
+                    min_value=1.0, max_value=1e10, value=1e7,
+                    step=1e4, format="%.0f", placeholder="Insert a number")
+
+                st.session_state.baselineremoval_ALS_p = st.number_input(
+                    label="ALS asymmetry (p)",
+                    help="Asymmetry parameter. Smaller values push the baseline lower beneath peaks. Typical range: 1e-4 – 1e-2.",
+                    min_value=0.000001, max_value=0.999999, value=0.001,
+                    step=0.0001, format="%.6f", placeholder="Insert a number")
+
+                st.session_state.baselineremoval_ALS_d = st.number_input(
+                    label="ALS difference order (d)",
+                    help="Order of the finite-difference penalty. d=1 penalises slope, d=2 penalises curvature, d=3 penalises jerk.",
+                    min_value=1, max_value=3, value=2,
+                    step=1, placeholder="Insert a number")
         # Normalization
         # st.markdown("**Normalization**")
         
@@ -713,9 +756,15 @@ else:
                     log.log_function_call("Processing_Baseline_Mod_Poly", f_params={
                         'degree': step_entry["parameters"]["degree"]
                     })
-                else:
+                elif step_entry["parameters"]["function"] == "Gaussian-Lorentzian Fitting":
                     log.log_function_call("Processing_Baseline_Gaussian_Lorentzian_Fitting", f_params={
                         'fitting_ranges': step_entry["parameters"]["fitting_ranges"]
+                    })
+                elif step_entry["parameters"]["function"] == "ALS":
+                    log.log_function_call("Processing_Baseline_ALS", f_params={
+                        'lambda': step_entry["parameters"]["lambda"],
+                        'p': step_entry["parameters"]["p"],
+                        'd': step_entry["parameters"]["d"]
                     })
             elif step_entry["step"] == "normalization":
                 if step_entry["parameters"]["function"] == "Normalize by area":

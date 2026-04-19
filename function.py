@@ -1384,3 +1384,122 @@ def spectra_derivation(
     g["y1"] = y1
     g["y2"] = y2
     return g
+
+def als_baseline_removal(
+    group: "pd.DataFrame",
+    lam: float = 1e7,
+    p: float = 0.001,
+    d: int = 2,
+    max_iter: int = 50,
+    tol: float = 0.0,
+) -> "pd.DataFrame":
+    """
+    Asymmetric Least Squares (ALS) baseline removal for a single spectrum
+    group (per Sample ID).
+
+    Estimates a smooth baseline using the Eilers (2004) asymmetric
+    least-squares method and subtracts it from the raw intensity to
+    produce a baseline-corrected spectrum.
+
+    The algorithm minimises:
+        Q = Σ wᵢ(yᵢ − zᵢ)² + λ Σ (Δᵈzᵢ)²
+    where weights are updated asymmetrically each iteration so that
+    points above the current estimate (likely peaks) are down-weighted.
+
+    Parameters
+    ----------
+    group : pd.DataFrame
+        Columns must include 'Ramanshift' and 'Intensity' for one
+        Sample ID.
+    lam : float, optional
+        Smoothness penalty λ (default 1e7). Larger → smoother baseline.
+        Typical range: 1e4 – 1e9.
+    p : float, optional
+        Asymmetry parameter (default 0.001). Must be in (0, 1).
+        Smaller → baseline sinks lower beneath peaks.
+        Typical range: 1e-4 – 1e-2.
+    d : int, optional
+        Order of the finite-difference penalty (default 2).
+        d=1 penalises slope; d=2 penalises curvature; d=3 penalises jerk.
+    max_iter : int, optional
+        Maximum number of ALS iterations (default 50).
+    tol : float, optional
+        Convergence tolerance on total weight change (default 0.0 =
+        iterate until weights are exactly unchanged, matching the
+        original MATLAB implementation).
+
+    Returns
+    -------
+    pd.DataFrame
+        Copy of input (sorted by Ramanshift) with two new columns:
+        'baseline'  – the estimated ALS baseline,
+        'Intensity' – overwritten with the baseline-corrected signal.
+
+    References
+    ----------
+    Eilers, P. H. C. (2004). "Parametric Time Warping."
+        Analytical Chemistry, 76(2), 404–411.
+    Eilers, P. H. C. & Boelens, H. F. M. (2005). "Baseline Correction
+        with Asymmetric Least Squares Smoothing." Unpublished manuscript.
+    """
+
+    import numpy as np
+    import pandas as pd
+    from scipy import sparse
+    from scipy.sparse.linalg import spsolve
+
+    # ── helpers (local so the function is fully self-contained) ──────
+    def _diff_matrix(m: int, d: int) -> sparse.csc_matrix:
+        """d-th order sparse difference matrix of size (m-d, m)."""
+        E = sparse.eye(m, format="csc")
+        D = E.copy()
+        for _ in range(d):
+            r = D.shape[0]
+            D = D[1:, :] - D[: r - 1, :]
+        return D.tocsc()
+
+    def _asysm(
+        y: np.ndarray,
+        lam: float,
+        p: float,
+        d: int,
+        max_iter: int,
+        tol: float,
+    ) -> np.ndarray:
+        """Core ALS iteration (Eilers 2004)."""
+        m = len(y)
+        D = _diff_matrix(m, d)
+        DtD = lam * D.T.dot(D)
+        w = np.ones(m)
+        z = np.zeros(m)
+        for _ in range(1, max_iter + 1):
+            W = sparse.diags(w, 0, shape=(m, m), format="csc")
+            C = W + DtD
+            z = spsolve(C, W.dot(y))
+            w_new = p * (y > z).astype(float) + (1 - p) * (y <= z).astype(float)
+            if np.sum(np.abs(w_new - w)) <= tol:
+                break
+            w = w_new
+        return z
+
+    # ── prepare data ─────────────────────────────────────────────────
+    g = group.sort_values("Ramanshift").copy()
+    y = g["Intensity"].to_numpy(dtype=float)
+
+    n = len(y)
+    if n < 5:
+        g["baseline"] = np.nan
+        return g
+
+    # ── validate parameters ──────────────────────────────────────────
+    lam = float(max(lam, 1.0))
+    p = float(np.clip(p, 1e-6, 1.0 - 1e-6))
+    d = int(np.clip(d, 1, 3))
+    max_iter = int(max(max_iter, 1))
+
+    # ── estimate and subtract baseline ───────────────────────────────
+    baseline = _asysm(y, lam=lam, p=p, d=d, max_iter=max_iter, tol=tol)
+
+    g["baseline"] = baseline
+    g["Intensity"] = y - baseline
+    return g

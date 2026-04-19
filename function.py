@@ -1388,7 +1388,7 @@ def spectra_derivation(
     g["y2"] = y2
     return g
 
-def k_nearest_neighbors(df, n_neighbors, metric="euclidean", weight="uniform"):
+def k_nearest_neighbors(df, n_neighbors, test_set_size, label_df=None):
     import altair as alt
     import pandas as pd
     import numpy as np
@@ -1396,70 +1396,121 @@ def k_nearest_neighbors(df, n_neighbors, metric="euclidean", weight="uniform"):
     from sklearn.neighbors import KNeighborsClassifier
     from sklearn.preprocessing import LabelEncoder, StandardScaler
     from sklearn.model_selection import train_test_split
-    from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix, classification_report, accuracy_score
+    from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix, classification_report, accuracy_score, roc_curve, auc
+
+    # transpose the dataframe 
+    df_t = df.set_index("Ramanshift").T 
+    samples_df = pd.DataFrame(index=df_t.index).reset_index()
+    samples_df.columns = ["Ramanshift"]
+
+    # prepare labels
+    if label_df is not None:
+        # rename first col to match 'Ramanshift' for merging
+        first_col = label_df.columns[0]
+        label_df_temp = label_df.rename(columns={first_col: "Ramanshift"})
+
+        # remove '.txt' from Ramanshift
+        samples_df["Ramanshift"] = samples_df["Ramanshift"].astype(str).str.replace(".txt", "", regex=False).str.strip()
+        label_df_temp["Ramanshift"] = label_df_temp["Ramanshift"].astype(str).str.replace(".txt", "", regex=False).str.strip()
+
+        # merge labels with samples_df
+        samples_df = samples_df.merge(
+            label_df_temp[["Ramanshift", "Label"]],
+            on="Ramanshift",
+            how="left"
+        )
+        y = samples_df["Label"].values # extract classes
+    else:
+        y = np.ones(len(df_t)) # if no labels, assign default class
+
+    # display error message if there are less than two classes
+    unique_classes = np.unique(y)
+    if len(unique_classes) < 2:
+        raise ValueError("The dataset must contain at least two different classes (labels) to perform KNN classification.")
 
     # data cleaning
-    # look at tsne func
-    # label df should only have 1 class 
-    df_t = df.set_index('Ramanshift').T 
     scaler = StandardScaler()
     X_std = scaler.fit_transform(df_t)
-    y = df_t.index.str.replace(".txt", "", regex=False)
 
     # encode labels
     le = LabelEncoder()
     y_encoded = le.fit_transform(y)
     all_viruses = le.classes_
-
+    display_names = [f"Class {int(name)}" for name in le.classes_]
 
     # 80/20 stratified split
-    # stratify=y_encoded
     X_train, X_test, y_train, y_test = train_test_split(
-        X_std, y_encoded, test_size=0.2, random_state=42, stratify=y_encoded
+        X_std, y_encoded, test_size=(test_set_size/100), random_state=42, stratify=y_encoded
     )
-    
+
     # model training and prediction
-    knn = KNeighborsClassifier(n_neighbors=n_neighbors, metric=metric, weights=weight)
+    knn = KNeighborsClassifier(n_neighbors=n_neighbors, metric="euclidean", weights="uniform")
     knn.fit(X_train, y_train)
     y_pred = knn.predict(X_test)
 
-    # performance metrics report
-    report_dict = classification_report(y_test, y_pred, target_names=all_viruses, output_dict=True)
-    df_report = pd.DataFrame(report_dict).transpose() # maybe print out instead
-
     # altair visualization of confusion matrix
-    cm = confusion_matrix(y_test, y_pred)
-    cm_df = pd.DataFrame(cm, index=all_viruses, columns=all_viruses).stack().reset_index()
-    cm_df.columns = ["Actual", "Predicted", "Count"]
+    cm = confusion_matrix(y_test, y_pred, labels=range(len(all_viruses)))
+    cm_df = pd.DataFrame(cm, index=display_names, columns=display_names).stack().reset_index()
+    cm_df.columns = ["Actual Label", "Predicted Label", "Count"]
+    cm_df["Count"] = cm_df["Count"].astype(float) # fixes blank chart issue by standardizing data types
 
     # base for heatmap
     base = alt.Chart(cm_df).encode(
-        x=alt.X("Predicted:O", title="Predicted"),
-        y=alt.Y("Actual:O", title="Actual")
-    ).properties(width=400, height=400)
-
-    # colored squares based on sample counts
-    heatmap = base.mark_rect().encode(
-        color=alt.Color("Count:Q", scale=alt.Scale(scheme="blues"))
+        x=alt.X("Predicted Label:N", title="Predicted"),
+        y=alt.Y("Actual Label:N", title="Actual")
     )
 
-    # add counts inside the squares
-    text = base.mark_text(baseline="middle").encode(
-        text="Count:Q",
-        color=alt.condition(
-            alt.datum.Count > (cm.max() / 2), 
-            alt.value("white"), 
-            alt.value("black")
-        )
-    )
+    # confusion matrix chart 
+    cm_chart = (
+            base.mark_rect().encode(
+                color=alt.Color("Count:Q", scale=alt.Scale(scheme="blues"))
+            ) + 
+            base.mark_text(baseline="middle").encode(
+                text=alt.Text("Count:Q", format=".0f"),
+                color=alt.condition(
+                    alt.datum.Count > int(cm.max() / 2),
+                    alt.value("white"), 
+                    alt.value("black")
+                )
+            )
+        ).properties(width=600, height=600, title="Confusion Matrix")
+
+    # performance metrics report
+    report_dict = classification_report(y_test, y_pred, target_names=display_names, output_dict=True)
+    df_report = pd.DataFrame(report_dict).transpose() 
+    df_report = df_report.loc[display_names]
+
+    # get prediction probabilities (for ROC analysis) and final predicted labels
+    y_probs = knn.predict_proba(X_test)
+    y_pred = knn.predict(X_test)
+
+    # compute ROC curve and AUC for each class to see how confident model is when making predictions
+    roc_list = []
+    for i, virus in enumerate(all_viruses):
+        fpr, tpr, _ = roc_curve(y_test == i, y_probs[:, i]) 
+        roc_auc = auc(fpr, tpr)
+        label_name = f"Class {int(virus)} (AUC={roc_auc:.2f})"
+        roc_list.append(pd.DataFrame({
+            "FPR": fpr, 
+            "TPR": tpr, 
+            "Virus": f"{virus} (AUC={roc_auc:.2f})" # AUC closer to 1 = better
+        }))
+
+    # concatenate all ROC dataframes
+    df_roc = pd.concat(roc_list)
+
+    # create ROC chart 
+    roc_chart = alt.Chart(df_roc).mark_line().encode(
+        x=alt.X("FPR:Q", title="False Positive Rate"), 
+        y=alt.Y("TPR:Q", title="True Positive Rate"),
+        color="Virus:N"
+    ).properties(title="ROC Curve Analysis", width=600, height=600)
+
+    # add diagonal line for chance level
+    line = alt.Chart(pd.DataFrame({"x": [0, 1], "y": [0, 1]})).mark_line(strokeDash=[5, 5], color="gray").encode(x="x", y="y")
 
     # combine layers and display final format
-    chart = (heatmap + text).properties(
-        width=400,
-        height=400,
-        title="Confusion Matrix"
-    )
+    roc = (line + roc_chart).properties(title="Receiver Operating Characteristic (ROC) Curve", width=600, height=600    )
 
-    return chart, df_report 
-    # confusion matrix, perfomance metric, roc curve
-
+    # output confusion matrix, peformance metrics, and ROC curve
+    return cm_chart, df_report, roc

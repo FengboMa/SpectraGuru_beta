@@ -643,7 +643,7 @@ else:
                                 st.success(f"Saved {len(cleaned_ranges)} valid fitting ranges.")
             elif st.session_state.baselineremoval_function == "SNIP":
                 st.session_state.baselineremoval_SNIP_num_iterations = st.number_input(label="SNIP Iterations",
-                                                                            help= "Determines the maximum peak width to be removed. Higher values create a smoother, lower baseline by allowing the algorithm to 'clip' wider peaks."
+                                                                            help= "Determines the maximum peak width to be removed. Higher values create a smoother, lower baseline by allowing the algorithm to 'clip' wider peaks.",
                                                                             min_value=10, max_value = 200, value = 50, 
                                                                             step = 1, placeholder="Insert a number")
         # Normalization

@@ -236,13 +236,29 @@ def apply_preprocessing_step(df, step_entry):
 
     if step == "smoothening":
         if params["function"] == "Savitzky-Golay filter":
-            result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
-                lambda col: function.savgol_filter_spectra(
-                    col,
-                    window_length=params["window_length"],
-                    polyorder=params["polynomial_order"]
+            trouble_spectra = []
+
+            for col_name in result_df.columns[1:]:
+                try:
+                    result_df[col_name] = function.savgol_filter_spectra(
+                        result_df[col_name],
+                        window_length=params["window_length"],
+                        polyorder=params["polynomial_order"]
+                    )
+                except Exception as e:
+                    trouble_spectra.append((col_name, str(e)))
+
+            if trouble_spectra:
+                show_feedback(
+                    message="Some spectra failed during Smoothening (Savitzky-Golay).",
+                    severity="warning",
+                    suggestions=[
+                        "Ensure window_length is odd",
+                        "Ensure polynomial_order < window_length",
+                        "Check for NaN or constant values in spectra"
+                    ],
+                    details="\n".join([f"{name}: {err}" for name, err in trouble_spectra])
                 )
-            )
         elif params["function"] == "1D Fast Fourier Transform filter":
             result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
                 lambda col: function.FFT_spectra(
@@ -1043,7 +1059,7 @@ else:
             # Display Plot
             st.altair_chart(cached_plot, use_container_width=False)
             # st.write("zzzzz")
-            log.log_plot_generated_count()
+            # log.log_plot_generated_count()
             
         elif mode_option == True:
                 
@@ -1081,7 +1097,7 @@ else:
             # Display Plot
             st.altair_chart(cached_plot, use_container_width=False)
             # st.write("2222")
-            log.log_plot_generated_count()
+            # log.log_plot_generated_count()
             # # Define the nearest selection
             # # click = alt.selection_single(nearest=True, on='click')
             # st.altair_chart(base, use_container_width=False)

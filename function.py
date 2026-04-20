@@ -1400,7 +1400,7 @@ def show_feedback(
 
     full_content = f"### {message}\n\n"
 
-    full_content += f"##### 📖 Documentation: [Documentation]({doc_link})\n\n"
+    full_content += f" 📖 Documentation: [SpectraGuru Docs]({doc_link})\n\n"
 
     if suggestions:
         full_content += "##### 💡 Suggestions\n"

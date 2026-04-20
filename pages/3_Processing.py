@@ -131,6 +131,24 @@ def collect_current_preprocessing_entries():
                     "padding_method": st.session_state.smoothening_act_FFT_padding
                 }
             })
+        elif st.session_state.smoothening_function == "Wavelet Denoising":
+            method = st.session_state.get("wavelet_method", "Sardy BCR")
+            params = {
+                "function": "Wavelet Denoising",
+                "method": method,
+                "wavelet": st.session_state.get("wavelet_family", "sym4"),
+                "level": st.session_state.get("wavelet_level", 4)
+            }
+            if method == "Sardy BCR":
+                params["n_iter"] = st.session_state.get("wavelet_n_iter", 10)
+                params["loss"] = st.session_state.get("wavelet_loss", "huber")
+            else:
+                params["mode"] = st.session_state.get("wavelet_mode", "soft")
+            run_log_entries.append({
+                "step": "smoothening",
+                "display_name": "Smoothening",
+                "parameters": params
+            })
 
     if st.session_state.baselineremoval_act:
         if st.session_state.baselineremoval_function == "airPLS":
@@ -251,6 +269,26 @@ def apply_preprocessing_step(df, step_entry):
                     padding_method=params["padding_method"]
                 )
             )
+        elif params["function"] == "Wavelet Denoising":
+            if params["method"] == "Sardy BCR":
+                result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
+                    lambda col: function.wavelet_denoise_sardy(
+                        col,
+                        wavelet=params["wavelet"],
+                        level=params["level"],
+                        n_iter=params["n_iter"],
+                        loss=params["loss"]
+                    )
+                )
+            elif params["method"] == "Standard":
+                result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
+                    lambda col: function.wavelet_denoise_standard(
+                        col,
+                        wavelet=params["wavelet"],
+                        level=params["level"],
+                        mode=params["mode"]
+                    )
+                )
         return result_df, remove_outliers_log
 
     if step == "baseline_removal":
@@ -473,7 +511,7 @@ else:
         
         if smoothening_act:
             # Add more functions to this selectbox if needed
-            st.session_state.smoothening_function = st.selectbox(label="Select your smoothening function",  options=["Savitzky-Golay filter","1D Fast Fourier Transform filter"])
+            st.session_state.smoothening_function = st.selectbox(label="Select your smoothening function",  options=["Savitzky-Golay filter","1D Fast Fourier Transform filter", "Wavelet Denoising"])
             
             if st.session_state.smoothening_function == "Savitzky-Golay filter":
             # Add more functions to this selectbox if needed
@@ -515,6 +553,68 @@ else:
                                                                                                                     "zero"],
                                                                 key = "smoothening_act_FFT_padding",
                                                                 help = help_txt2)
+            elif st.session_state.smoothening_function == "Wavelet Denoising":
+                wavelet_help = """
+                **Wavelet Denoising** suppresses broadband noise in Raman spectra by decomposing
+                the signal into wavelet coefficients, shrinking noise-dominated detail coefficients,
+                then reconstructing the signal.
+
+                **Sardy BCR** (recommended): Robust iterative method (Sardy, Tseng & Bruce 2001).
+                Uses Huber or L1 loss to down-weight outlier residuals — excellent spike tolerance.
+
+                **Standard**: Classic Donoho-Johnstone (1994) universal threshold. Fastest option;
+                less robust to sharp cosmic-ray spikes.
+                """
+                st.selectbox(
+                    label="Wavelet denoising method",
+                    options=["Sardy BCR", "Standard"],
+                    help=wavelet_help,
+                    key="wavelet_method"
+                )
+
+                st.selectbox(
+                    label="Wavelet family",
+                    options=["sym4", "sym8", "db4", "db8", "coif1", "coif3", "haar"],
+                    help="The mother wavelet used for decomposition. 'sym4' is a good default for smooth Raman spectra.",
+                    key="wavelet_family"
+                )
+
+                st.selectbox(
+                    label="Decomposition level",
+                    options=[1, 2, 3, 4, 5, 6],
+                    index=3,
+                    help="How many times to recursively decompose the signal. Each level halves the resolution and captures progressively lower-frequency noise. **4 is the recommended default** for Raman spectra.",
+                    key="wavelet_level"
+                )
+
+                if st.session_state.get("wavelet_method") == "Sardy BCR":
+                    st.number_input(
+                        label="BCR iterations",
+                        min_value=1, max_value=15, value=10, step=1,
+                        help="Number of IRLS iterations (1–15). Convergence typically occurs by iteration 10.",
+                        key="wavelet_n_iter"
+                    )
+                    st.selectbox(
+                        label="Robust loss function",
+                        options=["huber", "l1"],
+                        help="**Huber** (default): smooth near zero. **L1**: sharper down-weighting.",
+                        key="wavelet_loss"
+                    )
+                    if 'df' in st.session_state:
+                        _n_spectra = st.session_state.df.shape[1] - 1
+                        _n_iter = st.session_state.get("wavelet_n_iter", 10)
+                        if _n_spectra * _n_iter > 100:
+                            st.warning(
+                                f"{_n_spectra} spectra × {_n_iter} iterations = {_n_spectra * _n_iter} DWT passes. "
+                                "This may take a few seconds."
+                            )
+
+                elif st.session_state.get("wavelet_method") == "Standard":
+                    st.selectbox(
+                        label="Thresholding mode",
+                        options=["soft", "hard"],
+                        key="wavelet_mode"
+                    )
         # Baseline removal
         # st.markdown("**Baseline Removal**")
         
@@ -696,10 +796,15 @@ else:
                         'window_length': step_entry["parameters"]["window_length"],
                         'polyorder': step_entry["parameters"]["polynomial_order"]
                     })
-                else:
+                elif step_entry["parameters"]["function"] == "1D Fast Fourier Transform filter":
                     log.log_function_call("Processing_Smoothing_FFT_Filter", f_params={
                         'FFT_threshold': step_entry["parameters"]["fft_threshold"],
                         'padding_method': step_entry["parameters"]["padding_method"]
+                    })
+                elif step_entry["parameters"]["function"] == "Wavelet Denoising":
+                    log.log_function_call("Processing_Smoothing_Wavelet_Denoising", f_params={
+                        'method': step_entry["parameters"]["method"],
+                        'wavelet': step_entry["parameters"]["wavelet"]
                     })
             elif step_entry["step"] == "baseline_removal":
                 if step_entry["parameters"]["function"] == "airPLS":

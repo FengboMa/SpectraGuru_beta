@@ -200,6 +200,102 @@ def savgol_filter_spectra (spectra, window_length = 15, polyorder = 2):
     
     return new_spectra
 
+
+# Wavelet Denoising — Standard (Donoho-Johnstone 1994)
+def wavelet_denoise_standard(spectra, wavelet='sym4', level=None, mode='soft'):
+    """
+    Standard universal-threshold wavelet denoising (Donoho & Johnstone, 1994).
+    """
+    import numpy as np
+    import pywt
+
+    y = np.asarray(spectra, dtype=float)
+    w = pywt.Wavelet(wavelet)
+    if level is None:
+        max_level = pywt.dwt_max_level(len(y), w.dec_len)
+        level = min(6, max_level)
+
+    coeffs = pywt.wavedec(y, wavelet=w, level=level)
+    cA, cDs = coeffs[0], coeffs[1:]
+
+    detail_finest = cDs[-1]
+    sigma = np.median(np.abs(detail_finest - np.median(detail_finest))) / 0.6745
+    lam = sigma * np.sqrt(2 * np.log(y.size))
+
+    cDs_thresh = [pywt.threshold(cD, lam, mode=mode) for cD in cDs]
+    y_hat = pywt.waverec([cA] + cDs_thresh, wavelet=w)
+
+    if y_hat.size > y.size:
+        y_hat = y_hat[: y.size]
+    elif y_hat.size < y.size:
+        y_hat = np.pad(y_hat, (0, y.size - y_hat.size), mode='edge')
+
+    return y_hat
+
+
+# Wavelet Denoising — Sardy BCR (Sardy, Tseng & Bruce 2001)
+def wavelet_denoise_sardy(spectra, wavelet='sym4', level=None, n_iter=10,
+                           loss='huber', huber_delta=1.5, lam_scale=1.0):
+    """
+    Robust wavelet denoising via Block Coordinate Relaxation (BCR).
+    """
+    import numpy as np
+    import pywt
+
+    y = np.asarray(spectra, dtype=float)
+    n = len(y)
+    w_obj = pywt.Wavelet(wavelet)
+
+    if level is None:
+        max_lev = pywt.dwt_max_level(n, w_obj.dec_len)
+        level = min(4, max_lev)
+
+    coeffs = pywt.wavedec(y, w_obj, level=level)
+    cA = coeffs[0]
+    theta_D = list(coeffs[1:])
+
+    sigma = np.median(np.abs(theta_D[-1])) / 0.6745
+    if sigma < 1e-12:
+        return y.copy()
+
+    lam = lam_scale * sigma * np.sqrt(2.0 * np.log(n))
+
+    for _ in range(n_iter):
+        y_hat = pywt.waverec([cA] + theta_D, w_obj)
+        if y_hat.size > n:
+            y_hat = y_hat[:n]
+        elif y_hat.size < n:
+            y_hat = np.pad(y_hat, (0, n - y_hat.size), mode='edge')
+
+        r = y - y_hat
+
+        if loss == 'l1':
+            irls_w = 1.0 / np.maximum(np.abs(r), 1e-6 * sigma)
+        else:  # huber
+            thresh = huber_delta * sigma
+            irls_w = np.where(
+                np.abs(r) <= thresh,
+                1.0,
+                thresh / np.maximum(np.abs(r), 1e-10),
+            )
+
+        grad_coeffs = pywt.wavedec(irls_w * r, w_obj, level=level)
+        grad_D = grad_coeffs[1:]
+
+        theta_D = [
+            pywt.threshold(d + g, lam, mode='soft')
+            for d, g in zip(theta_D, grad_D)
+        ]
+
+    y_final = pywt.waverec([cA] + theta_D, w_obj)
+    if y_final.size > n:
+        y_final = y_final[:n]
+    elif y_final.size < n:
+        y_final = np.pad(y_final, (0, n - y_final.size), mode='edge')
+
+    return y_final
+
+
 # def FFT_spectra (spectra, FFT_threshold = 0.1):
 #     import numpy as np
 #     spectra_FFT = np.fft.fft(spectra)

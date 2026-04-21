@@ -185,12 +185,13 @@ if st.session_state.tool_select == "Spectra Simulation":
         
         simulation_df = st.session_state.simulation_df
         simulation_df_melted = simulation_df.melt(id_vars="Ramanshift", var_name="Sample ID", value_name="Intensity")
-        print("Melted", simulation_df_melted)
+        #print("Melted", simulation_df_melted)
         simulated_spectra = alt.Chart(simulation_df_melted).mark_line().encode(
                             x=alt.X('Ramanshift', title=DEFAULT_X_AXIS_TITLE, type="quantitative"),
                             y=alt.Y('Intensity', title=DEFAULT_Y_AXIS_TITLE, type="quantitative"),
                             color="Sample ID:N",
-                            size=alt.value(2) # Line width
+                            size=alt.value(2), # Line width
+                            tooltip=alt.value(None)
                         ).properties(
                             width=1300,
                             height=600,

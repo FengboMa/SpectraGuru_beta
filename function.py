@@ -1458,10 +1458,10 @@ def generate_spectra(s_params, b_params,
 
     # Returns an integer range centered at 'average' and with a span equal to 'variance'
     def random_select_range(average, variance, minimum=1, maximum=None):
-        low = max(average - np.floor(variance / 2), minimum)
-        high = average + np.ceil(variance / 2)
-        if maximum:
-            high = min(high, maximum)
+        low = int(max(average - np.floor(variance / 2), minimum))
+        high = int(average + np.ceil(variance / 2))
+        if maximum is not None:
+            high = int(min(high, maximum))
         return (low, high + 1)
 
     # Inserts a new entry to an array of ranges (2-tuples), sorted appropriately.

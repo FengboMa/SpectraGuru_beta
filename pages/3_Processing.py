@@ -165,6 +165,16 @@ def collect_current_preprocessing_entries():
                     "fitting_ranges": st.session_state.fitting_ranges
                 }
             })
+        if st.session_state.baselineremoval_function == "SNIP":
+            run_log_entries.append({
+                "step": "baseline_removal",
+                "display_name": "Baseline Removal",
+                "parameters": {
+                    "function": "SNIP",
+                    "num_iterations": st.session_state.baselineremoval_SNIP_num_iterations
+                }
+            })
+
 
     if st.session_state.normalization_act:
         run_log_entries.append({
@@ -274,6 +284,17 @@ def apply_preprocessing_step(df, step_entry):
                     col.values,
                     wavenumber=result_df.iloc[:, 0].values,
                     fitting_ranges=params["fitting_ranges"]
+                )
+            )
+        elif params["function"] == "SNIP":
+            result_df.iloc[:, 1:] = result_df.iloc[:, 1:] - result_df.iloc[:, 1:].apply(
+                lambda col: function.snip_1d(
+                    col.values,
+                    iterations=params["num_iterations"],
+                    use_lls=True, # hardcoded
+                    poly_window=15, # hardcoded
+                    poly_deg=1, # hardcoded
+                    return_baseline=True # hardcoded
                 )
             )
         return result_df, remove_outliers_log
@@ -528,7 +549,7 @@ else:
         
         if baselineremoval_act:
             # Add more functions to this selectbox if needed
-            st.session_state.baselineremoval_function = st.selectbox(label="Select your baseline removal function",  options=["airPLS", "ModPoly","Gaussian-Lorentzian Fitting"])
+            st.session_state.baselineremoval_function = st.selectbox(label="Select your baseline removal function",  options=["airPLS", "ModPoly","Gaussian-Lorentzian Fitting", "SNIP"])
             
             if st.session_state.baselineremoval_function == "airPLS":
                 st.session_state.baselineremoval_airPLS_lambda = st.number_input(label="AirPLS lambda", help="The larger lambda is,  the smoother the resulting background, z.",
@@ -620,6 +641,11 @@ else:
                                 st.session_state.fitting_ranges =cleaned_ranges
                                 # st.write(st.session_state.despike_fitting_ranges)
                                 st.success(f"Saved {len(cleaned_ranges)} valid fitting ranges.")
+            elif st.session_state.baselineremoval_function == "SNIP":
+                st.session_state.baselineremoval_SNIP_num_iterations = st.number_input(label="SNIP Iterations",
+                                                                            help= "Determines the maximum peak width to be removed. Higher values create a smoother, lower baseline by allowing the algorithm to 'clip' wider peaks.",
+                                                                            min_value=10, max_value = 200, value = 50, 
+                                                                            step = 1, placeholder="Insert a number")
         # Normalization
         # st.markdown("**Normalization**")
         
@@ -712,6 +738,10 @@ else:
                 elif step_entry["parameters"]["function"] == "ModPoly":
                     log.log_function_call("Processing_Baseline_Mod_Poly", f_params={
                         'degree': step_entry["parameters"]["degree"]
+                    })
+                elif step_entry["parameters"]["function"] == "SNIP":
+                    log.log_function_call("Processing_Baseline_SNIP", f_params={
+                        'num_iterations': step_entry["parameters"]["num_iterations"]
                     })
                 else:
                     log.log_function_call("Processing_Baseline_Gaussian_Lorentzian_Fitting", f_params={

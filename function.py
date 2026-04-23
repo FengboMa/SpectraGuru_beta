@@ -940,14 +940,6 @@ def tsne(df, perplexity=5, n_iter=500, label_df=None):
     return tsne_df, tsne_plot
 def svm(df, test_size, kernel='RBF', C=1, class_weight='None', degree=0, gamma="scale", label_df=None):
     
-    # Add feature log
-    # Fix labels_df
-    # add classification report
-    # add error message to restrict labels to >=2
-    # ensure multi class works
-    # add feature logs
-
-
 
     '''
     Support Vector Machine for classification.
@@ -989,6 +981,8 @@ def svm(df, test_size, kernel='RBF', C=1, class_weight='None', degree=0, gamma="
     indices = np.arange(len(X))
     
     test_size = test_size / 100 if test_size > 1 else test_size
+    min_class_count = y.value_counts().min()
+    test_size = max(round(test_size * len(y)) / 100, y.nunique()) if test_size != 0 else 0
     if test_size != 0:
         X_train, X_test, y_train, y_test, idx_train, idx_test = train_test_split(
             X, y, indices, test_size=test_size, random_state=42, stratify=y
@@ -1006,8 +1000,12 @@ def svm(df, test_size, kernel='RBF', C=1, class_weight='None', degree=0, gamma="
     svc.fit(X_train, y_train)
     y_pred = svc.predict(X_test)
     print(f"SVM accuracy: {accuracy_score(y_test, y_pred):.3f}")
-    report_df = pd.DataFrame(classification_report(y_test, y_pred, output_dict=True, zero_division=0)).T.reset_index()
-    report_df = report_df.rename(columns={'index': 'Class'})
+    # report_df = pd.DataFrame(classification_report(y_test, y_pred, output_dict=True, zero_division=0)).T.reset_index()
+    # report_df = report_df.rename(columns={'index': 'Class'})
+    display_names = [f"Class {int(name)}" for name in svc.classes_]
+    report_dict = classification_report(y_test, y_pred, target_names=display_names, output_dict=True)
+    report_df = pd.DataFrame(report_dict).transpose() 
+    report_df = report_df.loc[display_names]
 
     classes = y.unique()
     cm = confusion_matrix(y_test, y_pred, labels=classes)
@@ -1032,7 +1030,7 @@ def svm(df, test_size, kernel='RBF', C=1, class_weight='None', degree=0, gamma="
                 alt.value('black')
             )
         )
-    ).properties(width=400, height=400, title='Confusion Matrix')
+    ).properties(width=600, height=600, title='Confusion Matrix')
 
     # ── Chart 3: Support Vectors ──
     sv_row_idx = idx_train[svc.support_]
@@ -1086,7 +1084,7 @@ def svm(df, test_size, kernel='RBF', C=1, class_weight='None', degree=0, gamma="
         )
         + alt.Chart(pd.DataFrame({'fpr': [0, 1], 'tpr': [0, 1]}))
         .mark_line(strokeDash=[6, 4], color='black').encode(x='fpr:Q', y='tpr:Q')
-    ).properties(title=alt.Title('ROC Curve', fontSize=14), width=350, height=300)
+    ).properties(title=alt.Title('ROC Curve', fontSize=14), width=600, height=600)
 
     return cm_plot, sv_plot, roc_plot, report_df
 

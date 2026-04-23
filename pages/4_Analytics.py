@@ -8,13 +8,10 @@ from streamlit_extras.row import row
 from datetime import datetime
 import pandas as pd
 import function
-import log_utils as log
 
 function.wide_space_default()
-
-DEFAULT_X_AXIS_TITLE = "Raman shift/cm⁻¹"
-DEFAULT_Y_AXIS_TITLE = "Intensity/a.u."
-
+st.session_state.log_file_path = r"element/user_count.txt"
+st.session_state.function_log_file_path = r"element/funct_count.txt"
 # hide_st_style = """
 #             <style>
 #             #MainMenu {visibility: hidden;}
@@ -36,62 +33,13 @@ if 'df' in st.session_state:
                                 "Peak Identification and Stats",
                                 "Hierarchically-clustered Heatmap",
                                 "Principal Components Analysis (PCA)-Beta",
-                                "T-SNE Dimensionality Reduction-Beta"),
+                                "T-SNE Dimensionality Reduction-Beta",
+                                "Random Forest Classification"),
                         key="stats_plot_select")
 
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
         st.sidebar.toggle(label='Show spectra you selected', value=True, key = 'stats_avg_act',help='Show or hide original selected spectra.')
         st.sidebar.toggle(label='Show Standard Deviation', value=True, key = 'stats_avg_std_act',help='Show or hide Standard Deviation.')
-    elif st.session_state.stats_plot_select == "Confidence Interval Plot":
-        # Interval method selector
-        interval_method = st.sidebar.radio(
-            label="Interval Method",
-            options=("Confidence Interval", "Standard Deviation"),
-            index=0,   # default to Confidence Interval
-            help=(
-                "Choose how the uncertainty band is computed.\n\n"
-                "Confidence Interval estimates the uncertainty of the mean using "
-                "the t-distribution.\n\n"
-                "Standard Deviation shows how replicate spectra vary from each other."
-            ),
-            key = "interval_method"
-        )
-
-        # If user selects Confidence Interval method
-        if interval_method == "Confidence Interval":
-            conf_lvl = st.sidebar.selectbox(
-                label="Confidence Level",
-                options=(90, 95, 99),
-                index=1,   # default to 95 percent
-                key="conf_lvl",
-                help=(
-                    "Choose the confidence level for the interval. "
-                    "Higher levels produce wider intervals. "
-                    "The interval is computed using the formula: "
-                    "$CI = \\bar{x} \\pm t \\cdot (s / \\sqrt{n})$, "
-                    "where $\\bar{x}$ is the mean, $s$ is the standard deviation of replicates, "
-                    "and $n$ is the number of spectra.\n\n"
-                    "This interval estimates **uncertainty of the mean spectrum**, not the "
-                    "spread of the raw spectra."
-                )
-            )
-
-        else:
-            # Standard deviation envelope
-            std_multiplier = st.sidebar.selectbox(
-                label="Number of Standard Deviations",
-                options=(1, 2, 3),
-                index=0,   # default to 1 SD
-                key="std_mult",
-                help=(
-                    "Choose how many standard deviations to use when forming the envelope. "
-                    "For example, 1 SD typically captures about 68 percent of spectra if data is "
-                    "normally distributed.\n\n"
-                    "This method visualizes **spread among individual spectra**, not the "
-                    "uncertainty of the mean."
-                )
-            )
-    
     elif st.session_state.stats_plot_select == "Spectra Derivation":
         st.sidebar.selectbox(label="Normalization Method",
             options=("None", "Min-Max Normalization"),
@@ -99,23 +47,6 @@ if 'df' in st.session_state:
             key="deriv_norm_method",
             help="Apply per-spectrum Min–Max scaling before taking derivatives.")
     elif st.session_state.stats_plot_select == "Correlation Heatmap":
-        
-        st.sidebar.selectbox(
-            label='Correlation Algorithm',
-            options=('Pearson Correlation', 'Cosine Similarity'),
-            index=0,
-            key='heatmap_corr_method',
-            help=(
-                "Choose the correlation/similarity algorithm:\n\n"
-                "**Pearson Correlation**: Measures linear correlation between variables. "
-                "Values range from -1 (perfect negative) to 1 (perfect positive). "
-                "Sensitive to scale and magnitude.\n\n"
-                "**Cosine Similarity**: Measures the cosine of the angle between vectors. "
-                "Values range from -1 to 1. Less sensitive to magnitude, focuses on direction/shape."
-            )
-        )
-        
-        st.sidebar.toggle(label='Compute Average', value=False, key='heatmap_compute_avg', help='Add an average row/column at the end of the heatmap.')
         
         if st.sidebar.toggle(label='Customize Heatmap scale', value=False, key = 'heatmap_scale',help='Customize heatmap scale manually.'):
             st.sidebar.number_input(label='Heatmap scale min',min_value= -1.0, max_value= 1.00, placeholder='Insert a number between -1 and 1',
@@ -126,16 +57,9 @@ if 'df' in st.session_state:
             if st.session_state.heatmap_min >= st.session_state.heatmap_max:
                 st.sidebar.error('Invalid Number input.')
     elif st.session_state.stats_plot_select == "Peak Identification and Stats":
-        peak_target_options = ["Average"] + [
-            column for column in st.session_state.temp.columns
-            if column not in ["Ramanshift", "Average", "Standard Deviation"]
-        ]
-        st.sidebar.selectbox(
-            label="Select spectrum for peak identification",
-            options=peak_target_options,
-            index=0,
-            key="peak_identification_target"
-        )
+        
+        st.sidebar.write("Find peaks only on average:")
+        st.sidebar.write(True)
         
         st.sidebar.toggle(label="Auto Peak Identification", value=True, key="peak_iden_auto")
         
@@ -188,6 +112,35 @@ if 'df' in st.session_state:
         max_perplexity = st.session_state.df.shape[1] - 1
         st.sidebar.select_slider(label="t-SNE Perplexity", options=list(range(1,max_perplexity)),value=2, key="tSNE_perplexity")
         st.sidebar.select_slider(label="t-SNE Maximum number of iterations", options=list(range(200,1001)), value=500, key="tSNE_n_iter")
+    elif st.session_state.stats_plot_select == "Random Forest Classification":
+        st.sidebar.number_input(
+            label='Number of Trees',
+            min_value=1, max_value=500, step=1, value=100,
+            key='rf_n_estimators',
+            help='How many decision trees to build. More trees give more stable results but take longer to run. Range: 1–500.'
+        )
+        st.sidebar.number_input(
+            label='Max Depth (0 = unlimited)',
+            min_value=0, max_value=50, step=1, value=0,
+            key='rf_max_depth',
+            help='How deep each tree can grow. Deeper trees learn more detail but may overfit to the training data. Set to 0 for no limit. Range: 0–50.'
+        )
+        st.sidebar.number_input(
+            label='Min Samples Leaf',
+            min_value=1, max_value=20, step=1, value=1,
+            key='rf_min_samples_leaf',
+            help='Minimum number of spectra required at the end of each branch. Higher values make the model more general and less sensitive to individual spectra. Range: 1–20.'
+        )
+        st.sidebar.number_input(
+            label='Test Set Size (%)',
+            min_value=0, max_value=80, step=1, value=20,
+            key='rf_test_size',
+            help='Percentage of spectra set aside to test the model after training. These spectra are not used during training. Set to 0% to train and test on all spectra. Range: 0–80%.'
+        )
+        st.sidebar.info(
+            '**Label requirement:** Random Forest requires at least 2 classes. '
+            'Upload your data using **Number of classes > 1** in the Data Upload page to assign class labels.'
+        )
 
 # Stats section layout
 """"""""""""
@@ -204,13 +157,6 @@ else:
     if 'temp' not in st.session_state:
         st.error('Please process your data, and select Spectra you would like to use.')
     else:
-        if st.session_state.get("custom_axis_titles_act", False):
-            analytics_x_axis_title = st.session_state.get("custom_x_axis_title", DEFAULT_X_AXIS_TITLE)
-            analytics_y_axis_title = st.session_state.get("custom_y_axis_title", DEFAULT_Y_AXIS_TITLE)
-        else:
-            analytics_x_axis_title = DEFAULT_X_AXIS_TITLE
-            analytics_y_axis_title = DEFAULT_Y_AXIS_TITLE
-
         st.session_state.df_stats = st.session_state.temp
         st.session_state.df_stats['Average'] = st.session_state.df_stats.iloc[:, 1:].mean(axis=1)
         
@@ -224,8 +170,8 @@ else:
             
             if st.session_state.stats_avg_act:
                 avg_stats_base = alt.Chart(stats_data_melted).mark_line().encode(
-                        x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
-                        y=alt.Y('Intensity', title=analytics_y_axis_title, type='quantitative'),
+                        x=alt.X('Ramanshift', title='Raman shift/cm^-1', type='quantitative'),
+                        y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
                         tooltip=alt.value(None),
                         color=alt.condition(
                             alt.datum['Sample ID'] == 'Average',
@@ -245,13 +191,13 @@ else:
                 # avg_stats_base = function.style_altair_chart(avg_stats_base)
                 # st.altair_chart(avg_stats_base, use_container_width=False)  
                 show_plot = avg_stats_base
-                log.log_plot_generated_count()
+                function.log_plot_generated_count(st.session_state.log_file_path)
                 
             else:
                 filtered_avg_df = stats_data_melted[stats_data_melted['Sample ID'] == 'Average']
                 avg_stats_base2 = alt.Chart(filtered_avg_df).mark_line().encode(
-                        x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
-                        y=alt.Y('Intensity', title=analytics_y_axis_title, type='quantitative'),
+                        x=alt.X('Ramanshift', title='Raman shift/cm^-1', type='quantitative'),
+                        y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
                         tooltip=alt.value(None),
                         color=alt.value('blue'),
                         size=alt.value(3)
@@ -263,7 +209,7 @@ else:
                 
                 # st.altair_chart(avg_stats_base2, use_container_width=False)   
                 show_plot = avg_stats_base2
-                log.log_plot_generated_count()
+                function.log_plot_generated_count(st.session_state.log_file_path)
             
             if st.session_state.stats_avg_std_act:
                 ramanshift = st.session_state.df_stats["Ramanshift"]
@@ -284,7 +230,7 @@ else:
                 # st.write(std_df)
                 # Plot the results using Altair
                 std_plot = alt.Chart(std_df).mark_line().encode(
-                    x=alt.X('Ramanshift', axis=alt.Axis(title=analytics_x_axis_title)),
+                    x='Ramanshift',
                     y='Standard Deviation'
                 ).properties(
                             width=1300,
@@ -296,7 +242,7 @@ else:
                                             )
                 combined_plot = function.style_altair_chart(combined_plot)
                 st.altair_chart(combined_plot, use_container_width=False)
-                log.log_plot_generated_count()
+                function.log_plot_generated_count(st.session_state.log_file_path)
             else:
                 show_plot = function.style_altair_chart(show_plot)    
                 st.altair_chart(show_plot, use_container_width=False)
@@ -337,34 +283,28 @@ else:
             std_df = st.session_state.df_stats.iloc[:, 1:]
             std_df = std_df.drop('Average', axis=1)
             
-            if st.session_state.interval_method == "Confidence Interval":
-                threshold = st.session_state.conf_lvl     # 90, 95, 99
-                CI_title_text = f"{threshold} percent Confidence Interval Plot"
-            else:
-                threshold = st.session_state.std_mult     # 1, 2, 3
-                CI_title_text = f"±{threshold} Standard Deviation Envelope Plot"
+            # st.write(std_df)
+            # Calculate mean and std deviation
+            mean_values = std_df.mean(axis=1)
+            std_values = std_df.std(axis=1)
 
-            mean_values, ci_upper, ci_lower = function.confidence_interval(
-                df=std_df,
-                threshold=threshold,
-                interval_method=st.session_state.interval_method
-            )
-
+            ci_upper = mean_values + std_values
+            ci_lower = mean_values - std_values
+            
             data = pd.DataFrame({
                 'Ramanshift': ramanshift,
                 'Mean': mean_values,
                 'CI_Upper': ci_upper,
                 'CI_Lower': ci_lower
             })
-
+            
             base = alt.Chart(data).encode(
-                x=alt.X('Ramanshift', axis=alt.Axis(title=analytics_x_axis_title))
+                x='Ramanshift'
             ).properties(
                             width=1300,
                             height=600,
-                            title = CI_title_text
                 )
-            
+
             # Line for mean values
             mean_line = base.mark_line(color='blue').encode(
                 y='Mean'
@@ -380,7 +320,7 @@ else:
             confidence_plot = confidence_interval + mean_line
             confidence_plot = function.style_altair_chart(confidence_plot)
             st.altair_chart(confidence_plot, use_container_width=False)
-            log.log_plot_generated_count()
+            function.log_plot_generated_count(st.session_state.log_file_path)
 
         elif st.session_state.stats_plot_select == "Spectra Derivation":
             with st.sidebar:
@@ -441,7 +381,7 @@ else:
                     alt.Chart(proc)
                     .mark_line()
                     .encode(
-                        x=alt.X("Ramanshift:Q", title=analytics_x_axis_title),
+                        x=alt.X("Ramanshift:Q", title="Raman shift / cm⁻¹"),
                         y=alt.Y("y1:Q", title="1st derivative (a.u./cm⁻¹)"),
                         color=alt.condition(highlight_cond, alt.value("blue"), alt.Color("Sample ID:N", title="Sample")),
                         # size=alt.condition(highlight_cond, alt.value(3), alt.value(1)),
@@ -454,7 +394,7 @@ else:
                     alt.Chart(proc)
                     .mark_line()
                     .encode(
-                        x=alt.X("Ramanshift:Q", title=analytics_x_axis_title),
+                        x=alt.X("Ramanshift:Q", title="Raman shift / cm⁻¹"),
                         y=alt.Y("y2:Q", title="2nd derivative (a.u./cm⁻²)"),
                         color=alt.condition(highlight_cond, alt.value("blue"), alt.Color("Sample ID:N", title="Sample")),
                         # size=alt.condition(highlight_cond, alt.value(3), alt.value(1)),
@@ -515,38 +455,25 @@ else:
                 #         mime="text/csv",
                     # )
                 # optional: your logger
-                log.log_function_call("Analytics_Spectra_Derivation",
-                                        f_params={
-                                            'norm_method':st.session_state.deriv_norm_method,
-                                            'sg_win':win,
-                                            'sg_poly':poly
-                                        })
-                log.log_plot_generated_count()
+                try:
+                    function.log_function_use_count(st.session_state.function_log_file_path, "Spectra_Derived", st.session_state.df[1:].shape[1])
+                    function.log_plot_generated_count(st.session_state.log_file_path)
+                except Exception:
+                    pass
             except Exception as e:
                 st.error(f"Error during processing: {e}")
         
         elif st.session_state.stats_plot_select == "Correlation Heatmap":
-            # Select only the columns we need for correlation calculation
+            # Select only the columns we need for standard deviation calculation
             # Filter out the columns
             columns_to_include = [col for col in st.session_state.temp.columns if col not in ["Ramanshift", "Average","Standard Deviation"]]
-            df_filtered = st.session_state.temp[columns_to_include].copy()
+            df_filtered = st.session_state.temp[columns_to_include]
+            df_filtered['Average'] = df_filtered.mean(axis=1)
             
-            # Add average column if toggle is enabled
-            if st.session_state.heatmap_compute_avg:
-                df_filtered['Average'] = df_filtered.mean(axis=1)
-            
-            # Calculate the correlation matrix based on selected method
-            if st.session_state.heatmap_corr_method == "Pearson Correlation":
-                corr_matrix = df_filtered.corr(method='pearson')
-            else:  # Cosine Similarity
-                from sklearn.metrics.pairwise import cosine_similarity
-                # Calculate cosine similarity between columns (transpose so columns become rows)
-                cosine_sim = cosine_similarity(df_filtered.T)
-                corr_matrix = pd.DataFrame(
-                    cosine_sim,
-                    index=df_filtered.columns,
-                    columns=df_filtered.columns
-                )
+            # st.write(df_filtered)
+
+            # Calculate the correlation matrix
+            corr_matrix = df_filtered.corr()
 
             # Display the correlation matrix
             # stats_row2.dataframe(corr_matrix, use_container_width=True)
@@ -674,12 +601,8 @@ else:
             # Display the heatmap
             combined = function.style_altair_chart(combined)
             st.altair_chart(combined, use_container_width=False)
-            log.log_plot_generated_count()
-            log.log_function_call("Analytics_Correlation_Heatmap",
-                                    f_params={
-                                        'method':st.session_state.heatmap_corr_method,
-                                        'compute_avg':st.session_state.heatmap_compute_avg
-                                    })
+            function.log_plot_generated_count(st.session_state.log_file_path)
+            function.log_function_use_count(st.session_state.function_log_file_path, "Correlation_Heatmaps_Generated")
             
             @st.cache_data
             def download_df(df):
@@ -760,8 +683,7 @@ else:
 #                 stats_row2.altair_chart(heatmap, use_container_width=False)
 # """
         elif st.session_state.stats_plot_select == "Peak Identification and Stats":   
-            selected_peak_target = st.session_state.get("peak_identification_target", "Average")
-            filtered_peak_df = stats_data_melted[stats_data_melted['Sample ID'] == selected_peak_target]
+            filtered_avg_df = stats_data_melted[stats_data_melted['Sample ID'] == 'Average']
             
             # avg_stats_base2 = alt.Chart(filtered_avg_df).mark_line().encode(
             #         x=alt.X('Ramanshift', title='Raman shift/cm^-1', type='quantitative'),
@@ -780,7 +702,7 @@ else:
             # st.altair_chart(show_plot)
             # st.write(filtered_avg_df)
             
-            peaks, properties = function.peak_identification(spectra=filtered_peak_df['Intensity'].to_numpy(),
+            peaks, properties = function.peak_identification(spectra=filtered_avg_df['Intensity'].to_numpy(),
                                                             height= st.session_state.peak_iden_height_p,
                                                             threshold = st.session_state.peak_iden_threshold_p,
                                                             distance = st.session_state.peak_iden_distance_p,
@@ -789,8 +711,8 @@ else:
 
 
             # Extract Raman shift and intensity values
-            raman_shift = filtered_peak_df['Ramanshift']
-            intensity = filtered_peak_df['Intensity']
+            raman_shift = filtered_avg_df['Ramanshift']
+            intensity = filtered_avg_df['Intensity']
 
             # Plot the Raman shift vs. Intensity with detected peaks using .iloc
             # fig = plt.figure(figsize=(10, 6))
@@ -806,7 +728,7 @@ else:
             # peaks, _ = peak_identification(spectra=filtered_avg_df['Intensity'].to_numpy(), prominence=1.0)
 
             # Step 2: Prepare a DataFrame for the peak markers
-            peak_df = filtered_peak_df.iloc[peaks].copy()
+            peak_df = filtered_avg_df.iloc[peaks].copy()
             
             properties_df = pd.DataFrame(properties)
             
@@ -830,18 +752,16 @@ else:
 
             
             # Step 3: Create the base interactive plot
-            peak_plot_title = f'Peak Identification: {selected_peak_target}'
-
-            avg_stats_base2 = alt.Chart(filtered_peak_df).mark_line().encode(
-                x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
-                y=alt.Y('Intensity', title=analytics_y_axis_title, type='quantitative'),
+            avg_stats_base2 = alt.Chart(filtered_avg_df).mark_line().encode(
+                x=alt.X('Ramanshift', title='Raman shift/cm^-1', type='quantitative'),
+                y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
                 tooltip=alt.value(None),
                 color=alt.value('blue'),
                 size=alt.value(3)
             ).properties(
                 width=1300,
                 height=600,
-                title=peak_plot_title
+                title='Spectra Average Data Plot'
             )
 
             # Step 4: Create the peak markers plot
@@ -850,14 +770,14 @@ else:
                 color='red',
                 size=100
             ).encode(
-                x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
-                y=alt.Y('Intensity', title=analytics_y_axis_title, type='quantitative'),
-                tooltip=[alt.Tooltip('Ramanshift', title=analytics_x_axis_title),
-                        alt.Tooltip('Intensity', title=analytics_y_axis_title)]
+                x=alt.X('Ramanshift', title='Raman shift/cm^-1', type='quantitative'),
+                y=alt.Y('Intensity', title='Intensity/a.u.', type='quantitative'),
+                tooltip=[alt.Tooltip('Ramanshift', title='Raman shift/cm^-1'),
+                        alt.Tooltip('Intensity', title='Intensity/a.u.')]
             ).properties(
                 width=1300,
                 height=600,
-                title=peak_plot_title
+                title='Spectra Average Data Plot'
             )
 
             # Step 5: Combine the base plot and peak markers
@@ -875,17 +795,8 @@ else:
             
             st.write(peak_df)
             
-            log.log_plot_generated_count()
-            log.log_function_call("Analytics_Peak_Identification",
-                                    f_params={
-                                        'target_spectrum': selected_peak_target,
-                                        'auto':st.session_state.peak_iden_auto,
-                                        'height':st.session_state.peak_iden_height_p,
-                                        'threshold':st.session_state.peak_iden_threshold_p,
-                                        'distance':st.session_state.peak_iden_distance_p,
-                                        'prominence':st.session_state.peak_iden_prominence_p,
-                                        'width':st.session_state.peak_iden_width_p
-                                    })
+            function.log_plot_generated_count(st.session_state.log_file_path)
+            function.log_function_use_count(st.session_state.function_log_file_path, "Peak_Identification_Called")
         
         elif st.session_state.stats_plot_select == "Hierarchically-clustered Heatmap":
             
@@ -895,12 +806,12 @@ else:
             
             if st.session_state.HCA_heatmap:
                 st.pyplot(function.hierarchical_clustering_heatmap(temp))
-                log.log_function_call("Analytics_Clustering_Clustermap", f_params={})
+                function.log_function_use_count(st.session_state.function_log_file_path, "Clustermaps_Generated")
             else:
                 st.pyplot(function.hierarchical_clustering_tree(temp))
-                log.log_function_call("Analytics_Clustering_Dendrogram", f_params={})
+                function.log_function_use_count(st.session_state.function_log_file_path, "Clustering_Dendrograms_Drawn")
         
-            log.log_plot_generated_count()
+            function.log_plot_generated_count(st.session_state.log_file_path)
         
         elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)-Beta":
             
@@ -949,15 +860,15 @@ else:
             # 3.  Display results
             # ------------------------------------------------------------------
             st.altair_chart(function.style_altair_chart(pc1_vs_pc2_plot), use_container_width=False)
-            log.log_plot_generated_count()
+            function.log_plot_generated_count(st.session_state.log_file_path)
 
             st.altair_chart(function.style_altair_chart(cumulative_variance_plot), use_container_width=False)
-            log.log_plot_generated_count()
+            function.log_plot_generated_count(st.session_state.log_file_path)
 
             st.altair_chart(function.style_altair_chart(loading_plot), use_container_width=False)
-            log.log_plot_generated_count()
+            function.log_plot_generated_count(st.session_state.log_file_path)
 
-            log.log_function_call("Analytics_PCA", f_params={})
+            function.log_function_use_count(st.session_state.function_log_file_path, "PCA_Used")
 
             st.write("### PCA Scores Table")
             st.write(pca_result_df)
@@ -978,11 +889,61 @@ else:
             )
             st.altair_chart(function.style_altair_chart(tsne_plot), use_container_width=False)
 
-            log.log_plot_generated_count()
-            log.log_function_call("Analytics_TSNE",
-                                    f_params={
-                                        'perplexity':st.session_state.tSNE_perplexity,
-                                        'n_iter':st.session_state.tSNE_n_iter,
-                                    })
+            function.log_plot_generated_count(st.session_state.log_file_path)
+            function.log_function_use_count(st.session_state.function_log_file_path, "TSNE_Used")
 
             st.write(tsne_df)
+
+        elif st.session_state.stats_plot_select == "Random Forest Classification":
+
+            st.write("**Random Forest Classification**")
+
+            temp = st.session_state.temp.drop(columns=['Average'])
+            label_df = st.session_state.get('label_df')
+
+            if label_df is None:
+                st.error(
+                    "No class labels found. "
+                    "Please go to the Data Upload page and upload your data with **Number of classes > 1**."
+                )
+                st.stop()
+
+            if label_df['Label'].nunique() < 2:
+                st.error(
+                    "Random Forest requires at least **2 classes** but only 1 class label was found. "
+                    "Please go to the Data Upload page and upload your data with **Number of classes > 1**."
+                )
+                st.stop()
+
+            max_depth = st.session_state.rf_max_depth if st.session_state.rf_max_depth > 0 else None
+
+            try:
+                fig_cm, fig_roc, metrics_df, fig_fi = function.random_forest_classification(
+                    df=temp,
+                    label_df=label_df,
+                    n_estimators=st.session_state.rf_n_estimators,
+                    max_depth=max_depth,
+                    min_samples_leaf=st.session_state.rf_min_samples_leaf,
+                    test_size=st.session_state.rf_test_size / 100,
+                )
+
+                st.write("### Classification Metrics")
+                st.dataframe(metrics_df, use_container_width=False)
+
+                st.write("### Confusion Matrix")
+                st.altair_chart(function.style_altair_chart(fig_cm), use_container_width=False)
+
+                st.write("### ROC Curve")
+                st.altair_chart(function.style_altair_chart(fig_roc), use_container_width=False)
+
+                st.write("### Feature Importance")
+                st.altair_chart(function.style_altair_chart(fig_fi), use_container_width=False)
+
+                function.log_plot_generated_count(st.session_state.log_file_path)
+                try:
+                    function.log_function_use_count(st.session_state.function_log_file_path, "Random_Forest_Used", 1)
+                except Exception:
+                    pass
+
+            except Exception as e:
+                st.error(f"Error running Random Forest: {e}")

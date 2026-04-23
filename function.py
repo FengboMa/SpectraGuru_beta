@@ -13,10 +13,9 @@ def wide_space_default():
     st.set_page_config(layout="wide", 
                     page_icon=r"element/tab_bar_pic.png")
 
-# Reset button function
-def reset_processing():
+# Shared helper for processing-page toggles
+def clear_processing_toggles():
     import streamlit as st
-    st.session_state.df = st.session_state.backup.copy()
     st.session_state.interpolation_act = False
     st.session_state.crop_act = False
     st.session_state.smoothening_act = False
@@ -24,6 +23,14 @@ def reset_processing():
     st.session_state.despike_act = False
     st.session_state.normalization_act = False
     st.session_state.outlierremoval_act = False
+
+# Reset button function
+def reset_processing():
+    import streamlit as st
+    st.session_state.df = st.session_state.backup.copy()
+    clear_processing_toggles()
+    st.session_state.preprocessing_log = []
+    st.session_state.pop("remove_outliers_log", None)
 
 # airPLS function
 '''
@@ -357,105 +364,70 @@ def ModPoly(input_array, degree=2, repetition=100, gradient=0.001):
 
     return corrected
 
-# User count function
-def log_user_count(log_file_path):
-    import os
-    # Initialize counts
-    counts = {
-        "User": 0,
-        "Plot_Generated": 0,
-        "Spectra_processed": 0
-    }
-    
-    # Read the current counts from the log file
-    if os.path.exists(log_file_path):
-        with open(log_file_path, "r") as file:
-            for line in file:
-                key, value = line.strip().split('\t')
-                counts[key] = int(value)
+# Increments the counter for a specified metric in a given log file. Returns the new count and 
+# returns 0 if the keyname does not match any recognizable keyname in the log file.
+def increment_count(log_file_path, keyname, amount=1):
+    try:
+        counts = read_counts(log_file_path)
+        counts[keyname] += amount
+        write_counts(log_file_path, counts)
+        return counts[keyname]
+    except:
+        return 0
 
-    # Increment the user count
-    counts["User"] += 1
-
-    # Write the new counts back to the log file
-    with open(log_file_path, "w") as file:
-        for key, value in counts.items():
-            file.write(f"{key}\t{value}\n")
-    
-    return counts["User"]
-
+# Returns a dictionary of all the key-value pairs expressed in a given log file. Log files must
+# take the form:
+#
+# Key_1[\t]Value_1
+# Key_2[\t]Value_2
+# ...
 def read_counts(log_file_path):
     import os
-    counts = {
-        "User": 0,
-        "Plot_Generated": 0,
-        "Spectra_processed": 0
-    }
-    
-    # Read the current counts from the log file
+
+    counts = {}
+
     if os.path.exists(log_file_path):
         with open(log_file_path, "r") as file:
             for line in file:
                 key, value = line.strip().split('\t')
-                counts[key] = int(value)
+                counts = {**counts, key: int(value)}
     
     return counts
 
+# Writes a counts dictionary to a log file
+def write_counts(log_file_path, counts):
+    import os
+
+    # Clean up any incorrect keys (e.g., 'Spectra_processed' with lowercase p)
+    corrected_counts = {}
+    for key, value in counts.items():
+        # Map old incorrect keys to correct ones
+        if key == 'Spectra_processed':
+            corrected_counts['Spectra_Processed'] = value
+        else:
+            corrected_counts[key] = value
+    
+    with open(log_file_path, "w") as file:
+        for key, value in corrected_counts.items():
+            file.write(f"{key}\t{value}\n")
+
+
+# User count function
+def log_user_count(log_file_path):
+    return increment_count(log_file_path, 'User')
+
 # Plot_Generated count function
 def log_plot_generated_count(log_file_path):
-    import os
-    # Initialize counts
-    counts = {
-        "User": 0,
-        "Plot_Generated": 0,
-        "Spectra_processed": 0
-    }
-    
-    # Read the current counts from the log file
-    if os.path.exists(log_file_path):
-        with open(log_file_path, "r") as file:
-            for line in file:
-                key, value = line.strip().split('\t')
-                counts[key] = int(value)
+    return increment_count(log_file_path, 'Plot_Generated')
 
-    # Increment the user count
-    counts["Plot_Generated"] += 1
-
-    # Write the new counts back to the log file
-    with open(log_file_path, "w") as file:
-        for key, value in counts.items():
-            file.write(f"{key}\t{value}\n")
-    
-    return counts["Plot_Generated"]
-
-# Plot_Generated count function
+# Spectra_Processed count function
 def log_spectra_processed_count(log_file_path):
-    import os
     import streamlit as st
-    # Initialize counts
-    counts = {
-        "User": 0,
-        "Plot_Generated": 0,
-        "Spectra_Processed": 0
-    }
-    
-    # Read the current counts from the log file
-    if os.path.exists(log_file_path):
-        with open(log_file_path, "r") as file:
-            for line in file:
-                key, value = line.strip().split('\t')
-                counts[key] = int(value)
+    return increment_count(log_file_path, 'Spectra_Processed', st.session_state.df[1:].shape[1])
 
-    # Increment the user count
-    counts["Spectra_Processed"] += st.session_state.df[1:].shape[1]
-
-    # Write the new counts back to the log file
-    with open(log_file_path, "w") as file:
-        for key, value in counts.items():
-            file.write(f"{key}\t{value}\n")
-    
-    return counts["Spectra_Processed"]
-
+# Essentially a function rename for clarity
+def log_function_use_count(function_log_file_path, keyname, amount=1):
+    return increment_count(function_log_file_path, keyname, amount)
 # Peak finding function
 def peak_identification(spectra, height=None, threshold=None, distance=None, 
                         prominence=None, width=None, wlen=None, 
@@ -597,6 +569,62 @@ def get_transformed_spectrum_data():
         return transformed_df.astype('float64')
     except:
         pass
+
+def confidence_interval(df, threshold, interval_method):
+    """
+    Unified interval computation.
+    
+    df: dataframe of replicate spectra (each column is a spectrum)
+    threshold: 
+        - CI mode: confidence level (90, 95, 99)
+        - STD mode: standard deviation multiplier (1, 2, 3)
+    interval_method: "Confidence Interval" or "Standard Deviation"
+    
+    Returns:
+        mean_values, ci_upper, ci_lower
+    """
+    import numpy as np
+    from scipy.stats import t
+
+    # Number of replicate spectra
+    n = df.shape[1]
+
+    # Mean and standard deviation per row
+    mean_values = df.mean(axis=1)
+    sd_values = df.std(axis=1)
+
+    # ---------------------------------------------------------
+    # Mode 1: Confidence Interval (threshold = conf level)
+    # ---------------------------------------------------------
+    if interval_method == "Confidence Interval":
+
+        conf_lvl = threshold
+
+        # Standard error
+        se_values = sd_values / np.sqrt(n)
+
+        # Convert conf level to two-sided alpha
+        alpha = 1 - conf_lvl / 100.0
+
+        # t critical value
+        t_value = t.ppf(1 - alpha / 2, df=n - 1)
+
+        ci_upper = mean_values + t_value * se_values
+        ci_lower = mean_values - t_value * se_values
+
+        return mean_values, ci_upper, ci_lower
+
+    # ---------------------------------------------------------
+    # Mode 2: Standard Deviation envelope (threshold = SD multiplier)
+    # ---------------------------------------------------------
+    elif interval_method == "Standard Deviation":
+
+        sd_mult = threshold
+
+        ci_upper = mean_values + sd_mult * sd_values
+        ci_lower = mean_values - sd_mult * sd_values
+
+        return mean_values, ci_upper, ci_lower
 
 def hierarchical_clustering_heatmap(df):
     """
@@ -862,7 +890,7 @@ def tsne(df, perplexity=5, n_iter=500, label_df=None):
     tsne = TSNE(
         n_components=2,
         perplexity=perplexity,
-        n_iter=n_iter,
+        max_iter=n_iter,
         random_state=random_state
     )
     tsne_components = tsne.fit_transform(X_std)
@@ -1186,6 +1214,7 @@ def search_database(search_term, data_type_filter="Both"):
 
 # Better plot downloading
 def make_matplotlib_png(data, x_col,
+                        x_label="Raman shift/cm⁻¹", y_label="Intensity/a.u.",
                         plot_width_in=8.0, legend_width_in=4.5, height_in=6.0,
                         legend_fontsize=11):
     import io
@@ -1254,8 +1283,8 @@ def make_matplotlib_png(data, x_col,
                 ci += 1
 
         # Labels (no title)
-        ax.set_xlabel("Raman shift (cm$^{-1}$)")
-        ax.set_ylabel("Intensity (a.u.)")
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
 
         # Minor ticks
         ax.xaxis.set_minor_locator(AutoMinorLocator())
@@ -1304,6 +1333,7 @@ def spectra_derivation(
         'y1' (1st derivative), 'y2' (2nd derivative).
         If normalization is enabled, y1/y2 are min–max scaled per spectrum.
     """
+
     import numpy as np
     import pandas as pd
     from scipy.signal import savgol_filter
@@ -1354,6 +1384,84 @@ def spectra_derivation(
     g["y1"] = y1
     g["y2"] = y2
     return g
+
+# ── SNIP baseline correction ──────────────────────────────────────────────────
+
+def lls_transform(y):
+    """Log-Log-Square root transform"""
+    import numpy as np
+    return np.log(np.log(np.sqrt(np.maximum(y, 0) + 1) + 1) + 1)
+
+def inv_lls_transform(v):
+    """Inverse of the LLS transform."""
+    import numpy as np
+    return (np.exp(np.exp(v) - 1) - 1)**2 - 1
+
+def polynomial_padding(v, pad_width, window_size=15, poly_deg=1):
+    import numpy as np
+    """
+    Extends the array using a polynomial fit of the edges.
+    
+    Parameters:
+    - v: The 1D array to pad.
+    - pad_width: Number of points to add to each side (usually 'iterations').
+    - window_size: Number of points from the edge to use for the fit.
+    - poly_deg: Degree of the polynomial (1 for linear, 2 for quadratic).
+    """
+    n = len(v)
+    # Ensure window_size isn't larger than the data
+    window_size = min(window_size, n)
+    
+    # Left Edge
+    x_left_fit = np.arange(window_size)
+    y_left_fit = v[:window_size]
+    coeffs_left = np.polyfit(x_left_fit, y_left_fit, poly_deg)
+    
+    x_left_pad = np.arange(-pad_width, 0)
+    left_extension = np.polyval(coeffs_left, x_left_pad)
+    
+    # Right Edge
+    x_right_fit = np.arange(n - window_size, n)
+    y_right_fit = v[-window_size:]
+    coeffs_right = np.polyfit(x_right_fit, y_right_fit, poly_deg)
+    
+    x_right_pad = np.arange(n, n + pad_width)
+    right_extension = np.polyval(coeffs_right, x_right_pad)
+    
+    return np.concatenate([left_extension, v, right_extension])
+
+def snip_1d(y, iterations=50, use_lls=True, poly_window=15, poly_deg=1, return_baseline=False):
+    import numpy as np
+    
+    """SNIP baseline correction with polynomial edge padding and optional LLS transform."""
+    
+    # Preprocessing: LLS Transform
+    v = lls_transform(y) if use_lls else y.astype(np.float64)
+    n_original = len(v)
+    
+    # Padding: Polynomial Fit
+    v_padded = polynomial_padding(v, iterations, window_size=poly_window, poly_deg=poly_deg)
+    n_padded = len(v_padded)
+    
+    # Vectorized SNIP iterations
+    for p in range(1, iterations + 1):
+        # Center slice
+        center = v_padded[p : n_padded - p]
+        # Left and Right neighbors shifted by p
+        left = v_padded[0 : n_padded - 2*p]
+        right = v_padded[2*p : n_padded]
+        
+        # Apply the clipping rule
+        v_padded[p : n_padded - p] = np.minimum(center, 0.5 * (left + right))
+    
+    # Post-processing: Remove padding and invert LLS
+    v_final = v_padded[iterations : iterations + n_original]
+    baseline = inv_lls_transform(v_final) if use_lls else v_final
+
+    if return_baseline:
+        return baseline
+    
+    return y - baseline
 
 def random_forest_classification(df, label_df=None, n_estimators=100, max_depth=None, min_samples_leaf=1, test_size=0.2):
     """

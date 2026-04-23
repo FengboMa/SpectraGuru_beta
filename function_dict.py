@@ -28,6 +28,7 @@ names = {
     'Analytics_Clustering_Dendrogram':("Hierarchical Clustering", "Dendrogram"),
     'Analytics_PCA':("PCA", "Principal Component Analysis"),
     'Analytics_TSNE':("t-SNE", "t-Distributed Stochastic Neighbor Embedding"),
+    'Analytics_Classification_Random_Forest':("Classification", "Random Forest"),
 
 
 
@@ -76,8 +77,8 @@ references = {
     28:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/Clustermap/", "link":True, "doc_page":True, "notes":"Hierarchical Clustering doc page"},
     29:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/Principal_Component_Analysis/", "link":True, "doc_page":True, "notes":"PCA doc page"},
     30:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/T-SNE/", "link":True, "doc_page":True, "notes":"t-SNE doc page"},
-    31:{"text":"", "link":None, "doc_page":None, "notes":""},
-    32:{"text":"", "link":None, "doc_page":None, "notes":""},
+    31:{"text":"https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html", "link":True, "doc_page":False, "notes":"scikit-learn RandomForestClassifier documentation"},
+    32:{"text":"https://doi.org/10.1023/A:1010933404324", "link":True, "doc_page":False, "notes":"Breiman 2001 - Random Forests original paper"},
     33:{"text":"", "link":None, "doc_page":None, "notes":""},
     34:{"text":"", "link":None, "doc_page":None, "notes":""},
     35:{"text":"", "link":None, "doc_page":None, "notes":""},
@@ -128,6 +129,7 @@ reference_map = {
     'Analytics_Clustering_Dendrogram':[1,8,28],
     'Analytics_PCA':[9,10,29],
     'Analytics_TSNE':[9,11,30],
+    'Analytics_Classification_Random_Forest':[9,31,32],
 
 
 

@@ -1399,3 +1399,80 @@ def median_filter_spectra (spectra, window_size = 3, padding_method = 'mirror'):
                                 mode=padding_method)
     
     return new_spectra
+# ── SNIP baseline correction ──────────────────────────────────────────────────
+
+def lls_transform(y):
+    """Log-Log-Square root transform"""
+    import numpy as np
+    return np.log(np.log(np.sqrt(np.maximum(y, 0) + 1) + 1) + 1)
+
+def inv_lls_transform(v):
+    """Inverse of the LLS transform."""
+    import numpy as np
+    return (np.exp(np.exp(v) - 1) - 1)**2 - 1
+
+def polynomial_padding(v, pad_width, window_size=15, poly_deg=1):
+    import numpy as np
+    """
+    Extends the array using a polynomial fit of the edges.
+    
+    Parameters:
+    - v: The 1D array to pad.
+    - pad_width: Number of points to add to each side (usually 'iterations').
+    - window_size: Number of points from the edge to use for the fit.
+    - poly_deg: Degree of the polynomial (1 for linear, 2 for quadratic).
+    """
+    n = len(v)
+    # Ensure window_size isn't larger than the data
+    window_size = min(window_size, n)
+    
+    # Left Edge
+    x_left_fit = np.arange(window_size)
+    y_left_fit = v[:window_size]
+    coeffs_left = np.polyfit(x_left_fit, y_left_fit, poly_deg)
+    
+    x_left_pad = np.arange(-pad_width, 0)
+    left_extension = np.polyval(coeffs_left, x_left_pad)
+    
+    # Right Edge
+    x_right_fit = np.arange(n - window_size, n)
+    y_right_fit = v[-window_size:]
+    coeffs_right = np.polyfit(x_right_fit, y_right_fit, poly_deg)
+    
+    x_right_pad = np.arange(n, n + pad_width)
+    right_extension = np.polyval(coeffs_right, x_right_pad)
+    
+    return np.concatenate([left_extension, v, right_extension])
+
+def snip_1d(y, iterations=50, use_lls=True, poly_window=15, poly_deg=1, return_baseline=False):
+    import numpy as np
+    
+    """SNIP baseline correction with polynomial edge padding and optional LLS transform."""
+    
+    # Preprocessing: LLS Transform
+    v = lls_transform(y) if use_lls else y.astype(np.float64)
+    n_original = len(v)
+    
+    # Padding: Polynomial Fit
+    v_padded = polynomial_padding(v, iterations, window_size=poly_window, poly_deg=poly_deg)
+    n_padded = len(v_padded)
+    
+    # Vectorized SNIP iterations
+    for p in range(1, iterations + 1):
+        # Center slice
+        center = v_padded[p : n_padded - p]
+        # Left and Right neighbors shifted by p
+        left = v_padded[0 : n_padded - 2*p]
+        right = v_padded[2*p : n_padded]
+        
+        # Apply the clipping rule
+        v_padded[p : n_padded - p] = np.minimum(center, 0.5 * (left + right))
+    
+    # Post-processing: Remove padding and invert LLS
+    v_final = v_padded[iterations : iterations + n_original]
+    baseline = inv_lls_transform(v_final) if use_lls else v_final
+
+    if return_baseline:
+        return baseline
+    
+    return y - baseline

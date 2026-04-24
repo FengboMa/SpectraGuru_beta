@@ -1,6 +1,6 @@
 import streamlit as st
 from streamlit_modal import Modal
-from auth_utils import login, logout, startup, populate
+from auth_utils import LOCAL_DEPLOY, login, logout, startup, populate
 from auth_utils import clerk_component
 # import streamlit.components.v1 as components
 
@@ -113,16 +113,19 @@ if st.session_state.show_welcome_modal and not st.session_state.show_login_modal
         st.write("If you encounter a problem, please email Fengbo.Ma@uga.edu")
         st.write("**:arrow_upper_left: After starting, go to ‘Data Upload’ in the sidebar to begin!**")
 
-        col1, col2 = st.columns(2)
+        if LOCAL_DEPLOY:
+            st.button("Continue as Guest", on_click=guest_entry)
+        else:
+            col1, col2 = st.columns(2)
 
-        # left: guest
-        col1.button("Continue as Guest", on_click=guest_entry)
+            # left: guest
+            col1.button("Continue as Guest", on_click=guest_entry)
 
-        # right: login via Clerk—just a link
-        #signin_url = clerk_signin_url()           # already returns the full redirect URL
-        #col2.link_button("Log in", signin_url,type="primary")  
+            # right: login via Clerk—just a link
+            #signin_url = clerk_signin_url()           # already returns the full redirect URL
+            #col2.link_button("Log in", signin_url,type="primary")
 
-        col2.button("Log in here", on_click=login, type="primary")
+            col2.button("Log in here", on_click=login, type="primary")
 
 
         st.caption(
@@ -134,7 +137,7 @@ if st.session_state.show_welcome_modal and not st.session_state.show_login_modal
 print("Login modal:", st.session_state.show_login_modal)
 print("User decided:", st.session_state.user_decided)
 # ---------- login modal ----------- #
-if st.session_state.show_login_modal:
+if st.session_state.show_login_modal and not LOCAL_DEPLOY:
 
     def abort():
         st.session_state.show_login_modal = False
@@ -153,6 +156,8 @@ if st.session_state.show_login_modal:
     login_dialog()
 
 st.write("# SpectraGuru  - A Spectra Analysis Application ")
+if LOCAL_DEPLOY:
+    st.write("## Local deploy version")
 # st.info('SpectraGuru is still under development. Current version: SpectraGuru ver. 0.15')
 
 # ---------- greet authenticated users ----------
@@ -176,7 +181,7 @@ st.sidebar.success("Navigate to Data Upload page above to start")
 
 if st.session_state.user_logged_in:
     st.sidebar.button("Log Out", on_click=logout, type='primary')
-elif not st.session_state.show_welcome_modal:
+elif not st.session_state.show_welcome_modal and not LOCAL_DEPLOY:
     st.sidebar.button("Log In", on_click=login, type='primary')
 
 st.markdown(

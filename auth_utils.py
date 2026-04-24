@@ -12,7 +12,7 @@ else:
     _clerk_component = components.declare_component(
         "clerk_component",
         #url="http://localhost:3001/",
-        path="frontend/build"
+        path=clerk_component_path
     )
 
 def clerk_component(key, action, height_offset=25, min_height=100, visible=True):

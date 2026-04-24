@@ -346,15 +346,9 @@ st.markdown(
 """
 )
 
-st.markdown(
-    """
-    ### SpectraGuru supported by:
-    <div style="display:flex; justify-content:center; align-items:center; gap:40px;">
-        <img src="element/USDA.png" style="height:100px; object-fit:contain;">
-        <img src="element/nsf.png" style="height:100px; object-fit:contain;">
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+st.markdown("### SpectraGuru supported by:")
+support_col1, support_col2, support_col3, support_col4 = st.columns([1, 2, 2, 1])
+support_col2.image("element/USDA.png", width=160)
+support_col3.image("element/nsf.png", width=160)
 
 st.session_state.global_placeholder = st.empty() # this should stay the last line of code in this file.

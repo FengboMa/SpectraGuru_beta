@@ -197,11 +197,44 @@ def despikeSpec_v2(spectra, ramanshift, threshold=100, zap_length=11, window_sta
 # Smoothening
 def savgol_filter_spectra (spectra, window_length = 15, polyorder = 2):
     from scipy.signal import savgol_filter
-    new_spectra = savgol_filter (x = spectra, 
+    new_spectra = savgol_filter (x = spectra,
                                 window_length=window_length,
                                 polyorder=polyorder)
-    
+
     return new_spectra
+
+def median_filter_spectra(spectra, window_size=3, padding_method='mirror'):
+    from scipy.ndimage import median_filter
+
+    try:
+        window_size = int(window_size)
+    except (TypeError, ValueError):
+        raise ValueError("window_size must be a positive odd integer")
+
+    if window_size <= 0:
+        raise ValueError("window_size must be a positive odd integer")
+
+    if window_size % 2 == 0:
+        window_size += 1
+
+    padding_aliases = {
+        'edge': 'nearest',
+        'zero': 'constant',
+    }
+    padding_method = padding_aliases.get(padding_method, padding_method)
+
+    supported_padding_methods = {'reflect', 'constant', 'nearest', 'mirror', 'wrap'}
+    if padding_method not in supported_padding_methods:
+        raise ValueError(
+            f"Unknown padding_method '{padding_method}'. "
+            f"Supported values are: {sorted(supported_padding_methods)} plus aliases 'edge' and 'zero'."
+        )
+
+    return median_filter(
+        input=spectra,
+        size=window_size,
+        mode=padding_method
+    )
 
 # def FFT_spectra (spectra, FFT_threshold = 0.1):
 #     import numpy as np
@@ -1536,3 +1569,323 @@ def k_nearest_neighbors(df, n_neighbors, test_set_size, label_df=None):
 
     # output confusion matrix, peformance metrics, and ROC curve
     return cm_chart, df_report, roc
+
+# Returns a DataFrame of spectra with the given structure
+#   Distinct: Each peak is separated
+#   Joint: Peaks are paired together
+#   Consecutive: Multiple peaks overlap in a sequence
+def generate_spectra(s_params, b_params, 
+                     wavenumber_range=(400, 2000), 
+                     resolution=1601, 
+                     scale=1.0, 
+                     structure="Distinct", 
+                     use_baseline=False, 
+                     baseline_type=None, 
+                     use_noise=False, 
+                     noise_amplifier=1, 
+                     num_spectra=1):
+    import pandas as pd
+    import numpy as np
+    from itertools import chain
+
+    A_MIN, A_MAX = 5, 100 # Peak amplitude
+    SIGMA_MIN, SIGMA_MAX = 10, 40 # Peak width
+    BUFFER = 100 # Should be greater than SIGMA_MAX
+    SIGMOIDAL_STEEPNESS = 30
+    buffered_range = (wavenumber_range[0] + BUFFER, wavenumber_range[1] - BUFFER)
+
+    # Establish data shape
+    x = np.linspace(wavenumber_range[0], wavenumber_range[1], resolution)
+    y = np.zeros((num_spectra, resolution))
+
+    # Cuts off a subrange if it exceeds the allowed range
+    def clip(range, allowed_range):
+        return (max(range[0], allowed_range[0]), min(range[1], allowed_range[1]))
+
+    # Adds a Gaussian peak to y
+    def add_gaussian(y, a, mu, sigma):
+        def gaussian(a, mu, sigma):
+            return a * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
+        return y + gaussian(a, mu, sigma), a, mu, sigma
+
+    # Adds a baseline to y
+    def add_baseline(y, b_params, type="Polynomial"):
+        # Normalize x to span [-1, 1]
+        x_ = 2 * (x - (wavenumber_range[0] + wavenumber_range[1]) / 2) / (wavenumber_range[1] - wavenumber_range[0])
+
+        def polynomial(a, b, c, d, e, f):
+            return a*x_**5 + b*x_**4 + c*x_**3 + d*x_**2 + e*x_ + f
+        def exponential(a, b, c, x0):
+            return a * np.exp(-b * (x_ - x0)**2) + c * (x_ - x0)**2
+        def gaussian_baseline(amp, c, w):
+            return amp * np.exp(-((x_ - c) ** 2) / (2 * w ** 2))
+        def sigmoidal(a, k, x0):
+            return a / (1 + np.exp(-SIGMOIDAL_STEEPNESS * k * (x_ - x0)))
+        
+        # Extract parameters
+        if type == "Polynomial":
+            f, e, d, c, b, a = (b_params[i] for i in [f"a{i}" for i in range(6)])
+            y += polynomial(a, b, c, d, e, f)
+        elif type == "Exponential":
+            a, b, c, x0 = (b_params[i] for i in ('a', 'b', 'c', 'x0'))
+            y += exponential(a, b, c, x0)
+        elif type == "Gaussian":
+            amp, c, w = (b_params[i] for i in ('amp', 'c', 'w'))
+            y += gaussian_baseline(amp, c, w)
+        elif type == "Sigmoidal":
+            a, k, x0 = (b_params[i] for i in ('a', 'k', 'x0'))
+            y += sigmoidal(a, k, x0)
+        
+        return y
+
+    # Adds Gaussian noise to y
+    def add_noise(y, noise_amplifier=1):
+        return y + np.random.normal(loc=0, scale=0.01*noise_amplifier, size=np.shape(y))
+
+    # Returns an integer range centered at 'average' and with a span equal to 'variance'
+    def random_select_range(average, variance, minimum=1, maximum=None):
+        low = int(max(average - np.floor(variance / 2), minimum))
+        high = int(average + np.ceil(variance / 2))
+        if maximum is not None:
+            high = int(min(high, maximum))
+        return (low, high + 1)
+
+    # Inserts a new entry to an array of ranges (2-tuples), sorted appropriately.
+    def insert_sort_range(range_array, entry):
+        index = 0
+        while index < len(range_array) and range_array[index][0] < entry[0]:
+            index += 1
+        range_array.insert(index, entry)
+
+    # Uniformly chooses a value within the provided range, but excludes ranges listed as 'excluded ranges'
+    # The excluded ranges should fall within the general range and be sorted by the low end of the range
+    def random_exclusive(bounds, excluded_ranges=None):
+        if excluded_ranges is None:
+            excluded_ranges = []
+
+        # Find the valid ranges
+        valid_ranges, total_valid_size, max_high = [], 0, bounds[0]
+        for ex_range in chain(excluded_ranges, [(bounds[1], bounds[1])]):
+            if ex_range[0] > max_high:
+                valid_ranges.append((max_high, ex_range[0]))
+                total_valid_size += ex_range[0] - max_high
+            max_high = max(max_high, ex_range[1])
+
+        #print("V", valid_ranges)
+        
+        if total_valid_size > 0:
+            random_choice = np.random.uniform(0, total_valid_size)
+            index, valid_range = 0, valid_ranges[0]
+            valid_range_size = valid_range[1] - valid_range[0]
+            while random_choice > valid_range_size and index + 1 < len(valid_ranges):
+                random_choice -= valid_range_size
+                index += 1
+                valid_range = valid_ranges[index]
+                valid_range_size = valid_range[1] - valid_range[0]
+            #print(valid_range, random_choice)
+            return valid_range[0] + random_choice
+        
+        # Else: excluded ranges cover the entire spectrum
+        # Half the size of each excluded range and try again.
+        reduced_excluded_ranges = []
+        for ex_range in excluded_ranges:
+            range_center = (ex_range[1] + ex_range[0]) / 2
+            reduced_ex_range = ((range_center + ex_range[0]) / 2, (range_center + ex_range[1]) / 2)
+            insert_sort_range(reduced_excluded_ranges, reduced_ex_range)
+        return random_exclusive(bounds, reduced_excluded_ranges)
+
+    # Add a region of peaks clumped together by a clustering factor.
+    def add_region(y, allowed_range, seed, clustering_factor=0.5, num_peaks=2):
+
+        excluded_ranges = []
+
+        a, mu, sigma = np.zeros((3, num_peaks))
+        y, a[0], mu[0], sigma[0] = add_gaussian(y, np.random.uniform(A_MIN, A_MAX), seed, np.random.uniform(SIGMA_MIN, SIGMA_MAX))
+        excluded_ranges.append(clip((mu[0] - 2 * clustering_factor * SIGMA_MAX, mu[0] + 2 * clustering_factor * SIGMA_MAX), allowed_range))
+
+        #print(mu)
+
+        for i in range(1, num_peaks):
+            leftmost_peak_center, rightmost_peak_center = mu[mu != 0].min(), mu[mu != 0].max()
+            #print("LPC, RPC", leftmost_peak_center, rightmost_peak_center)
+            peak_spawning_range = clip((leftmost_peak_center - 4 * clustering_factor * SIGMA_MAX, rightmost_peak_center + 4 * clustering_factor * SIGMA_MAX), allowed_range)
+            #print("PSR", peak_spawning_range)
+            
+            y, a[i], mu[i], sigma[i] = add_gaussian(y, np.random.uniform(A_MIN, A_MAX), random_exclusive(peak_spawning_range, excluded_ranges), np.random.uniform(SIGMA_MIN, SIGMA_MAX))
+            
+            new_ex_range = clip((mu[i] - 2 * clustering_factor * SIGMA_MAX, mu[i] + 2 * clustering_factor * SIGMA_MAX), allowed_range)
+            # Sort new excluded range by insertion
+            insert_sort_range(excluded_ranges, new_ex_range)
+            
+        return y, a, mu, sigma
+
+    if structure == "Distinct":
+        # Extract special parameters
+        average_num_peaks = s_params['average_num_peaks']
+        peak_num_variance = s_params['peak_num_variance']
+        separation_factor = s_params['separation_factor']
+        peak_number_range = random_select_range(average=average_num_peaks, variance=peak_num_variance, maximum=20)
+        
+        for k in range(num_spectra):
+            num_peaks = np.random.randint(peak_number_range[0], peak_number_range[1])
+
+            #print(num_peaks)
+
+            excluded_ranges = [] # This array must remain sorted
+            for i in range(num_peaks):
+                y[k], a, mu, sigma = add_gaussian(y[k], np.random.uniform(A_MIN, A_MAX), random_exclusive(buffered_range, excluded_ranges), np.random.uniform(SIGMA_MIN, SIGMA_MAX))
+                # Determine the range in which new peaks should not appear
+                new_ex_range = clip((mu - separation_factor * SIGMA_MAX, mu + separation_factor * SIGMA_MAX), buffered_range)
+
+                #print(mu)
+                #for ex_range in excluded_ranges:
+                #    if ex_range[0] < mu and ex_range[1] > mu:
+                #        print("FAIL")
+
+                # Sort the excluded range by inserting at the correct index
+                insert_sort_range(excluded_ranges, new_ex_range)
+                #print(excluded_ranges)
+    
+    elif structure == "Joint":
+        # Extract special parameters
+        average_num_regions = s_params['average_num_regions']
+        region_num_variance = s_params['region_num_variance']
+        clustering_factor = s_params['clustering_factor'] # Determines how closely the peak pairs are joined together
+        region_number_range = random_select_range(average=average_num_regions, variance=region_num_variance, maximum=10)
+        
+        for k in range(num_spectra):
+            num_regions = np.random.randint(region_number_range[0], region_number_range[1])
+
+            excluded_ranges = []
+            for i in range(num_regions):
+                y[k], a, mu, sigma = add_region(y[k], buffered_range, random_exclusive(buffered_range, excluded_ranges), clustering_factor=clustering_factor)
+                region_center = np.average(mu)
+
+                new_ex_range = clip((region_center - 16 * clustering_factor * SIGMA_MAX, region_center + 16 * clustering_factor * SIGMA_MAX), buffered_range)
+                # Sort the excluded range by inserting at the correct index
+                insert_sort_range(excluded_ranges, new_ex_range)
+
+    elif structure == "Consecutive":
+        # Extract special parameters
+        average_peaks_per_region = s_params['average_peaks_per_region']
+        per_region_peak_variance = s_params['per_region_peak_variance']
+        clustering_factor = s_params['clustering_factor'] # Determines how closely the peak pairs are joined together
+        region_number_range = random_select_range(average=2, variance=1)
+        peak_number_range = random_select_range(average=average_peaks_per_region, variance=per_region_peak_variance, maximum=10)
+
+        for k in range(num_spectra):
+            num_regions = np.random.randint(region_number_range[0], region_number_range[1])
+
+            excluded_ranges = []
+            for i in range(num_regions):
+                num_peaks = np.random.randint(peak_number_range[0], peak_number_range[1])
+                y[k], a, mu, sigma = add_region(y[k], buffered_range, random_exclusive(buffered_range, excluded_ranges), clustering_factor=clustering_factor, num_peaks=num_peaks)
+                region_center = np.average(mu)
+
+                new_ex_range = clip((region_center - 30 * clustering_factor * SIGMA_MAX, region_center + 30 * clustering_factor * SIGMA_MAX), buffered_range)
+                # Sort the excluded range by inserting at the correct index
+                insert_sort_range(excluded_ranges, new_ex_range)
+    else:
+        raise ValueError(f"Unknown spectra structure: {structure}")
+    
+    # Normalize y
+    y -= y.min()
+    y /= y.max()
+
+    if use_baseline:
+        y = add_baseline(y, b_params, baseline_type)
+    
+    if use_noise:
+        y = add_noise(y, noise_amplifier)
+    
+    # Renormalize
+    y -= y.min()
+    y /= y.max()
+    y *= scale
+
+    data = pd.DataFrame({
+        "Ramanshift": x,
+        **{f"y{k}": y[k] for k in range(num_spectra)}
+    })
+
+    #print(data)
+
+    return data
+
+# ── SNIP baseline correction ──────────────────────────────────────────────────
+
+def lls_transform(y):
+    """Log-Log-Square root transform"""
+    import numpy as np
+    return np.log(np.log(np.sqrt(np.maximum(y, 0) + 1) + 1) + 1)
+
+def inv_lls_transform(v):
+    """Inverse of the LLS transform."""
+    import numpy as np
+    return (np.exp(np.exp(v) - 1) - 1)**2 - 1
+
+def polynomial_padding(v, pad_width, window_size=15, poly_deg=1):
+    import numpy as np
+    """
+    Extends the array using a polynomial fit of the edges.
+    
+    Parameters:
+    - v: The 1D array to pad.
+    - pad_width: Number of points to add to each side (usually 'iterations').
+    - window_size: Number of points from the edge to use for the fit.
+    - poly_deg: Degree of the polynomial (1 for linear, 2 for quadratic).
+    """
+    n = len(v)
+    # Ensure window_size isn't larger than the data
+    window_size = min(window_size, n)
+    
+    # Left Edge
+    x_left_fit = np.arange(window_size)
+    y_left_fit = v[:window_size]
+    coeffs_left = np.polyfit(x_left_fit, y_left_fit, poly_deg)
+    
+    x_left_pad = np.arange(-pad_width, 0)
+    left_extension = np.polyval(coeffs_left, x_left_pad)
+    
+    # Right Edge
+    x_right_fit = np.arange(n - window_size, n)
+    y_right_fit = v[-window_size:]
+    coeffs_right = np.polyfit(x_right_fit, y_right_fit, poly_deg)
+    
+    x_right_pad = np.arange(n, n + pad_width)
+    right_extension = np.polyval(coeffs_right, x_right_pad)
+    
+    return np.concatenate([left_extension, v, right_extension])
+
+def snip_1d(y, iterations=50, use_lls=True, poly_window=15, poly_deg=1, return_baseline=False):
+    import numpy as np
+    
+    """SNIP baseline correction with polynomial edge padding and optional LLS transform."""
+    
+    # Preprocessing: LLS Transform
+    v = lls_transform(y) if use_lls else y.astype(np.float64)
+    n_original = len(v)
+    
+    # Padding: Polynomial Fit
+    v_padded = polynomial_padding(v, iterations, window_size=poly_window, poly_deg=poly_deg)
+    n_padded = len(v_padded)
+    
+    # Vectorized SNIP iterations
+    for p in range(1, iterations + 1):
+        # Center slice
+        center = v_padded[p : n_padded - p]
+        # Left and Right neighbors shifted by p
+        left = v_padded[0 : n_padded - 2*p]
+        right = v_padded[2*p : n_padded]
+        
+        # Apply the clipping rule
+        v_padded[p : n_padded - p] = np.minimum(center, 0.5 * (left + right))
+    
+    # Post-processing: Remove padding and invert LLS
+    v_final = v_padded[iterations : iterations + n_original]
+    baseline = inv_lls_transform(v_final) if use_lls else v_final
+
+    if return_baseline:
+        return baseline
+    
+    return y - baseline

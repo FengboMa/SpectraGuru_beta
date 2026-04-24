@@ -131,6 +131,16 @@ def collect_current_preprocessing_entries():
                     "padding_method": st.session_state.smoothening_act_FFT_padding
                 }
             })
+        elif st.session_state.smoothening_function == "Median filter":
+            run_log_entries.append({
+                "step": "smoothening",
+                "display_name": "Smoothening",
+                "parameters": {
+                    "function": "Median filter",
+                    "window_size": st.session_state.smoothening_act_median_filter_window_size,
+                    "padding_method": st.session_state.smoothening_act_median_filter_padding_method
+                }
+            })
 
     if st.session_state.baselineremoval_act:
         if st.session_state.baselineremoval_function == "airPLS":
@@ -165,6 +175,16 @@ def collect_current_preprocessing_entries():
                     "fitting_ranges": st.session_state.fitting_ranges
                 }
             })
+        if st.session_state.baselineremoval_function == "SNIP":
+            run_log_entries.append({
+                "step": "baseline_removal",
+                "display_name": "Baseline Removal",
+                "parameters": {
+                    "function": "SNIP",
+                    "num_iterations": st.session_state.baselineremoval_SNIP_num_iterations
+                }
+            })
+
 
     if st.session_state.normalization_act:
         run_log_entries.append({
@@ -251,6 +271,14 @@ def apply_preprocessing_step(df, step_entry):
                     padding_method=params["padding_method"]
                 )
             )
+        elif params["function"] == "Median filter":
+            result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
+                lambda col: function.median_filter_spectra(
+                    col,
+                    window_size=params["window_size"],
+                    padding_method=params["padding_method"]
+                )
+            )
         return result_df, remove_outliers_log
 
     if step == "baseline_removal":
@@ -274,6 +302,17 @@ def apply_preprocessing_step(df, step_entry):
                     col.values,
                     wavenumber=result_df.iloc[:, 0].values,
                     fitting_ranges=params["fitting_ranges"]
+                )
+            )
+        elif params["function"] == "SNIP":
+            result_df.iloc[:, 1:] = result_df.iloc[:, 1:] - result_df.iloc[:, 1:].apply(
+                lambda col: function.snip_1d(
+                    col.values,
+                    iterations=params["num_iterations"],
+                    use_lls=True, # hardcoded
+                    poly_window=15, # hardcoded
+                    poly_deg=1, # hardcoded
+                    return_baseline=True # hardcoded
                 )
             )
         return result_df, remove_outliers_log
@@ -473,7 +512,7 @@ else:
         
         if smoothening_act:
             # Add more functions to this selectbox if needed
-            st.session_state.smoothening_function = st.selectbox(label="Select your smoothening function",  options=["Savitzky-Golay filter","1D Fast Fourier Transform filter"])
+            st.session_state.smoothening_function = st.selectbox(label="Select your smoothening function",  options=["Savitzky-Golay filter","1D Fast Fourier Transform filter", "Median filter"])
             
             if st.session_state.smoothening_function == "Savitzky-Golay filter":
             # Add more functions to this selectbox if needed
@@ -515,6 +554,28 @@ else:
                                                                                                                     "zero"],
                                                                 key = "smoothening_act_FFT_padding",
                                                                 help = help_txt2)
+            elif st.session_state.smoothening_function == "Median filter":
+                window_size_help = '''
+                The window size parameter specifies the length of the window for the median filter to use. A small window size can remove sharp spikes or outliers while minimizing artifacts. Larger window sizes may result in feature loss and distortion of the original spectra.
+
+                Window size must be odd. The max window size is 51, but smaller window sizes may still produce significant distortion and artifacts. Be sure to select an appropriate window size considering the width of features in your spectra.
+                '''
+                st.number_input(label="Window size", key = "smoothening_act_median_filter_window_size",
+                                                min_value = 3, max_value = 51, value = 3,
+                                                step=2, placeholder="Insert a number", help=window_size_help)
+                padding_help = '''
+                The padding method parameter specifies the method used to pad the signal before applying the median filter. Padding helps to reduce edge effects and minimize artifacts introduced by the filtering process.
+                
+                **Mirror Padding ('mirror'):** Reflects the signal at its edges, creating a smooth transition.
+                
+                **Edge Padding ('edge'):** Repeats the edge values of the signal.
+                
+                **Zero Padding ('zero'):** Adds zeros to the edges of the signal. May introduce artifacts at the edges.
+                '''
+                st.selectbox(label="Padding method",
+                             options=["mirror", "edge", "zero"],
+                             key="smoothening_act_median_filter_padding_method",
+                             help=padding_help)
         # Baseline removal
         # st.markdown("**Baseline Removal**")
         
@@ -528,7 +589,7 @@ else:
         
         if baselineremoval_act:
             # Add more functions to this selectbox if needed
-            st.session_state.baselineremoval_function = st.selectbox(label="Select your baseline removal function",  options=["airPLS", "ModPoly","Gaussian-Lorentzian Fitting"])
+            st.session_state.baselineremoval_function = st.selectbox(label="Select your baseline removal function",  options=["airPLS", "ModPoly","Gaussian-Lorentzian Fitting", "SNIP"])
             
             if st.session_state.baselineremoval_function == "airPLS":
                 st.session_state.baselineremoval_airPLS_lambda = st.number_input(label="AirPLS lambda", help="The larger lambda is,  the smoother the resulting background, z.",
@@ -620,6 +681,11 @@ else:
                                 st.session_state.fitting_ranges =cleaned_ranges
                                 # st.write(st.session_state.despike_fitting_ranges)
                                 st.success(f"Saved {len(cleaned_ranges)} valid fitting ranges.")
+            elif st.session_state.baselineremoval_function == "SNIP":
+                st.session_state.baselineremoval_SNIP_num_iterations = st.number_input(label="SNIP Iterations",
+                                                                            help= "Determines the maximum peak width to be removed. Higher values create a smoother, lower baseline by allowing the algorithm to 'clip' wider peaks.",
+                                                                            min_value=10, max_value = 200, value = 50, 
+                                                                            step = 1, placeholder="Insert a number")
         # Normalization
         # st.markdown("**Normalization**")
         
@@ -696,9 +762,14 @@ else:
                         'window_length': step_entry["parameters"]["window_length"],
                         'polyorder': step_entry["parameters"]["polynomial_order"]
                     })
-                else:
+                elif step_entry["parameters"]["function"] == "1D Fast Fourier Transform filter":
                     log.log_function_call("Processing_Smoothing_FFT_Filter", f_params={
                         'FFT_threshold': step_entry["parameters"]["fft_threshold"],
+                        'padding_method': step_entry["parameters"]["padding_method"]
+                    })
+                elif step_entry["parameters"]["function"] == "Median filter":
+                    log.log_function_call("Processing_Smoothing_Median_Filter", f_params={
+                        'window_size': step_entry["parameters"]["window_size"],
                         'padding_method': step_entry["parameters"]["padding_method"]
                     })
             elif step_entry["step"] == "baseline_removal":
@@ -712,6 +783,10 @@ else:
                 elif step_entry["parameters"]["function"] == "ModPoly":
                     log.log_function_call("Processing_Baseline_Mod_Poly", f_params={
                         'degree': step_entry["parameters"]["degree"]
+                    })
+                elif step_entry["parameters"]["function"] == "SNIP":
+                    log.log_function_call("Processing_Baseline_SNIP", f_params={
+                        'num_iterations': step_entry["parameters"]["num_iterations"]
                     })
                 else:
                     log.log_function_call("Processing_Baseline_Gaussian_Lorentzian_Fitting", f_params={

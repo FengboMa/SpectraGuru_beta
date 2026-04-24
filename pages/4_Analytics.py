@@ -127,9 +127,16 @@ if 'df' in st.session_state:
             if st.session_state.heatmap_min >= st.session_state.heatmap_max:
                 st.sidebar.error('Invalid Number input.')
     elif st.session_state.stats_plot_select == "Peak Identification and Stats":
-        
-        st.sidebar.write("Find peaks only on average:")
-        st.sidebar.write(True)
+        peak_target_options = ["Average"] + [
+            column for column in st.session_state.temp.columns
+            if column not in ["Ramanshift", "Average", "Standard Deviation"]
+        ]
+        st.sidebar.selectbox(
+            label="Select spectrum for peak identification",
+            options=peak_target_options,
+            index=0,
+            key="peak_identification_target"
+        )
         
         st.sidebar.toggle(label="Auto Peak Identification", value=True, key="peak_iden_auto")
         
@@ -802,7 +809,8 @@ else:
 #                 stats_row2.altair_chart(heatmap, use_container_width=False)
 # """
         elif st.session_state.stats_plot_select == "Peak Identification and Stats":   
-            filtered_avg_df = stats_data_melted[stats_data_melted['Sample ID'] == 'Average']
+            selected_peak_target = st.session_state.get("peak_identification_target", "Average")
+            filtered_peak_df = stats_data_melted[stats_data_melted['Sample ID'] == selected_peak_target]
             
             # avg_stats_base2 = alt.Chart(filtered_avg_df).mark_line().encode(
             #         x=alt.X('Ramanshift', title='Raman shift/cm^-1', type='quantitative'),
@@ -821,7 +829,7 @@ else:
             # st.altair_chart(show_plot)
             # st.write(filtered_avg_df)
             
-            peaks, properties = function.peak_identification(spectra=filtered_avg_df['Intensity'].to_numpy(),
+            peaks, properties = function.peak_identification(spectra=filtered_peak_df['Intensity'].to_numpy(),
                                                             height= st.session_state.peak_iden_height_p,
                                                             threshold = st.session_state.peak_iden_threshold_p,
                                                             distance = st.session_state.peak_iden_distance_p,
@@ -830,8 +838,8 @@ else:
 
 
             # Extract Raman shift and intensity values
-            raman_shift = filtered_avg_df['Ramanshift']
-            intensity = filtered_avg_df['Intensity']
+            raman_shift = filtered_peak_df['Ramanshift']
+            intensity = filtered_peak_df['Intensity']
 
             # Plot the Raman shift vs. Intensity with detected peaks using .iloc
             # fig = plt.figure(figsize=(10, 6))
@@ -847,7 +855,7 @@ else:
             # peaks, _ = peak_identification(spectra=filtered_avg_df['Intensity'].to_numpy(), prominence=1.0)
 
             # Step 2: Prepare a DataFrame for the peak markers
-            peak_df = filtered_avg_df.iloc[peaks].copy()
+            peak_df = filtered_peak_df.iloc[peaks].copy()
             
             properties_df = pd.DataFrame(properties)
             
@@ -871,7 +879,9 @@ else:
 
             
             # Step 3: Create the base interactive plot
-            avg_stats_base2 = alt.Chart(filtered_avg_df).mark_line().encode(
+            peak_plot_title = f'Peak Identification: {selected_peak_target}'
+
+            avg_stats_base2 = alt.Chart(filtered_peak_df).mark_line().encode(
                 x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
                 y=alt.Y('Intensity', title=analytics_y_axis_title, type='quantitative'),
                 tooltip=alt.value(None),
@@ -880,7 +890,7 @@ else:
             ).properties(
                 width=1300,
                 height=600,
-                title='Spectra Average Data Plot'
+                title=peak_plot_title
             )
 
             # Step 4: Create the peak markers plot
@@ -896,7 +906,7 @@ else:
             ).properties(
                 width=1300,
                 height=600,
-                title='Spectra Average Data Plot'
+                title=peak_plot_title
             )
 
             # Step 5: Combine the base plot and peak markers
@@ -917,6 +927,7 @@ else:
             log.log_plot_generated_count()
             log.log_function_call("Analytics_Peak_Identification",
                                     f_params={
+                                        'target_spectrum': selected_peak_target,
                                         'auto':st.session_state.peak_iden_auto,
                                         'height':st.session_state.peak_iden_height_p,
                                         'threshold':st.session_state.peak_iden_threshold_p,

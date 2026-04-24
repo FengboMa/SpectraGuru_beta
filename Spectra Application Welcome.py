@@ -170,10 +170,10 @@ if st.session_state.user_logged_in:
 try:
     counts = function.read_counts(st.session_state.log_file_path)
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Views", st.session_state.current_user_count, None)
-    col2.metric("Plots generated", counts['Plot_Generated'], None)
-    col3.metric("Spectra processed", counts['Spectra_Processed'], None)
+    # col1, col2, col3 = st.columns(3)
+    # col1.metric("Views", st.session_state.current_user_count, None)
+    # col2.metric("Plots generated", counts['Plot_Generated'], None)
+    # col3.metric("Spectra processed", counts['Spectra_Processed'], None)
 except:
     pass
 
@@ -198,7 +198,7 @@ st.info("Check out our latest news and updates on SpectraGuru!")
 
 # Add expander to show the flyer
 with st.expander("View SpectraGuru Flyer (v2, Oct 26)"):
-    st.image("news/Spectraguru flyer v2 oct26 (1).png", caption="SpectraGuru Flyer v2 – October 26", use_container_width=True)
+    st.image("element/Spectraguru flyer v2 oct26 (1).png", caption="SpectraGuru Flyer v2 – October 26", use_container_width=True)
 st.divider()
 
 

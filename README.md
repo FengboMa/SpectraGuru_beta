@@ -1,4 +1,4 @@
-<img src="logo.png" width="300">
+<img src="element/logo.png" width="300">
 
 [![Documentation Status](https://img.shields.io/badge/Documentation-latest-green)](https://fengboma.github.io/docs.spectraguru/) 
 [![License: Apache](https://img.shields.io/badge/License-Apache_2.0-yellow)](https://www.apache.org/licenses/LICENSE-2.0) 
@@ -88,7 +88,6 @@ The project was started in Jun 2024 by Dr. Yiping Zhao and Dr. Xianyan Chen from
 ### Help and Support
 
 If you have any questions, comments, and observations, please let us know! Email: zhao-nano-lab@uga.edu.
-
 
 
 

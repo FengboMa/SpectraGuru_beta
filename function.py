@@ -194,11 +194,44 @@ def despikeSpec_v2(spectra, ramanshift, threshold=100, zap_length=11, window_sta
 # Smoothening
 def savgol_filter_spectra (spectra, window_length = 15, polyorder = 2):
     from scipy.signal import savgol_filter
-    new_spectra = savgol_filter (x = spectra, 
+    new_spectra = savgol_filter (x = spectra,
                                 window_length=window_length,
                                 polyorder=polyorder)
-    
+
     return new_spectra
+
+def median_filter_spectra(spectra, window_size=3, padding_method='mirror'):
+    from scipy.ndimage import median_filter
+
+    try:
+        window_size = int(window_size)
+    except (TypeError, ValueError):
+        raise ValueError("window_size must be a positive odd integer")
+
+    if window_size <= 0:
+        raise ValueError("window_size must be a positive odd integer")
+
+    if window_size % 2 == 0:
+        window_size += 1
+
+    padding_aliases = {
+        'edge': 'nearest',
+        'zero': 'constant',
+    }
+    padding_method = padding_aliases.get(padding_method, padding_method)
+
+    supported_padding_methods = {'reflect', 'constant', 'nearest', 'mirror', 'wrap'}
+    if padding_method not in supported_padding_methods:
+        raise ValueError(
+            f"Unknown padding_method '{padding_method}'. "
+            f"Supported values are: {sorted(supported_padding_methods)} plus aliases 'edge' and 'zero'."
+        )
+
+    return median_filter(
+        input=spectra,
+        size=window_size,
+        mode=padding_method
+    )
 
 # def FFT_spectra (spectra, FFT_threshold = 0.1):
 #     import numpy as np

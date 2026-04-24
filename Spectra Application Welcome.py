@@ -7,6 +7,7 @@ from auth_utils import clerk_component
 import function
 import log_utils as log
 import os
+import base64
 
 # Get the current script's directory
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -346,9 +347,23 @@ st.markdown(
 """
 )
 
-st.markdown("### SpectraGuru supported by:")
-support_col1, support_col2, support_col3, support_col4 = st.columns([1, 2, 2, 1])
-support_col2.image("element/USDA.png", width=160)
-support_col3.image("element/nsf.png", width=160)
+def image_data_uri(path):
+    with open(path, "rb") as image_file:
+        encoded = base64.b64encode(image_file.read()).decode("utf-8")
+    return f"data:image/png;base64,{encoded}"
+
+usda_logo = image_data_uri("element/USDA.png")
+nsf_logo = image_data_uri("element/nsf.png")
+
+st.markdown(
+    f"""
+    ### SpectraGuru supported by:
+    <div style="display:flex; justify-content:center; align-items:center; gap:40px; flex-wrap:wrap;">
+        <img src="{usda_logo}" style="height:80px; width:auto; max-width:320px; object-fit:contain;">
+        <img src="{nsf_logo}" style="height:80px; width:auto; max-width:320px; object-fit:contain;">
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 st.session_state.global_placeholder = st.empty() # this should stay the last line of code in this file.

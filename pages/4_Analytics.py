@@ -184,7 +184,8 @@ if 'df' in st.session_state:
         st.sidebar.select_slider(label="t-SNE Maximum number of iterations", options=list(range(200,1001)), value=500, key="tSNE_n_iter")
     elif st.session_state.stats_plot_select == "K-Nearest Neighbors (KNN)":
         # max samples in training set
-        num_samples = int(len(st.session_state.temp.columns) * (1 - st.session_state.get("KNN_test_size", 20) / 100)) - 1
+        num_samples = int(len([col for col in st.session_state.temp.columns if col != 'Ramanshift']) * (1 - st.session_state.get("KNN_test_size", 20) / 100)) - 2
+        num_samples = max(1, num_samples) 
 
         # tips for choosing best k value
         knn_help = """
@@ -214,10 +215,10 @@ if 'df' in st.session_state:
             value=20, 
             key="KNN_test_size",
             help=test_help) # description for test size
-        
-        # if current k is greater than available samples, force it down
+
+        # if current k is greater than available samples, force down to default or max possible samples (whichever is smaller)
         if st.session_state.get("KNN_n_neighbors", 3) > num_samples:
-            st.session_state["KNN_n_neighbors"] = 3
+            st.session_state["KNN_n_neighbors"] = max(1, min(3, num_samples))
         
         # k value settings
         st.sidebar.number_input(
@@ -225,7 +226,7 @@ if 'df' in st.session_state:
             min_value=1, 
             max_value=num_samples, 
             step=2,
-            value=3, 
+            value=min(3, num_samples),
             key="KNN_n_neighbors",
             help=knn_help) # description for K value
 
@@ -1032,29 +1033,32 @@ else:
             st.write("#### **K-Nearest Neighbors (KNN) Analysis**")
             st.divider()
 
-            # run knn function using settings from the sidebar
-            cm_chart, df_report, roc = function.k_nearest_neighbors(
-                temp,
-                n_neighbors=st.session_state.KNN_n_neighbors,
-                test_set_size=st.session_state.KNN_test_size,
-                label_df=label_df
-            )
+            try:
+                # run knn function using settings from the sidebar
+                cm_chart, df_report, roc = function.k_nearest_neighbors(
+                    temp,
+                    n_neighbors=st.session_state.KNN_n_neighbors,
+                    test_set_size=st.session_state.KNN_test_size,
+                    label_df=label_df
+                )
 
-            # log plot generated count
-            log.log_plot_generated_count()
-            log.log_function_call("Analytics_KNN",
-                                    f_params={
-                                        "n_neighbors": st.session_state.KNN_n_neighbors,
-                                        "test_set_size": st.session_state.KNN_test_size
-                                    })
+                # display confusion matrix
+                st.altair_chart(cm_chart, use_container_width=False)
 
-            # display confusion matrix
-            st.altair_chart(cm_chart, use_container_width=False)
+                # display performance metrics
+                st.markdown("**Performance Metrics**")
+                st.dataframe(df_report, use_container_width=False)
+                st.write("\n")
 
-            # display performance metrics
-            st.markdown("**Performance Metrics**")
-            st.dataframe(df_report, use_container_width=False)
-            st.write("\n")
+                # display ROC curve
+                st.altair_chart(roc, use_container_width=False)
 
-            # display ROC curve
-            st.altair_chart(roc, use_container_width=False)
+                # log plot generated count
+                log.log_plot_generated_count()
+                log.log_function_call("Analytics_KNN",
+                                        f_params={
+                                            "n_neighbors": st.session_state.KNN_n_neighbors,
+                                            "test_set_size": st.session_state.KNN_test_size
+                                        })
+            except Exception as e: # display any error messages w/ no traceback
+                st.error(f"**Error occurred**: {e}")

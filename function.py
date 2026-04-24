@@ -1426,7 +1426,8 @@ def k_nearest_neighbors(df, n_neighbors, test_set_size, label_df=None):
     # display error message if there are less than two classes
     unique_classes = np.unique(y)
     if len(unique_classes) < 2:
-        raise ValueError("The dataset must contain at least two different classes (labels) to perform KNN classification.")
+            raise ValueError("The dataset must contain at least two different classes (labels) to perform KNN classification. "
+                            "Please go back to the 'Data Upload' Page and ensure you have two or more labels in your dataset.")
 
     # data cleaning
     scaler = StandardScaler()
@@ -1435,29 +1436,47 @@ def k_nearest_neighbors(df, n_neighbors, test_set_size, label_df=None):
     # encode labels
     le = LabelEncoder()
     y_encoded = le.fit_transform(y)
-    all_viruses = le.classes_
+    all_classes = le.classes_
     display_names = [f"Class {int(name)}" for name in le.classes_]
 
-    # 80/20 stratified split
-    X_train, X_test, y_train, y_test = train_test_split(
-        X_std, y_encoded, test_size=(test_set_size/100), random_state=42, stratify=y_encoded
-    )
+    # train/test split
+    if test_set_size == 0: # no test set
+        X_train, X_test, y_train, y_test = X_std, X_std, y_encoded, y_encoded 
+    else: 
+        # calculate min test samples needed (one per class) 
+        min_test_samples = len(unique_classes)
+        requested_test_samples = int(len(y_encoded) * (test_set_size / 100))
+
+        # ensure test size is large enough to include all classes
+        if requested_test_samples < min_test_samples:
+            final_test_size = min_test_samples # if user input is too small, use min required samples
+        else:
+            final_test_size = requested_test_samples # otherwise, use user-requested test size
+
+        # split data while preserving class distribution
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_std, y_encoded, test_size=final_test_size, random_state=42, stratify=y_encoded
+        )
+    
+    # ensure k is within a valid range based on training size
+    safe_k = min(n_neighbors, len(X_train) - 1) # k cannot exceed available training samples
+    safe_k = max(1, safe_k) # k is at least 1
 
     # model training and prediction
-    knn = KNeighborsClassifier(n_neighbors=n_neighbors, metric="euclidean", weights="uniform")
+    knn = KNeighborsClassifier(n_neighbors=safe_k, metric="euclidean", weights="uniform")
     knn.fit(X_train, y_train)
     y_pred = knn.predict(X_test)
 
     # altair visualization of confusion matrix
-    cm = confusion_matrix(y_test, y_pred, labels=range(len(all_viruses)))
+    cm = confusion_matrix(y_test, y_pred, labels=range(len(all_classes)))
     cm_df = pd.DataFrame(cm, index=display_names, columns=display_names).stack().reset_index()
     cm_df.columns = ["Actual Label", "Predicted Label", "Count"]
     cm_df["Count"] = cm_df["Count"].astype(float) # fixes blank chart issue by standardizing data types
 
     # base for heatmap
     base = alt.Chart(cm_df).encode(
-        x=alt.X("Predicted Label:N", title="Predicted"),
-        y=alt.Y("Actual Label:N", title="Actual")
+        x=alt.X("Predicted Label:N", title="Predicted Label"),
+        y=alt.Y("Actual Label:N", title="Actual Label")
     )
 
     # confusion matrix chart 
@@ -1476,9 +1495,11 @@ def k_nearest_neighbors(df, n_neighbors, test_set_size, label_df=None):
         ).properties(width=600, height=600, title="Confusion Matrix")
 
     # performance metrics report
-    report_dict = classification_report(y_test, y_pred, target_names=display_names, output_dict=True)
+    present_in_test = np.unique(y_test)
+    actual_target_names = [display_names[i] for i in present_in_test]
+    report_dict = classification_report(y_test, y_pred, target_names=actual_target_names, output_dict=True)
     df_report = pd.DataFrame(report_dict).transpose() 
-    df_report = df_report.loc[display_names]
+    df_report = df_report.loc[actual_target_names]
 
     # get prediction probabilities (for ROC analysis) and final predicted labels
     y_probs = knn.predict_proba(X_test)
@@ -1486,15 +1507,16 @@ def k_nearest_neighbors(df, n_neighbors, test_set_size, label_df=None):
 
     # compute ROC curve and AUC for each class to see how confident model is when making predictions
     roc_list = []
-    for i, virus in enumerate(all_viruses):
-        fpr, tpr, _ = roc_curve(y_test == i, y_probs[:, i]) 
-        roc_auc = auc(fpr, tpr)
-        label_name = f"Class {int(virus)} (AUC={roc_auc:.2f})"
-        roc_list.append(pd.DataFrame({
-            "FPR": fpr, 
-            "TPR": tpr, 
-            "Virus": f"{virus} (AUC={roc_auc:.2f})" # AUC closer to 1 = better
-        }))
+    for i, class_name in enumerate(all_classes):
+        if i in present_in_test:
+            prob_col_idx = list(knn.classes_).index(i)
+            fpr, tpr, _ = roc_curve(y_test == i, y_probs[:, prob_col_idx])
+            roc_auc = auc(fpr, tpr)
+            roc_list.append(pd.DataFrame({
+                "FPR": fpr, 
+                "TPR": tpr, 
+                "Class": f"{class_name} (AUC={roc_auc:.2f})" # AUC closer to 1 = better
+            }))
 
     # concatenate all ROC dataframes
     df_roc = pd.concat(roc_list)
@@ -1503,14 +1525,14 @@ def k_nearest_neighbors(df, n_neighbors, test_set_size, label_df=None):
     roc_chart = alt.Chart(df_roc).mark_line().encode(
         x=alt.X("FPR:Q", title="False Positive Rate"), 
         y=alt.Y("TPR:Q", title="True Positive Rate"),
-        color="Virus:N"
+        color="Class:N"
     ).properties(title="ROC Curve Analysis", width=600, height=600)
 
     # add diagonal line for chance level
     line = alt.Chart(pd.DataFrame({"x": [0, 1], "y": [0, 1]})).mark_line(strokeDash=[5, 5], color="gray").encode(x="x", y="y")
 
     # combine layers and display final format
-    roc = (line + roc_chart).properties(title="Receiver Operating Characteristic (ROC) Curve", width=600, height=600    )
+    roc = (line + roc_chart).properties(title="ROC Curve (Receiver Operating Characteristic)", width=600, height=600)
 
     # output confusion matrix, peformance metrics, and ROC curve
     return cm_chart, df_report, roc

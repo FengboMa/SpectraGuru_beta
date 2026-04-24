@@ -1406,6 +1406,7 @@ def generate_spectra(s_params, b_params,
     A_MIN, A_MAX = 5, 100 # Peak amplitude
     SIGMA_MIN, SIGMA_MAX = 10, 40 # Peak width
     BUFFER = 100 # Should be greater than SIGMA_MAX
+    SIGMOIDAL_STEEPNESS = 30
     buffered_range = (wavenumber_range[0] + BUFFER, wavenumber_range[1] - BUFFER)
 
     # Establish data shape
@@ -1434,7 +1435,7 @@ def generate_spectra(s_params, b_params,
         def gaussian_baseline(amp, c, w):
             return amp * np.exp(-((x_ - c) ** 2) / (2 * w ** 2))
         def sigmoidal(a, k, x0):
-            return a / (1 + np.exp(-k*(30*(x_ - x0))))
+            return a / (1 + np.exp(-SIGMOIDAL_STEEPNESS * k * (x_ - x0)))
         
         # Extract parameters
         if type == "Polynomial":
@@ -1473,10 +1474,13 @@ def generate_spectra(s_params, b_params,
 
     # Uniformly chooses a value within the provided range, but excludes ranges listed as 'excluded ranges'
     # The excluded ranges should fall within the general range and be sorted by the low end of the range
-    def random_exclusive(range, excluded_ranges=[]):
+    def random_exclusive(bounds, excluded_ranges=None):
+        if excluded_ranges is None:
+            excluded_ranges = []
+
         # Find the valid ranges
-        valid_ranges, total_valid_size, max_high = [], 0, range[0]
-        for ex_range in chain(excluded_ranges, [(range[1], range[1])]):
+        valid_ranges, total_valid_size, max_high = [], 0, bounds[0]
+        for ex_range in chain(excluded_ranges, [(bounds[1], bounds[1])]):
             if ex_range[0] > max_high:
                 valid_ranges.append((max_high, ex_range[0]))
                 total_valid_size += ex_range[0] - max_high
@@ -1503,7 +1507,7 @@ def generate_spectra(s_params, b_params,
             range_center = (ex_range[1] + ex_range[0]) / 2
             reduced_ex_range = ((range_center + ex_range[0]) / 2, (range_center + ex_range[1]) / 2)
             insert_sort_range(reduced_excluded_ranges, reduced_ex_range)
-        return random_exclusive(range, reduced_excluded_ranges)
+        return random_exclusive(bounds, reduced_excluded_ranges)
 
     # Add a region of peaks clumped together by a clustering factor.
     def add_region(y, allowed_range, seed, clustering_factor=0.5, num_peaks=2):
@@ -1596,6 +1600,8 @@ def generate_spectra(s_params, b_params,
                 new_ex_range = clip((region_center - 30 * clustering_factor * SIGMA_MAX, region_center + 30 * clustering_factor * SIGMA_MAX), buffered_range)
                 # Sort the excluded range by inserting at the correct index
                 insert_sort_range(excluded_ranges, new_ex_range)
+    else:
+        raise ValueError(f"Unknown spectra structure: {structure}")
     
     # Normalize y
     y -= y.min()

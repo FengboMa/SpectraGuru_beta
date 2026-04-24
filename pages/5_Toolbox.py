@@ -1,6 +1,5 @@
 import streamlit as st
 import altair as alt
-import pandas as pd
 import function
 import log_utils as log
 import datetime as dt
@@ -16,7 +15,7 @@ with st.sidebar:
 
     st.selectbox('Select Tool',
                         options=(
-                            "Spectra Simulation"
+                            "Spectra Simulation",
                         ),
                         key="tool_select")
 
@@ -74,7 +73,8 @@ with st.sidebar:
                 st.caption("**Polynomial Baseline:**")
                 st.caption("B(x) = a0 + a1*(x) + a2*(x^2) + a3*(x^3) + a4*(x^4) + a5*(x^5)")
 
-                sliders = [st.slider(f"a{i}", min_value=-1.0, max_value=1.0, value=0.0, step=0.01, key=f"simulation_baseline_polynomial_a{i}") for i in range(6)]
+                for i in range(6):
+                    st.slider(f"a{i}", min_value=-1.0, max_value=1.0, value=0.0, step=0.01, key=f"simulation_baseline_polynomial_a{i}")
             elif baseline_type == "Exponential":
                 st.caption("**Exponential Baseline:**")
                 st.caption("B(x) = a*(e^(-b * (x - x0)^2)) + c*((x - x0)^2)")
@@ -92,7 +92,7 @@ with st.sidebar:
                 st.slider("Width (sigma)", min_value=0.1, max_value=1.0, value=0.5, key="simulation_baseline_gaussian_width")
             elif baseline_type == "Sigmoidal":
                 st.caption("**Sigmoidal Baseline:**")
-                st.caption("B(x) = a / (1 + e^(-k * (x - x0)))")
+                st.caption("B(x) = a / (1 + e^(-30 * k * (x - x0)))")
 
                 st.slider("Amplitude (a)", min_value=-1.0, max_value=1.0, value=0.5, key="simulation_baseline_sigmoidal_amplitude")
                 st.slider("Exponent (k)", min_value=-1.0, max_value=1.0, value=0.1, key="simulation_baseline_sigmoidal_exponent")
@@ -198,7 +198,7 @@ if st.session_state.tool_select == "Spectra Simulation":
                             title="Simulated Spectra"
                         )
         simulated_spectra = function.style_altair_chart(simulated_spectra)
-        st.altair_chart(simulated_spectra, width="content")
+        st.altair_chart(simulated_spectra, use_container_width=False)
 
         @st.cache_data
         def download_df(df):

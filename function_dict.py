@@ -4,7 +4,7 @@
 # To add a new function to the names dict, first determine its keyname
 #   Keynames should take the form DOMAIN_FEATURE_ALGORITHM with underscores used as spaces
 #     - for example: Processing_Baseline_AirPLS
-#     - DOMAIN should almost always be Processing or Analytics
+#     - DOMAIN should almost always be Processing, Analytics, or Toolbox
 #   The pair of strings after each entry represent user-readable identifiers (FEATURE, ALGORITHM)
 #     - FEATURE and ALGORITHM may be the same if appropriate
 #   In the Processing/Analytics page, make sure log.log_function_call(keyname, parameters) is invoked appropriately when your
@@ -28,6 +28,7 @@ names = {
     'Analytics_Clustering_Dendrogram':("Hierarchical Clustering", "Dendrogram"),
     'Analytics_PCA':("PCA", "Principal Component Analysis"),
     'Analytics_TSNE':("t-SNE", "t-Distributed Stochastic Neighbor Embedding"),
+    'Toolbox_Spectra_Simulation':("Spectra Simulation", "Spectra Simulation"),
 
 
 
@@ -128,6 +129,7 @@ reference_map = {
     'Analytics_Clustering_Dendrogram':[1,8,28],
     'Analytics_PCA':[9,10,29],
     'Analytics_TSNE':[9,11,30],
+    'Toolbox_Spectra_Simulation':[0]
 
 
 

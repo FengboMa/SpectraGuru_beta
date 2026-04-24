@@ -1066,7 +1066,7 @@ else:
 
                 # log plot generated count
                 log.log_plot_generated_count()
-                log.log_function_call("Analytics_KNN",
+                log.log_function_call("Analytics_Classification_KNN",
                                         f_params={
                                             "n_neighbors": st.session_state.KNN_n_neighbors,
                                             "test_set_size": st.session_state.KNN_test_size

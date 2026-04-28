@@ -5,7 +5,7 @@
 # To add a new function to the names dict, first determine its keyname
 #   Keynames should take the form DOMAIN_FEATURE_ALGORITHM with underscores used as spaces
 #     - for example: Processing_Baseline_AirPLS
-#     - DOMAIN should almost always be Processing or Analytics
+#     - DOMAIN should almost always be Processing, Analytics, or Toolbox
 #   The pair of strings after each entry represent user-readable identifiers (FEATURE, ALGORITHM)
 #     - FEATURE and ALGORITHM may be the same if appropriate
 #   In the Processing/Analytics page, make sure log.log_function_call(keyname, parameters) is invoked appropriately when your
@@ -16,6 +16,7 @@ names = {
     'Processing_Despike_Manual':("Despike", "Manual Despike"),
     'Processing_Smoothing_Savgol_Filter':("Smoothening", "Savitzky-Golay filter"),
     'Processing_Smoothing_FFT_Filter':("Smoothening", "1D Fast Fourier Transform filter"),
+    'Processing_Smoothing_Median_Filter':("Smoothening", "Median filter"),
     'Processing_Baseline_AirPLS':("Baseline Removal", "AirPLS"),
     'Processing_Baseline_Mod_Poly':("Baseline Removal", "Modified Polynomial Fitting"),
     'Processing_Baseline_Gaussian_Lorentzian_Fitting':("Baseline Removal", "Gaussian-Lorentzian Fitting"),
@@ -32,6 +33,7 @@ names = {
 
     'Analytics_TSNE':("t-SNE", "t-Distributed Stochastic Neighbor Embedding"),
     'Analytics_SVM':("SVM", "Support Vector Machine"),
+    'Toolbox_Spectra_Simulation':("Spectra Simulation", "Spectra Simulation"),
 
 
 
@@ -122,6 +124,7 @@ reference_map = {
     'Processing_Despike_Manual':[0,12],
     'Processing_Smoothing_Savgol_Filter':[1,2,13],
     'Processing_Smoothing_FFT_Filter':[0,14],
+    'Processing_Smoothing_Median_Filter':[1],
     'Processing_Baseline_AirPLS':[3,4,15],
     'Processing_Baseline_Mod_Poly':[5,16],
     'Processing_Baseline_Gaussian_Lorentzian_Fitting':[6,7,17],

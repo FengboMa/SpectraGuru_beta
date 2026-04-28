@@ -67,12 +67,7 @@ print("User:", st.session_state.user)
 
 st.image(r"element/Application header picture-3.png")
 
-<<<<<<< HEAD
-#st.session_state.log_file_path = r"element/user_count.txt"
-=======
 st.session_state.log_file_path = r"element/user_count.txt"
-
->>>>>>> 7e2ac56 (sync)
 
 # Initialize user count (logs +1 for each unique session)
 if 'current_user_count' not in st.session_state:

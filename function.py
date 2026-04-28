@@ -282,6 +282,143 @@ def FFT_spectra(spectra, FFT_threshold=0.1, padding_method='mirror', fs=1):
     # Return the real part of the filtered signal
     return filtered_signal.real
 
+def compute_fft_spectrum(ramanshift, intensity, source_spectrum, subtract_average=False):
+    import numpy as np
+    import pandas as pd
+
+    try:
+        from scipy.fft import rfft, rfftfreq
+    except ImportError:
+        try:
+            from scipy.fftpack import rfft, rfftfreq
+        except ImportError:
+            from numpy.fft import rfft, rfftfreq
+
+    x = pd.to_numeric(pd.Series(ramanshift), errors="coerce").to_numpy(dtype=float)
+    y = pd.to_numeric(pd.Series(intensity), errors="coerce").to_numpy(dtype=float)
+    valid_mask = np.isfinite(x) & np.isfinite(y)
+    x = x[valid_mask]
+    y = y[valid_mask]
+
+    if x.size != y.size:
+        raise ValueError("Ramanshift and intensity must have the same length.")
+    if x.size < 2:
+        raise ValueError("At least two points are required to compute FFT.")
+
+    if subtract_average:
+        y = y - np.mean(y)
+
+    spacing = float(np.mean(np.diff(x)))
+    if not np.isfinite(spacing) or spacing == 0:
+        raise ValueError("Ramanshift spacing must be non-zero for FFT.")
+
+    fft_values = rfft(y)
+    frequency = rfftfreq(x.size, d=abs(spacing))
+    magnitude = np.abs(fft_values)
+    power_msa = magnitude ** 2
+    phase_deg = np.degrees(np.angle(fft_values))
+
+    fft_df = pd.DataFrame({
+        "Frequency": frequency,
+        "Real": fft_values.real,
+        "Imaginary": fft_values.imag,
+        "Magnitude": magnitude,
+        "Power_MSA": power_msa,
+        "Phase (deg)": phase_deg
+    }).sort_values(by="Frequency").reset_index(drop=True)
+    fft_df["Source Spectrum"] = source_spectrum
+    fft_df["Subtract Average Applied"] = subtract_average
+    fft_df["Ramanshift Step"] = abs(spacing)
+
+    return fft_df
+
+def build_fft_plots(
+    fft_df,
+    frequency_axis_title,
+    phase_axis_title,
+    amplitude_axis_title,
+    real_axis_title,
+    imaginary_axis_title,
+    power_axis_title,
+    chart_width=650,
+    chart_height=300,
+    title_prefix=""
+):
+    import altair as alt
+    import pandas as pd
+
+    base = alt.Chart(fft_df).encode(
+        x=alt.X("Frequency:Q", title=frequency_axis_title)
+    )
+
+    phase_plot = base.mark_line(color="#1f77b4").encode(
+        y=alt.Y("Phase (deg):Q", title=phase_axis_title),
+        tooltip=[
+            alt.Tooltip("Frequency:Q", title=frequency_axis_title),
+            alt.Tooltip("Phase (deg):Q", title=phase_axis_title, format=".4f")
+        ]
+    ).properties(width=chart_width, height=chart_height, title=f"{title_prefix}: Phase vs Frequency")
+
+    amplitude_plot = base.mark_line(color="#ff7f0e").encode(
+        y=alt.Y("Magnitude:Q", title=amplitude_axis_title),
+        tooltip=[
+            alt.Tooltip("Frequency:Q", title=frequency_axis_title),
+            alt.Tooltip("Magnitude:Q", title=amplitude_axis_title, format=".4f")
+        ]
+    ).properties(width=chart_width, height=chart_height, title=f"{title_prefix}: Amplitude vs Frequency")
+
+    real_plot = base.mark_line(color="#2ca02c").encode(
+        y=alt.Y("Real:Q", title=real_axis_title),
+        tooltip=[
+            alt.Tooltip("Frequency:Q", title=frequency_axis_title),
+            alt.Tooltip("Real:Q", title=real_axis_title, format=".4f")
+        ]
+    ).properties(width=chart_width, height=chart_height, title=f"{title_prefix}: Real vs Frequency")
+
+    imaginary_plot = base.mark_line(color="#d62728").encode(
+        y=alt.Y("Imaginary:Q", title=imaginary_axis_title),
+        tooltip=[
+            alt.Tooltip("Frequency:Q", title=frequency_axis_title),
+            alt.Tooltip("Imaginary:Q", title=imaginary_axis_title, format=".4f")
+        ]
+    ).properties(width=chart_width, height=chart_height, title=f"{title_prefix}: Imaginary vs Frequency")
+
+    real_imag_df = pd.concat([
+        fft_df[["Frequency", "Real"]].rename(columns={"Real": "Value"}).assign(Component="Real"),
+        fft_df[["Frequency", "Imaginary"]].rename(columns={"Imaginary": "Value"}).assign(Component="Imaginary")
+    ], ignore_index=True)
+    real_imag_plot = alt.Chart(real_imag_df).mark_line().encode(
+        x=alt.X("Frequency:Q", title=frequency_axis_title),
+        y=alt.Y("Value:Q", title="Real / Imaginary"),
+        color=alt.Color(
+            "Component:N",
+            title="Component",
+            scale=alt.Scale(domain=["Real", "Imaginary"], range=["#2ca02c", "#d62728"])
+        ),
+        tooltip=[
+            alt.Tooltip("Frequency:Q", title=frequency_axis_title),
+            alt.Tooltip("Component:N", title="Component"),
+            alt.Tooltip("Value:Q", title="Value", format=".4f")
+        ]
+    ).properties(width=chart_width, height=chart_height, title=f"{title_prefix}: Real + Imaginary vs Frequency")
+
+    power_plot = base.mark_line(color="#9467bd").encode(
+        y=alt.Y("Power_MSA:Q", title=power_axis_title),
+        tooltip=[
+            alt.Tooltip("Frequency:Q", title=frequency_axis_title),
+            alt.Tooltip("Power_MSA:Q", title=power_axis_title, format=".4f")
+        ]
+    ).properties(width=chart_width, height=chart_height, title=f"{title_prefix}: Power (MSA) vs Frequency")
+
+    return {
+        "phase": style_altair_chart(phase_plot),
+        "amplitude": style_altair_chart(amplitude_plot),
+        "real": style_altair_chart(real_plot),
+        "imaginary": style_altair_chart(imaginary_plot),
+        "real_imaginary": style_altair_chart(real_imag_plot),
+        "power": style_altair_chart(power_plot)
+    }
+
 def remove_outliers(df, single_thresh=4, distance_thresh=6, coeff_thresh=4):
     import numpy as np
     import pandas as pd

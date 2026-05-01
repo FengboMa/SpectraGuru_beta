@@ -1496,6 +1496,87 @@ def _analytics_ml_classification_evaluate(model, X_eval, y_eval, classes, sectio
     }
 
 
+def analytics_ml_classification_random_forest(
+    df,
+    label_df,
+    n_estimators=100,
+    max_depth=None,
+    min_samples_leaf=1,
+    test_size=0,
+):
+    import altair as alt
+    import pandas as pd
+    from sklearn.ensemble import RandomForestClassifier
+
+    X, y, sample_names, spectra_df = _analytics_ml_classification_prepare_data(df, label_df)
+    split = _analytics_ml_classification_split(X, y, test_size)
+
+    model = RandomForestClassifier(
+        n_estimators=int(n_estimators),
+        max_depth=None if max_depth in (None, 0) else int(max_depth),
+        min_samples_leaf=int(min_samples_leaf),
+        max_features="sqrt",
+        criterion="gini",
+        bootstrap=True,
+        random_state=42,
+    )
+    model.fit(split["X_train"], split["y_train"])
+    classes = model.classes_
+
+    if split["mode"] == "full_dataset":
+        sections = [_analytics_ml_classification_evaluate(
+            model,
+            split["X_test"],
+            split["y_test"],
+            classes,
+            "Full Dataset Performance",
+            "Full Dataset Confusion Matrix",
+            "Full Dataset ROC Curve",
+        )]
+    else:
+        sections = [
+            _analytics_ml_classification_evaluate(
+                model,
+                split["X_train"],
+                split["y_train"],
+                classes,
+                "Training Set Performance",
+                "Training Set Confusion Matrix",
+                "Training Set ROC Curve",
+            ),
+            _analytics_ml_classification_evaluate(
+                model,
+                split["X_test"],
+                split["y_test"],
+                classes,
+                "Test Set Performance",
+                "Test Set Confusion Matrix",
+                "Test Set ROC Curve",
+            ),
+        ]
+
+    feature_names = spectra_df.columns.astype(str).tolist()
+    feature_importance_df = pd.DataFrame({
+        "Feature": feature_names,
+        "Importance": model.feature_importances_,
+    }).sort_values("Importance", ascending=False).head(25)
+    feature_importance = alt.Chart(feature_importance_df).mark_bar().encode(
+        x=alt.X("Importance:Q", title="Importance"),
+        y=alt.Y("Feature:N", sort="-x", title="Raman Shift"),
+        tooltip=["Feature", "Importance"],
+    ).properties(width=700, height=500, title="Random Forest Feature Importance")
+
+    return {
+        "mode": split["mode"],
+        "split_info": split["split_info"],
+        "sections": sections,
+        "extra_plots": [{
+            "name": "Feature Importance",
+            "chart": style_altair_chart(feature_importance),
+        }],
+    }
+
+
 def analytics_ml_classification_svm(
     df,
     label_df,
@@ -1507,7 +1588,6 @@ def analytics_ml_classification_svm(
     gamma="scale",
 ):
     import altair as alt
-    import pandas as pd
     from sklearn.svm import SVC
 
     X, y, sample_names, spectra_df = _analytics_ml_classification_prepare_data(df, label_df)
@@ -1560,18 +1640,17 @@ def analytics_ml_classification_svm(
     train_sample_indices = split["train_indices"]
     support_sample_indices = train_sample_indices[model.support_]
 
-    def to_long(source_df, sample_role):
+    def to_long(source_df):
         return (
             source_df.copy()
             .assign(Spectrum=source_df.index.astype(str))
             .melt(id_vars="Spectrum", var_name="Raman Shift", value_name="Intensity")
-            .assign(Role=sample_role)
         )
 
     train_df = spectra_df.iloc[train_sample_indices]
     support_df = spectra_df.iloc[support_sample_indices]
     support_plot = (
-        alt.Chart(to_long(train_df, "Training Spectrum")).mark_line(
+        alt.Chart(to_long(train_df)).mark_line(
             opacity=0.15,
             color="gray",
             strokeWidth=1,
@@ -1580,7 +1659,7 @@ def analytics_ml_classification_svm(
             y=alt.Y("Intensity:Q", title="Intensity"),
             detail="Spectrum:N",
         )
-        + alt.Chart(to_long(support_df, "Support Vector")).mark_line(strokeWidth=2).encode(
+        + alt.Chart(to_long(support_df)).mark_line(strokeWidth=2).encode(
             x=alt.X("Raman Shift:Q", title="Raman Shift"),
             y=alt.Y("Intensity:Q", title="Intensity"),
             color=alt.Color("Spectrum:N", legend=alt.Legend(title="Support Vectors")),

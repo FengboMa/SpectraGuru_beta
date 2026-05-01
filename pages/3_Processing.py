@@ -149,7 +149,7 @@ def collect_current_preprocessing_entries():
                 "wavelet": st.session_state.wavelet_family,
                 "level": st.session_state.wavelet_level
             }
-            if method == "Sardy BCR":
+            if method in ("Sardy Block Coordinate Relaxation(BCR)", "Sardy BCR"):
                 params["n_iter"] = st.session_state.wavelet_n_iter
                 params["loss"] = st.session_state.wavelet_loss
             else:
@@ -202,12 +202,12 @@ def collect_current_preprocessing_entries():
                     "num_iterations": st.session_state.baselineremoval_SNIP_num_iterations
                 }
             })
-        if st.session_state.baselineremoval_function == "ALS":
+        if st.session_state.baselineremoval_function in ("Asymmetric Least Squares(ALS)", "ALS"):
             run_log_entries.append({
                 "step": "baseline_removal",
                 "display_name": "Baseline Removal",
                 "parameters": {
-                    "function": "ALS",
+                    "function": "Asymmetric Least Squares(ALS)",
                     "lambda": st.session_state.baselineremoval_ALS_lambda,
                     "p": st.session_state.baselineremoval_ALS_p,
                     "d": st.session_state.baselineremoval_ALS_d,
@@ -310,7 +310,7 @@ def apply_preprocessing_step(df, step_entry):
                 )
             )
         elif params["function"] == "Wavelet Denoising":
-            if params["method"] == "Sardy BCR":
+            if params["method"] in ("Sardy Block Coordinate Relaxation(BCR)", "Sardy BCR"):
                 result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
                     lambda col: function.wavelet_denoise_sardy(
                         col,
@@ -320,7 +320,7 @@ def apply_preprocessing_step(df, step_entry):
                         loss=params["loss"]
                     )
                 )
-            elif params["method"] == "Standard":
+            elif params["method"] in ("Standard Universal Thresholding", "Standard"):
                 result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
                     lambda col: function.wavelet_denoise_standard(
                         col,
@@ -365,7 +365,7 @@ def apply_preprocessing_step(df, step_entry):
                     return_baseline=True # hardcoded
                 )
             )
-        elif params["function"] == "ALS":
+        elif params["function"] in ("Asymmetric Least Squares(ALS)", "ALS"):
             result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
                 lambda col: function.als_baseline_removal(
                     col.values,
@@ -637,14 +637,17 @@ else:
                              key="smoothening_act_median_filter_padding_method",
                              help=padding_help)
             elif st.session_state.smoothening_function == "Wavelet Denoising":
+                wavelet_methods = ["Sardy Block Coordinate Relaxation(BCR)", "Standard Universal Thresholding"]
                 wavelet_help = '''
-                Wavelet denoising suppresses broadband noise by decomposing the signal into wavelet coefficients, shrinking noise-dominated detail coefficients, and reconstructing the signal.
+                Selects the coefficient-shrinkage method used after wavelet decomposition.
 
-                Sardy BCR is the recommended robust iterative method. Standard uses classic universal thresholding and is faster.
+                Sardy Block Coordinate Relaxation(BCR) applies an iterative robust shrinkage procedure to detail coefficients. Standard Universal Thresholding applies a single universal threshold to detail coefficients.
+
+                Default: Sardy Block Coordinate Relaxation(BCR).
                 '''
                 st.selectbox(
                     label="Wavelet denoising method",
-                    options=["Sardy BCR", "Standard"],
+                    options=wavelet_methods,
                     help=wavelet_help,
                     key="wavelet_method"
                 )
@@ -652,38 +655,39 @@ else:
                     label="Wavelet family",
                     options=["sym4", "sym8", "db4", "db8", "coif1", "coif3", "haar"],
                     index=0,
-                    help="'sym4' is a good default for smooth Raman spectra.",
+                    help="Selects the wavelet basis used to decompose and reconstruct each spectrum. The options define different compact-support wavelet shapes. Default: sym4.",
                     key="wavelet_family"
                 )
                 st.selectbox(
                     label="Decomposition level",
                     options=[1, 2, 3, 4, 5, 6],
                     index=3,
-                    help="Each level recursively decomposes the signal. Level 4 is a practical default for Raman spectra.",
+                    help="Sets how many recursive wavelet decomposition levels are applied before coefficient shrinkage. Larger values separate broader signal structures into lower-frequency components. Default: 4.",
                     key="wavelet_level"
                 )
-                if st.session_state.get("wavelet_method") == "Sardy BCR":
+                if st.session_state.get("wavelet_method") in ("Sardy Block Coordinate Relaxation(BCR)", "Sardy BCR"):
                     st.number_input(
                         label="BCR iterations",
                         min_value=1,
                         max_value=15,
                         value=10,
                         step=1,
-                        help="Higher values increase runtime. Convergence typically occurs by iteration 10.",
+                        help="Sets the maximum number of block coordinate relaxation passes used to update the shrinkage solution. Larger values allow additional refinement and increase runtime. Default: 10.",
                         key="wavelet_n_iter"
                     )
                     st.selectbox(
                         label="Robust loss function",
                         options=["huber", "l1"],
                         index=0,
-                        help="Huber is smooth near zero; L1 more aggressively down-weights outlier residuals.",
+                        help="Selects the residual loss used by the robust iterative shrinkage method. Huber uses quadratic behavior near zero residuals and linear behavior for large residuals; l1 uses absolute residual magnitude. Default: huber.",
                         key="wavelet_loss"
                     )
-                elif st.session_state.get("wavelet_method") == "Standard":
+                elif st.session_state.get("wavelet_method") in ("Standard Universal Thresholding", "Standard"):
                     st.selectbox(
                         label="Thresholding mode",
                         options=["soft", "hard"],
                         index=0,
+                        help="Selects how coefficients below the universal threshold are treated. Soft thresholding shrinks retained coefficients toward zero; hard thresholding keeps retained coefficients unchanged. Default: soft.",
                         key="wavelet_mode"
                     )
         # Baseline removal
@@ -699,7 +703,8 @@ else:
         
         if baselineremoval_act:
             # Add more functions to this selectbox if needed
-            st.session_state.baselineremoval_function = st.selectbox(label="Select your baseline removal function",  options=["airPLS", "ModPoly","Gaussian-Lorentzian Fitting", "SNIP", "ALS"])
+            baselineremoval_functions = ["airPLS", "ModPoly","Gaussian-Lorentzian Fitting", "SNIP", "ALS"]
+            st.session_state.baselineremoval_function = st.selectbox(label="Select your baseline removal function",  options=baselineremoval_functions)
             
             if st.session_state.baselineremoval_function == "airPLS":
                 st.session_state.baselineremoval_airPLS_lambda = st.number_input(label="AirPLS lambda", help="The larger lambda is,  the smoother the resulting background, z.",
@@ -796,20 +801,20 @@ else:
                                                                             help= "Determines the maximum peak width to be removed. Higher values create a smoother, lower baseline by allowing the algorithm to 'clip' wider peaks.",
                                                                             min_value=10, max_value = 200, value = 50,
                                                                             step = 1, placeholder="Insert a number")
-            elif st.session_state.baselineremoval_function == "ALS":
+            elif st.session_state.baselineremoval_function in ("Asymmetric Least Squares(ALS)", "ALS"):
                 st.session_state.baselineremoval_ALS_lambda = st.number_input(
-                    label="ALS lambda (smoothness)",
-                    help="Higher values produce a smoother baseline.",
+                    label="ALS lambda",
+                    help="Controls the smoothness penalty for the estimated baseline. Larger values penalize curvature more strongly and produce a smoother baseline. Default: 100.",
                     min_value=1.0,
                     max_value=1e10,
-                    value=1e7,
+                    value=100.0,
                     step=1e4,
                     format="%.0f",
                     placeholder="Insert a number"
                 )
                 st.session_state.baselineremoval_ALS_p = st.number_input(
                     label="ALS asymmetry (p)",
-                    help="Lower values make the estimated baseline fit lower beneath peaks.",
+                    help="Controls the asymmetric weighting between positive and negative residuals during baseline fitting. Smaller values weight positive peak residuals less, placing the fitted baseline below peaks. Default: 0.001.",
                     min_value=0.000001,
                     max_value=0.999999,
                     value=0.001,
@@ -819,16 +824,16 @@ else:
                 )
                 st.session_state.baselineremoval_ALS_d = st.number_input(
                     label="ALS difference order (d)",
-                    help="Order of the finite-difference smoothness penalty.",
+                    help="Sets the finite-difference order used in the smoothness penalty. Order 1 penalizes slope changes; order 2 penalizes curvature; order 3 applies a higher-order curvature penalty. Default: 1.",
                     min_value=1,
                     max_value=3,
-                    value=2,
+                    value=1,
                     step=1,
                     placeholder="Insert a number"
                 )
                 st.session_state.baselineremoval_ALS_max_iter = st.number_input(
                     label="ALS maximum iterations",
-                    help="Maximum number of reweighted least-squares iterations.",
+                    help="Sets the maximum number of reweighted least-squares updates used to estimate the baseline. Larger values allow more weight updates and increase runtime. Default: 50.",
                     min_value=1,
                     max_value=200,
                     value=50,
@@ -927,7 +932,7 @@ else:
                         'wavelet': step_entry["parameters"]["wavelet"],
                         'level': step_entry["parameters"]["level"]
                     }
-                    if step_entry["parameters"]["method"] == "Sardy BCR":
+                    if step_entry["parameters"]["method"] in ("Sardy Block Coordinate Relaxation(BCR)", "Sardy BCR"):
                         wavelet_params.update({
                             'n_iter': step_entry["parameters"]["n_iter"],
                             'loss': step_entry["parameters"]["loss"]
@@ -953,7 +958,7 @@ else:
                     log.log_function_call("Processing_Baseline_SNIP", f_params={
                         'num_iterations': step_entry["parameters"]["num_iterations"]
                     })
-                elif step_entry["parameters"]["function"] == "ALS":
+                elif step_entry["parameters"]["function"] in ("Asymmetric Least Squares(ALS)", "ALS"):
                     log.log_function_call("Processing_Baseline_ALS", f_params={
                         'lambda': step_entry["parameters"]["lambda"],
                         'p': step_entry["parameters"]["p"],

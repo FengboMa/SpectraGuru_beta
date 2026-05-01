@@ -19,7 +19,7 @@ names = {
     'Processing_Baseline_AirPLS':("Baseline Removal", "AirPLS"),
     'Processing_Baseline_Mod_Poly':("Baseline Removal", "Modified Polynomial Fitting"),
     'Processing_Baseline_Gaussian_Lorentzian_Fitting':("Baseline Removal", "Gaussian-Lorentzian Fitting"),
-    'Processing_Baseline_ALS':("Baseline Removal", "Asymmetric Least Squares (ALS)"),
+    'Processing_Baseline_ALS':("Baseline Removal", "Asymmetric Least Squares(ALS)"),
     'Processing_Normalization_Area':("Normalization", "Normalization by Area"),
     'Processing_Normalization_Peak':("Normalization", "Normalization by Peak"),
     'Processing_Normalization_Minmax':("Normalization", "Min-max normalization"),

@@ -4,7 +4,7 @@
 # To add a new function to the names dict, first determine its keyname
 #   Keynames should take the form DOMAIN_FEATURE_ALGORITHM with underscores used as spaces
 #     - for example: Processing_Baseline_AirPLS
-#     - DOMAIN should almost always be Processing or Analytics
+#     - DOMAIN should almost always be Processing, Analytics, or Toolbox
 #   The pair of strings after each entry represent user-readable identifiers (FEATURE, ALGORITHM)
 #     - FEATURE and ALGORITHM may be the same if appropriate
 #   In the Processing/Analytics page, make sure log.log_function_call(keyname, parameters) is invoked appropriately when your
@@ -14,21 +14,26 @@ names = {
     'Processing_Despike_Manual':("Despike", "Manual Despike"),
     'Processing_Smoothing_Savgol_Filter':("Smoothening", "Savitzky-Golay filter"),
     'Processing_Smoothing_FFT_Filter':("Smoothening", "1D Fast Fourier Transform filter"),
+    'Processing_Smoothing_Median_Filter':("Smoothening", "Median filter"),
+    'Processing_Smoothing_Wavelet_Denoising':("Smoothening", "Wavelet Denoising"),
     'Processing_Baseline_AirPLS':("Baseline Removal", "AirPLS"),
     'Processing_Baseline_Mod_Poly':("Baseline Removal", "Modified Polynomial Fitting"),
     'Processing_Baseline_Gaussian_Lorentzian_Fitting':("Baseline Removal", "Gaussian-Lorentzian Fitting"),
+    'Processing_Baseline_ALS':("Baseline Removal", "Asymmetric Least Squares(ALS)"),
     'Processing_Normalization_Area':("Normalization", "Normalization by Area"),
     'Processing_Normalization_Peak':("Normalization", "Normalization by Peak"),
     'Processing_Normalization_Minmax':("Normalization", "Min-max normalization"),
     'Processing_Remove_Outliers':("Outlier Removal", "Outlier Removal"),
     'Analytics_Spectra_Derivation':("Spectra Derivation", "Spectra Derivation"),
+    'Analytics_FFT':("Fast Fourier Transform", "Fast Fourier Transform"),
     'Analytics_Correlation_Heatmap':("Correlation Heatmap", "Correlation Heatmap"),
     'Analytics_Peak_Identification':("Peak Identification", "Peak Identification"),
     'Analytics_Clustering_Clustermap':("Hierarchical Clustering", "Clustermap"),
     'Analytics_Clustering_Dendrogram':("Hierarchical Clustering", "Dendrogram"),
     'Analytics_PCA':("PCA", "Principal Component Analysis"),
     'Analytics_TSNE':("t-SNE", "t-Distributed Stochastic Neighbor Embedding"),
-    'Analytics_Classification_Random_Forest':("Classification", "Random Forest"),
+    'Analytics_ML_Classification_Random_Forest':("ML Classification", "Random Forest(RF)"),
+    'Toolbox_Spectra_Simulation':("Spectra Simulation", "Spectra Simulation"),
 
 
 
@@ -77,9 +82,9 @@ references = {
     28:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/Clustermap/", "link":True, "doc_page":True, "notes":"Hierarchical Clustering doc page"},
     29:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/Principal_Component_Analysis/", "link":True, "doc_page":True, "notes":"PCA doc page"},
     30:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/T-SNE/", "link":True, "doc_page":True, "notes":"t-SNE doc page"},
-    31:{"text":"https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html", "link":True, "doc_page":False, "notes":"scikit-learn RandomForestClassifier documentation"},
-    32:{"text":"https://doi.org/10.1023/A:1010933404324", "link":True, "doc_page":False, "notes":"Breiman 2001 Random Forests reference"},
-    33:{"text":"", "link":None, "doc_page":None, "notes":""},
+    31:{"text":"https://www.unige.ch/~sardy/Papers/robustIEEE.pdf", "link":True, "doc_page":False, "notes":"Robust Wavelet Denoising (Sardy, Tseng & Bruce 2001)"},
+    32:{"text":"https://doi.org/10.1093/biomet/81.3.425", "link":True, "doc_page":False, "notes":"Ideal spatial adaptation by wavelet shrinkage (Donoho & Johnstone 1994)"},
+    33:{"text":"https://zanran_storage.s3.amazonaws.com/www.science.uva.nl/ContentPages/443199618.pdf", "link":True, "doc_page":False, "notes":"Eilers and Boelens (2005), Baseline Correction with Asymmetric Least Squares Smoothing"},
     34:{"text":"", "link":None, "doc_page":None, "notes":""},
     35:{"text":"", "link":None, "doc_page":None, "notes":""},
     36:{"text":"", "link":None, "doc_page":None, "notes":""},
@@ -115,21 +120,26 @@ reference_map = {
     'Processing_Despike_Manual':[0,12],
     'Processing_Smoothing_Savgol_Filter':[1,2,13],
     'Processing_Smoothing_FFT_Filter':[0,14],
+    'Processing_Smoothing_Median_Filter':[1],
+    'Processing_Smoothing_Wavelet_Denoising':[31,32],
     'Processing_Baseline_AirPLS':[3,4,15],
     'Processing_Baseline_Mod_Poly':[5,16],
     'Processing_Baseline_Gaussian_Lorentzian_Fitting':[6,7,17],
+    'Processing_Baseline_ALS':[0,33],
     'Processing_Normalization_Area':[0,18],
     'Processing_Normalization_Peak':[0,19],
     'Processing_Normalization_Minmax':[0,20],
     'Processing_Remove_Outliers':[0,21],
     'Analytics_Spectra_Derivation':[0,24],
+    'Analytics_FFT':[0,14],
     'Analytics_Correlation_Heatmap':[0,25],
     'Analytics_Peak_Identification':[1,26],
     'Analytics_Clustering_Clustermap':[1,8,28],
     'Analytics_Clustering_Dendrogram':[1,8,28],
     'Analytics_PCA':[9,10,29],
     'Analytics_TSNE':[9,11,30],
-    'Analytics_Classification_Random_Forest':[31,32],
+    'Analytics_ML_Classification_Random_Forest':[0,9],
+    'Toolbox_Spectra_Simulation':[0]
 
 
 

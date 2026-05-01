@@ -1434,7 +1434,11 @@ def _analytics_ml_classification_confusion_matrix_chart(y_true, y_pred, classes,
     cm_df = pd.DataFrame(cm, index=classes, columns=classes).reset_index()
     cm_df = cm_df.melt(id_vars="index", var_name="Predicted Label", value_name="Count")
     cm_df = cm_df.rename(columns={"index": "Actual Label"})
-    threshold = cm.max() / 2 if cm.size else 0
+    cm_df["Actual Label"] = cm_df["Actual Label"].astype(str)
+    cm_df["Predicted Label"] = cm_df["Predicted Label"].astype(str)
+    cm_df["Count"] = cm_df["Count"].astype(float)
+    max_count = float(cm.max()) if cm.size else 0
+    threshold = max_count / 2
 
     base = alt.Chart(cm_df).encode(
         x=alt.X("Predicted Label:N", title="Predicted Label"),
@@ -1442,14 +1446,18 @@ def _analytics_ml_classification_confusion_matrix_chart(y_true, y_pred, classes,
     )
     chart = (
         base.mark_rect().encode(
-            color=alt.Color("Count:Q", scale=alt.Scale(scheme="blues"), title="Count"),
+            color=alt.Color(
+                "Count:Q",
+                scale=alt.Scale(scheme="blues"),
+                title="Count",
+            ),
             tooltip=["Actual Label", "Predicted Label", "Count"],
         )
         + base.mark_text(baseline="middle").encode(
             text=alt.Text("Count:Q", format=".0f"),
             color=alt.condition(alt.datum.Count > threshold, alt.value("white"), alt.value("black")),
         )
-    ).properties(width=600, height=500, title=title)
+    ).properties(width=600, height=600, title=title)
     return style_altair_chart(chart)
 
 
@@ -1483,6 +1491,153 @@ def _analytics_ml_classification_roc_chart(y_true, y_score, classes, title):
         y="True Positive Rate:Q",
     )
     return style_altair_chart((roc_chart + chance).properties(width=600, height=500, title=title))
+
+
+def _analytics_ml_classification_class_count_summary(y, train_indices, test_indices, mode):
+    import numpy as np
+    import pandas as pd
+
+    classes = np.unique(y)
+    rows = []
+    if mode == "full_dataset":
+        total = len(y)
+        for class_name in classes:
+            count = int(np.sum(y == class_name))
+            rows.append({
+                "Class": class_name,
+                "Full Dataset Count": count,
+                "Full Dataset Percent": count / total if total else 0,
+            })
+        return pd.DataFrame(rows)
+
+    train_y = y[train_indices]
+    test_y = y[test_indices]
+    train_total = len(train_y)
+    test_total = len(test_y)
+    for class_name in classes:
+        train_count = int(np.sum(train_y == class_name))
+        test_count = int(np.sum(test_y == class_name))
+        rows.append({
+            "Class": class_name,
+            "Training Set Count": train_count,
+            "Training Set Percent": train_count / train_total if train_total else 0,
+            "Test Set Count": test_count,
+            "Test Set Percent": test_count / test_total if test_total else 0,
+            "Total Count": train_count + test_count,
+        })
+    return pd.DataFrame(rows)
+
+
+def _analytics_ml_classification_class_count_chart(class_counts_df, mode):
+    import altair as alt
+
+    if mode == "full_dataset":
+        chart_df = class_counts_df.rename(columns={"Full Dataset Count": "Count"})
+        chart_df["Split"] = "Full Dataset"
+    else:
+        chart_df = class_counts_df.melt(
+            id_vars=["Class"],
+            value_vars=["Training Set Count", "Test Set Count"],
+            var_name="Split",
+            value_name="Count",
+        )
+        chart_df["Split"] = chart_df["Split"].str.replace(" Count", "", regex=False)
+
+    chart = alt.Chart(chart_df).mark_bar().encode(
+        x=alt.X("Class:N", title="Class"),
+        y=alt.Y("Count:Q", title="Spectrum Count"),
+        color=alt.Color("Split:N", legend=alt.Legend(title="Split")),
+        xOffset=alt.XOffset("Split:N"),
+    ).properties(width=650, height=320, title="Class Distribution by Split")
+    return style_altair_chart(chart)
+
+
+def _analytics_ml_classification_spectra_envelope_chart(spectra_df, y, indices, title):
+    import altair as alt
+    import pandas as pd
+
+    subset = spectra_df.iloc[indices].copy()
+    labels = y[indices]
+    envelope_frames = []
+    for class_name in pd.unique(labels):
+        class_spectra = subset.iloc[labels == class_name]
+        if class_spectra.empty:
+            continue
+        raman_shift = class_spectra.columns.astype(float)
+        envelope_frames.append(pd.DataFrame({
+            "Raman Shift": raman_shift,
+            "Mean Intensity": class_spectra.mean(axis=0).to_numpy(),
+            "Minimum Intensity": class_spectra.min(axis=0).to_numpy(),
+            "Maximum Intensity": class_spectra.max(axis=0).to_numpy(),
+            "Class": str(class_name),
+        }))
+
+    envelope_df = pd.concat(envelope_frames, ignore_index=True)
+    base = alt.Chart(envelope_df).encode(
+        x=alt.X("Raman Shift:Q", title="Raman Shift"),
+    )
+    class_color = alt.Color("Class:N", legend=alt.Legend(title="Class"))
+    band = base.mark_area(opacity=0.18).encode(
+        y=alt.Y("Minimum Intensity:Q", title="Intensity"),
+        y2="Maximum Intensity:Q",
+        color=alt.Color("Class:N", legend=None),
+    )
+    line = base.mark_line(strokeWidth=2).encode(
+        y=alt.Y("Mean Intensity:Q", title="Intensity"),
+        color=class_color,
+    )
+    return style_altair_chart((band + line).properties(width=700, height=360, title=title))
+
+
+def _analytics_ml_classification_eda(spectra_df, y, split):
+    mode = split["mode"]
+    train_indices = split["train_indices"]
+    test_indices = split["test_indices"]
+    eda = {
+        "class_counts": _analytics_ml_classification_class_count_summary(
+            y,
+            train_indices,
+            test_indices,
+            mode,
+        ),
+        "class_count_chart": _analytics_ml_classification_class_count_chart(
+            _analytics_ml_classification_class_count_summary(y, train_indices, test_indices, mode),
+            mode,
+        ),
+    }
+
+    if mode == "full_dataset":
+        eda["spectra_envelopes"] = [{
+            "name": "Full Dataset Spectra by Class",
+            "chart": _analytics_ml_classification_spectra_envelope_chart(
+                spectra_df,
+                y,
+                test_indices,
+                "Full Dataset Spectra by Class",
+            ),
+        }]
+    else:
+        eda["spectra_envelopes"] = [
+            {
+                "name": "Training Spectra by Class",
+                "chart": _analytics_ml_classification_spectra_envelope_chart(
+                    spectra_df,
+                    y,
+                    train_indices,
+                    "Training Spectra by Class",
+                ),
+            },
+            {
+                "name": "Test Spectra by Class",
+                "chart": _analytics_ml_classification_spectra_envelope_chart(
+                    spectra_df,
+                    y,
+                    test_indices,
+                    "Test Spectra by Class",
+                ),
+            },
+        ]
+    return eda
 
 
 def _analytics_ml_classification_evaluate(model, X_eval, y_eval, classes, section_name, confusion_title, roc_title):
@@ -1569,6 +1724,7 @@ def analytics_ml_classification_random_forest(
     return {
         "mode": split["mode"],
         "split_info": split["split_info"],
+        "eda": _analytics_ml_classification_eda(spectra_df, y, split),
         "sections": sections,
         "extra_plots": [{
             "name": "Feature Importance",
@@ -1644,6 +1800,7 @@ def analytics_ml_classification_knn(
     return {
         "mode": split["mode"],
         "split_info": split_info,
+        "eda": _analytics_ml_classification_eda(spectra_df, y, split),
         "sections": sections,
     }
 
@@ -1741,6 +1898,7 @@ def analytics_ml_classification_svm(
     return {
         "mode": split["mode"],
         "split_info": split["split_info"],
+        "eda": _analytics_ml_classification_eda(spectra_df, y, split),
         "sections": sections,
         "extra_plots": [{
             "name": "Support Vectors",

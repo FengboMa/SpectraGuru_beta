@@ -1648,6 +1648,107 @@ def analytics_ml_classification_knn(
     }
 
 
+def analytics_ml_classification_svm(
+    df,
+    label_df,
+    test_size=0,
+    kernel="RBF",
+    C=1.0,
+    class_weight="None",
+    degree=3,
+    gamma="scale",
+):
+    import altair as alt
+    from sklearn.svm import SVC
+
+    X, y, sample_names, spectra_df = _analytics_ml_classification_prepare_data(df, label_df)
+    split = _analytics_ml_classification_split(X, y, test_size)
+
+    model = SVC(
+        kernel="poly" if kernel == "Polynomial" else str(kernel).lower(),
+        C=float(C),
+        class_weight="balanced" if class_weight == "Balanced" else None,
+        degree=int(degree),
+        gamma=str(gamma).lower(),
+        probability=True,
+        random_state=42,
+    )
+    model.fit(split["X_train"], split["y_train"])
+    classes = model.classes_
+
+    if split["mode"] == "full_dataset":
+        sections = [_analytics_ml_classification_evaluate(
+            model,
+            split["X_test"],
+            split["y_test"],
+            classes,
+            "Full Dataset Performance",
+            "Full Dataset Confusion Matrix",
+            "Full Dataset ROC Curve",
+        )]
+    else:
+        sections = [
+            _analytics_ml_classification_evaluate(
+                model,
+                split["X_train"],
+                split["y_train"],
+                classes,
+                "Training Set Performance",
+                "Training Set Confusion Matrix",
+                "Training Set ROC Curve",
+            ),
+            _analytics_ml_classification_evaluate(
+                model,
+                split["X_test"],
+                split["y_test"],
+                classes,
+                "Test Set Performance",
+                "Test Set Confusion Matrix",
+                "Test Set ROC Curve",
+            ),
+        ]
+
+    train_sample_indices = split["train_indices"]
+    support_sample_indices = train_sample_indices[model.support_]
+
+    def to_long(source_df):
+        return (
+            source_df.copy()
+            .assign(Spectrum=source_df.index.astype(str))
+            .melt(id_vars="Spectrum", var_name="Raman Shift", value_name="Intensity")
+        )
+
+    train_df = spectra_df.iloc[train_sample_indices]
+    support_df = spectra_df.iloc[support_sample_indices]
+    support_plot = (
+        alt.Chart(to_long(train_df)).mark_line(
+            opacity=0.15,
+            color="gray",
+            strokeWidth=1,
+        ).encode(
+            x=alt.X("Raman Shift:Q", title="Raman Shift"),
+            y=alt.Y("Intensity:Q", title="Intensity"),
+            detail="Spectrum:N",
+        )
+        + alt.Chart(to_long(support_df)).mark_line(strokeWidth=2).encode(
+            x=alt.X("Raman Shift:Q", title="Raman Shift"),
+            y=alt.Y("Intensity:Q", title="Intensity"),
+            color=alt.Color("Spectrum:N", legend=alt.Legend(title="Support Vectors")),
+            detail="Spectrum:N",
+        )
+    ).properties(width=800, height=350, title="Support Vectors Highlighted")
+
+    return {
+        "mode": split["mode"],
+        "split_info": split["split_info"],
+        "sections": sections,
+        "extra_plots": [{
+            "name": "Support Vectors",
+            "chart": style_altair_chart(support_plot),
+        }],
+    }
+
+
 def style_altair_chart(chart):
     return chart.configure_axis(
         labelFontSize=16,

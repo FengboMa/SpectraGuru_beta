@@ -34,6 +34,7 @@ names = {
     'Analytics_TSNE':("t-SNE", "t-Distributed Stochastic Neighbor Embedding"),
     'Analytics_ML_Classification_Random_Forest':("ML Classification", "Random Forest(RF)"),
     'Analytics_ML_Classification_KNN':("ML Classification", "K-Nearest Neighbors(KNN)"),
+    'Analytics_ML_Classification_SVM':("ML Classification", "Support Vector Machine(SVM)"),
     'Toolbox_Spectra_Simulation':("Spectra Simulation", "Spectra Simulation"),
 
 
@@ -141,6 +142,7 @@ reference_map = {
     'Analytics_TSNE':[9,11,30],
     'Analytics_ML_Classification_Random_Forest':[0,9],
     'Analytics_ML_Classification_KNN':[0,9],
+    'Analytics_ML_Classification_SVM':[0,9],
     'Toolbox_Spectra_Simulation':[0]
 
 

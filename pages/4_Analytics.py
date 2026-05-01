@@ -39,7 +39,8 @@ if 'df' in st.session_state:
                                 "Principal Components Analysis (PCA)-Beta",
                                 "T-SNE Dimensionality Reduction-Beta",
                                 "Random Forest(RF) Classification",
-                                "K-Nearest Neighbors(KNN) Classification"),
+                                "K-Nearest Neighbors(KNN) Classification",
+                                "Support Vector Machine(SVM) Classification"),
                         key="stats_plot_select")
 
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
@@ -274,6 +275,51 @@ if 'df' in st.session_state:
                 key="knn_test_size",
             )
             knn_run = st.form_submit_button("Run KNN")
+    elif st.session_state.stats_plot_select == "Support Vector Machine(SVM) Classification":
+        with st.sidebar.form("svm_classification_form"):
+            st.selectbox(
+                label="Kernel",
+                options=("RBF", "Linear", "Polynomial", "Sigmoid"),
+                index=0,
+                key="svm_kernel",
+            )
+            st.number_input(
+                label="C",
+                min_value=0.01,
+                max_value=100.0,
+                step=0.1,
+                value=1.0,
+                key="svm_C",
+            )
+            st.selectbox(
+                label="Class Weight",
+                options=("None", "Balanced"),
+                index=0,
+                key="svm_class_weight",
+            )
+            st.number_input(
+                label="Polynomial Degree",
+                min_value=1,
+                max_value=10,
+                step=1,
+                value=3,
+                key="svm_degree",
+            )
+            st.selectbox(
+                label="Gamma",
+                options=("scale", "auto"),
+                index=0,
+                key="svm_gamma",
+            )
+            st.slider(
+                label="Test Size (%)",
+                min_value=0,
+                max_value=80,
+                step=1,
+                value=0,
+                key="svm_test_size",
+            )
+            svm_run = st.form_submit_button("Run SVM")
 
 # Stats section layout
 """"""""""""
@@ -1237,3 +1283,54 @@ else:
                     )
                 except Exception as e:
                     st.error(f"Error running KNN classification: {e}")
+
+        elif st.session_state.stats_plot_select == "Support Vector Machine(SVM) Classification":
+            st.write("**Support Vector Machine(SVM) Classification**")
+            if not svm_run:
+                st.info("Set SVM parameters in the sidebar, then click Run SVM.")
+            elif st.session_state.get("label_df") is None:
+                st.error("Classification requires label data. Upload or assign labels before running this analysis.")
+            else:
+                try:
+                    temp = st.session_state.temp.drop(columns=["Average"], errors="ignore")
+                    svm_result = function.analytics_ml_classification_svm(
+                        temp,
+                        st.session_state.label_df,
+                        test_size=st.session_state.svm_test_size,
+                        kernel=st.session_state.svm_kernel,
+                        C=st.session_state.svm_C,
+                        class_weight=st.session_state.svm_class_weight,
+                        degree=st.session_state.svm_degree,
+                        gamma=st.session_state.svm_gamma,
+                    )
+
+                    split_info = svm_result.get("split_info", {})
+                    if split_info.get("info_message"):
+                        st.info(split_info["info_message"])
+
+                    for section in svm_result["sections"]:
+                        st.write(f"### {section['name']}")
+                        st.dataframe(section["metrics"], use_container_width=False)
+                        st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                        st.altair_chart(section["roc_curve"], use_container_width=False)
+                        log.log_plot_generated_count()
+                        log.log_plot_generated_count()
+
+                    for extra_plot in svm_result.get("extra_plots", []):
+                        st.write(f"### {extra_plot['name']}")
+                        st.altair_chart(extra_plot["chart"], use_container_width=False)
+                        log.log_plot_generated_count()
+
+                    log.log_function_call(
+                        "Analytics_ML_Classification_SVM",
+                        f_params={
+                            "kernel": st.session_state.svm_kernel,
+                            "C": st.session_state.svm_C,
+                            "class_weight": st.session_state.svm_class_weight,
+                            "degree": st.session_state.svm_degree,
+                            "gamma": st.session_state.svm_gamma,
+                            "test_size": st.session_state.svm_test_size,
+                        },
+                    )
+                except Exception as e:
+                    st.error(f"Error running SVM classification: {e}")

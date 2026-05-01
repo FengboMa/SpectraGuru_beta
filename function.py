@@ -1286,6 +1286,297 @@ def GLF(spectra_col, wavenumber, fitting_ranges, max_iteration=1000000, gtol=1e-
     return baseline
 
 #####
+def _analytics_ml_classification_prepare_data(df, label_df):
+    import numpy as np
+    import pandas as pd
+    from sklearn.preprocessing import StandardScaler
+
+    if label_df is None:
+        raise ValueError("Classification requires label data. Upload or assign labels before running this analysis.")
+
+    if "Ramanshift" not in df.columns:
+        raise ValueError("Classification input must include a Ramanshift column.")
+
+    spectra_df = df.drop(columns=["Average"], errors="ignore").set_index("Ramanshift").T
+    sample_names = spectra_df.index.astype(str).tolist()
+    if not sample_names:
+        raise ValueError("Classification requires at least one selected spectrum.")
+
+    label_df = label_df.copy()
+    first_col = label_df.columns[0]
+    if first_col != "Ramanshift":
+        label_df = label_df.rename(columns={first_col: "Ramanshift"})
+    if "Label" not in label_df.columns:
+        raise ValueError("Classification label data must include a Label column.")
+
+    label_df["Ramanshift"] = label_df["Ramanshift"].astype(str)
+    label_map = dict(zip(label_df["Ramanshift"], label_df["Label"]))
+    missing = [name for name in sample_names if name not in label_map or pd.isna(label_map[name])]
+    if missing:
+        raise ValueError(
+            "Classification requires labels for all selected spectra. Missing labels for: "
+            + ", ".join(missing)
+        )
+
+    y = np.array([label_map[name] for name in sample_names])
+    unique_labels = np.unique(y)
+    if len(unique_labels) < 2:
+        raise ValueError("Classification requires at least two classes. Add labels from at least two classes before running this analysis.")
+
+    X = StandardScaler().fit_transform(spectra_df.values)
+    return X, y, sample_names, spectra_df
+
+
+def _analytics_ml_classification_split(X, y, test_size_percent):
+    import math
+    import numpy as np
+    from sklearn.model_selection import train_test_split
+
+    requested_percent = float(test_size_percent)
+    if requested_percent < 0 or requested_percent > 80:
+        raise ValueError("Test size must be between 0% and 80%.")
+
+    n_samples = len(y)
+    classes, counts = np.unique(y, return_counts=True)
+    n_classes = len(classes)
+
+    if requested_percent == 0:
+        return {
+            "mode": "full_dataset",
+            "X_train": X,
+            "X_test": X,
+            "y_train": y,
+            "y_test": y,
+            "train_indices": np.arange(n_samples),
+            "test_indices": np.arange(n_samples),
+            "split_info": {
+                "requested_test_size": 0,
+                "actual_test_size": 0,
+                "train_count": n_samples,
+                "test_count": n_samples,
+            },
+        }
+
+    single_sample_classes = [str(cls) for cls, count in zip(classes, counts) if count < 2]
+    if single_sample_classes:
+        raise ValueError(
+            "Train/test split requires at least two spectra in every class. "
+            f"Class(es) with one spectrum: {', '.join(single_sample_classes)}. "
+            "Use 0% test size or add spectra to these classes."
+        )
+
+    requested_count = int(math.ceil(n_samples * requested_percent / 100.0))
+    actual_count = max(requested_count, n_classes)
+    max_test_count = n_samples - n_classes
+    if actual_count > max_test_count:
+        raise ValueError(
+            "Test size leaves too few training spectra to include every class. "
+            f"Choose 0% or a smaller test size. Maximum test spectra for this dataset: {max_test_count}."
+        )
+
+    info_message = None
+    if actual_count != requested_count:
+        actual_percent = actual_count / n_samples * 100
+        info_message = (
+            f"Requested test size {requested_percent:g}% would use {requested_count} spectrum/s; "
+            f"adjusted to {actual_count} spectra ({actual_percent:.1f}%) so every class is represented."
+        )
+
+    indices = np.arange(n_samples)
+    X_train, X_test, y_train, y_test, idx_train, idx_test = train_test_split(
+        X,
+        y,
+        indices,
+        test_size=actual_count,
+        random_state=42,
+        stratify=y,
+    )
+
+    return {
+        "mode": "train_test_split",
+        "X_train": X_train,
+        "X_test": X_test,
+        "y_train": y_train,
+        "y_test": y_test,
+        "train_indices": idx_train,
+        "test_indices": idx_test,
+        "split_info": {
+            "requested_test_size": requested_percent,
+            "actual_test_size": actual_count / n_samples * 100,
+            "train_count": len(y_train),
+            "test_count": len(y_test),
+            "info_message": info_message,
+        },
+    }
+
+
+def _analytics_ml_classification_metrics_df(y_true, y_pred):
+    import pandas as pd
+    from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
+
+    return pd.DataFrame({
+        "Metric": ["Accuracy", "Precision", "Recall", "F1"],
+        "Value": [
+            accuracy_score(y_true, y_pred),
+            precision_score(y_true, y_pred, average="macro", zero_division=0),
+            recall_score(y_true, y_pred, average="macro", zero_division=0),
+            f1_score(y_true, y_pred, average="macro", zero_division=0),
+        ],
+    })
+
+
+def _analytics_ml_classification_confusion_matrix_chart(y_true, y_pred, classes, title):
+    import altair as alt
+    import pandas as pd
+    from sklearn.metrics import confusion_matrix
+
+    cm = confusion_matrix(y_true, y_pred, labels=classes)
+    cm_df = pd.DataFrame(cm, index=classes, columns=classes).reset_index()
+    cm_df = cm_df.melt(id_vars="index", var_name="Predicted Label", value_name="Count")
+    cm_df = cm_df.rename(columns={"index": "Actual Label"})
+    threshold = cm.max() / 2 if cm.size else 0
+
+    base = alt.Chart(cm_df).encode(
+        x=alt.X("Predicted Label:N", title="Predicted Label"),
+        y=alt.Y("Actual Label:N", title="Actual Label"),
+    )
+    chart = (
+        base.mark_rect().encode(
+            color=alt.Color("Count:Q", scale=alt.Scale(scheme="blues"), title="Count"),
+            tooltip=["Actual Label", "Predicted Label", "Count"],
+        )
+        + base.mark_text(baseline="middle").encode(
+            text=alt.Text("Count:Q", format=".0f"),
+            color=alt.condition(alt.datum.Count > threshold, alt.value("white"), alt.value("black")),
+        )
+    ).properties(width=600, height=500, title=title)
+    return style_altair_chart(chart)
+
+
+def _analytics_ml_classification_roc_chart(y_true, y_score, classes, title):
+    import altair as alt
+    import pandas as pd
+    from sklearn.metrics import auc, roc_curve
+
+    roc_frames = []
+    for index, class_name in enumerate(classes):
+        fpr, tpr, _ = roc_curve(y_true == class_name, y_score[:, index])
+        roc_auc = auc(fpr, tpr)
+        roc_frames.append(pd.DataFrame({
+            "False Positive Rate": fpr,
+            "True Positive Rate": tpr,
+            "Class": f"{class_name} (AUC={roc_auc:.2f})",
+        }))
+
+    roc_df = pd.concat(roc_frames, ignore_index=True)
+    roc_chart = alt.Chart(roc_df).mark_line().encode(
+        x=alt.X("False Positive Rate:Q", title="False Positive Rate", scale=alt.Scale(domain=[0, 1])),
+        y=alt.Y("True Positive Rate:Q", title="True Positive Rate", scale=alt.Scale(domain=[0, 1])),
+        color=alt.Color("Class:N", legend=alt.Legend(title="Class")),
+        tooltip=["Class", "False Positive Rate", "True Positive Rate"],
+    )
+    chance = alt.Chart(pd.DataFrame({
+        "False Positive Rate": [0, 1],
+        "True Positive Rate": [0, 1],
+    })).mark_line(strokeDash=[5, 5], color="gray").encode(
+        x="False Positive Rate:Q",
+        y="True Positive Rate:Q",
+    )
+    return style_altair_chart((roc_chart + chance).properties(width=600, height=500, title=title))
+
+
+def _analytics_ml_classification_evaluate(model, X_eval, y_eval, classes, section_name, confusion_title, roc_title):
+    y_pred = model.predict(X_eval)
+    y_score = model.predict_proba(X_eval)
+    return {
+        "name": section_name,
+        "metrics": _analytics_ml_classification_metrics_df(y_eval, y_pred),
+        "confusion_matrix": _analytics_ml_classification_confusion_matrix_chart(y_eval, y_pred, classes, confusion_title),
+        "roc_curve": _analytics_ml_classification_roc_chart(y_eval, y_score, classes, roc_title),
+    }
+
+
+def analytics_ml_classification_random_forest(
+    df,
+    label_df,
+    n_estimators=100,
+    max_depth=None,
+    min_samples_leaf=1,
+    test_size=0,
+):
+    import altair as alt
+    import pandas as pd
+    from sklearn.ensemble import RandomForestClassifier
+
+    X, y, sample_names, spectra_df = _analytics_ml_classification_prepare_data(df, label_df)
+    split = _analytics_ml_classification_split(X, y, test_size)
+
+    model = RandomForestClassifier(
+        n_estimators=int(n_estimators),
+        max_depth=None if max_depth in (None, 0) else int(max_depth),
+        min_samples_leaf=int(min_samples_leaf),
+        max_features="sqrt",
+        criterion="gini",
+        bootstrap=True,
+        random_state=42,
+    )
+    model.fit(split["X_train"], split["y_train"])
+    classes = model.classes_
+
+    if split["mode"] == "full_dataset":
+        sections = [_analytics_ml_classification_evaluate(
+            model,
+            split["X_test"],
+            split["y_test"],
+            classes,
+            "Full Dataset Performance",
+            "Full Dataset Confusion Matrix",
+            "Full Dataset ROC Curve",
+        )]
+    else:
+        sections = [
+            _analytics_ml_classification_evaluate(
+                model,
+                split["X_train"],
+                split["y_train"],
+                classes,
+                "Training Set Performance",
+                "Training Set Confusion Matrix",
+                "Training Set ROC Curve",
+            ),
+            _analytics_ml_classification_evaluate(
+                model,
+                split["X_test"],
+                split["y_test"],
+                classes,
+                "Test Set Performance",
+                "Test Set Confusion Matrix",
+                "Test Set ROC Curve",
+            ),
+        ]
+
+    feature_names = spectra_df.columns.astype(str).tolist()
+    feature_importance_df = pd.DataFrame({
+        "Feature": feature_names,
+        "Importance": model.feature_importances_,
+    }).sort_values("Importance", ascending=False).head(25)
+    feature_importance = alt.Chart(feature_importance_df).mark_bar().encode(
+        x=alt.X("Importance:Q", title="Importance"),
+        y=alt.Y("Feature:N", sort="-x", title="Raman Shift"),
+        tooltip=["Feature", "Importance"],
+    ).properties(width=700, height=500, title="Random Forest Feature Importance")
+
+    return {
+        "mode": split["mode"],
+        "split_info": split["split_info"],
+        "sections": sections,
+        "extra_plots": [{
+            "name": "Feature Importance",
+            "chart": style_altair_chart(feature_importance),
+        }],
+    }
+
+
 def style_altair_chart(chart):
     return chart.configure_axis(
         labelFontSize=16,

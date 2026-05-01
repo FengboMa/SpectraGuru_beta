@@ -233,6 +233,121 @@ def median_filter_spectra(spectra, window_size=3, padding_method='mirror'):
         mode=padding_method
     )
 
+def _wavelet_trim_or_pad(signal, target_size):
+    import numpy as np
+
+    if signal.size > target_size:
+        return signal[:target_size]
+    if signal.size < target_size:
+        return np.pad(signal, (0, target_size - signal.size), mode='edge')
+    return signal
+
+def _resolve_wavelet_level(signal_size, wavelet_obj, level, default_level):
+    import pywt
+
+    max_level = pywt.dwt_max_level(signal_size, wavelet_obj.dec_len)
+    if max_level < 1:
+        return None
+    if level is None:
+        return min(default_level, max_level)
+    return max(1, min(int(level), max_level))
+
+def wavelet_denoise_standard(spectra, wavelet='sym4', level=None, mode='soft'):
+    import numpy as np
+    import pywt
+
+    y = np.asarray(spectra, dtype=float)
+    if y.size < 2:
+        return y.copy()
+
+    if mode not in {'soft', 'hard'}:
+        raise ValueError("mode must be 'soft' or 'hard'")
+
+    wavelet_obj = pywt.Wavelet(wavelet)
+    resolved_level = _resolve_wavelet_level(y.size, wavelet_obj, level, default_level=6)
+    if resolved_level is None:
+        return y.copy()
+
+    coeffs = pywt.wavedec(y, wavelet=wavelet_obj, level=resolved_level)
+    approx_coeffs = coeffs[0]
+    detail_coeffs = coeffs[1:]
+    if not detail_coeffs:
+        return y.copy()
+
+    finest_detail = detail_coeffs[-1]
+    sigma = np.median(np.abs(finest_detail - np.median(finest_detail))) / 0.6745
+    if not np.isfinite(sigma) or sigma <= 0:
+        return y.copy()
+
+    threshold = sigma * np.sqrt(2 * np.log(y.size))
+    denoised_details = [
+        pywt.threshold(detail, threshold, mode=mode)
+        for detail in detail_coeffs
+    ]
+    denoised = pywt.waverec([approx_coeffs] + denoised_details, wavelet=wavelet_obj)
+    return _wavelet_trim_or_pad(denoised, y.size)
+
+def wavelet_denoise_sardy(
+    spectra,
+    wavelet='sym4',
+    level=None,
+    n_iter=10,
+    loss='huber',
+    huber_delta=1.5,
+    lam_scale=1.0,
+):
+    import numpy as np
+    import pywt
+
+    y = np.asarray(spectra, dtype=float)
+    if y.size < 2:
+        return y.copy()
+
+    n_iter = max(1, int(n_iter))
+    if loss not in {'huber', 'l1'}:
+        raise ValueError("loss must be 'huber' or 'l1'")
+
+    wavelet_obj = pywt.Wavelet(wavelet)
+    resolved_level = _resolve_wavelet_level(y.size, wavelet_obj, level, default_level=4)
+    if resolved_level is None:
+        return y.copy()
+
+    coeffs = pywt.wavedec(y, wavelet_obj, level=resolved_level)
+    approx_coeffs = coeffs[0]
+    detail_coeffs = list(coeffs[1:])
+    if not detail_coeffs:
+        return y.copy()
+
+    sigma = np.median(np.abs(detail_coeffs[-1])) / 0.6745
+    if not np.isfinite(sigma) or sigma <= 1e-12:
+        return y.copy()
+
+    threshold = float(lam_scale) * sigma * np.sqrt(2.0 * np.log(y.size))
+
+    for _ in range(n_iter):
+        y_hat = pywt.waverec([approx_coeffs] + detail_coeffs, wavelet_obj)
+        y_hat = _wavelet_trim_or_pad(y_hat, y.size)
+        residual = y - y_hat
+
+        if loss == 'l1':
+            weights = 1.0 / np.maximum(np.abs(residual), 1e-6 * sigma)
+        else:
+            cutoff = float(huber_delta) * sigma
+            weights = np.where(
+                np.abs(residual) <= cutoff,
+                1.0,
+                cutoff / np.maximum(np.abs(residual), 1e-10),
+            )
+
+        gradient_coeffs = pywt.wavedec(weights * residual, wavelet_obj, level=resolved_level)
+        detail_coeffs = [
+            pywt.threshold(detail + gradient, threshold, mode='soft')
+            for detail, gradient in zip(detail_coeffs, gradient_coeffs[1:])
+        ]
+
+    denoised = pywt.waverec([approx_coeffs] + detail_coeffs, wavelet_obj)
+    return _wavelet_trim_or_pad(denoised, y.size)
+
 # def FFT_spectra (spectra, FFT_threshold = 0.1):
 #     import numpy as np
 #     spectra_FFT = np.fft.fft(spectra)
@@ -281,6 +396,143 @@ def FFT_spectra(spectra, FFT_threshold=0.1, padding_method='mirror', fs=1):
 
     # Return the real part of the filtered signal
     return filtered_signal.real
+
+def compute_fft_spectrum(ramanshift, intensity, source_spectrum, subtract_average=False):
+    import numpy as np
+    import pandas as pd
+
+    try:
+        from scipy.fft import rfft, rfftfreq
+    except ImportError:
+        try:
+            from scipy.fftpack import rfft, rfftfreq
+        except ImportError:
+            from numpy.fft import rfft, rfftfreq
+
+    x = pd.to_numeric(pd.Series(ramanshift), errors="coerce").to_numpy(dtype=float)
+    y = pd.to_numeric(pd.Series(intensity), errors="coerce").to_numpy(dtype=float)
+    valid_mask = np.isfinite(x) & np.isfinite(y)
+    x = x[valid_mask]
+    y = y[valid_mask]
+
+    if x.size != y.size:
+        raise ValueError("Ramanshift and intensity must have the same length.")
+    if x.size < 2:
+        raise ValueError("At least two points are required to compute FFT.")
+
+    if subtract_average:
+        y = y - np.mean(y)
+
+    spacing = float(np.mean(np.diff(x)))
+    if not np.isfinite(spacing) or spacing == 0:
+        raise ValueError("Ramanshift spacing must be non-zero for FFT.")
+
+    fft_values = rfft(y)
+    frequency = rfftfreq(x.size, d=abs(spacing))
+    magnitude = np.abs(fft_values)
+    power_msa = magnitude ** 2
+    phase_deg = np.degrees(np.angle(fft_values))
+
+    fft_df = pd.DataFrame({
+        "Frequency": frequency,
+        "Real": fft_values.real,
+        "Imaginary": fft_values.imag,
+        "Magnitude": magnitude,
+        "Power_MSA": power_msa,
+        "Phase (deg)": phase_deg
+    }).sort_values(by="Frequency").reset_index(drop=True)
+    fft_df["Source Spectrum"] = source_spectrum
+    fft_df["Subtract Average Applied"] = subtract_average
+    fft_df["Ramanshift Step"] = abs(spacing)
+
+    return fft_df
+
+def build_fft_plots(
+    fft_df,
+    frequency_axis_title,
+    phase_axis_title,
+    amplitude_axis_title,
+    real_axis_title,
+    imaginary_axis_title,
+    power_axis_title,
+    chart_width=650,
+    chart_height=300,
+    title_prefix=""
+):
+    import altair as alt
+    import pandas as pd
+
+    base = alt.Chart(fft_df).encode(
+        x=alt.X("Frequency:Q", title=frequency_axis_title)
+    )
+
+    phase_plot = base.mark_line(color="#1f77b4").encode(
+        y=alt.Y("Phase (deg):Q", title=phase_axis_title),
+        tooltip=[
+            alt.Tooltip("Frequency:Q", title=frequency_axis_title),
+            alt.Tooltip("Phase (deg):Q", title=phase_axis_title, format=".4f")
+        ]
+    ).properties(width=chart_width, height=chart_height, title=f"{title_prefix}: Phase vs Frequency")
+
+    amplitude_plot = base.mark_line(color="#ff7f0e").encode(
+        y=alt.Y("Magnitude:Q", title=amplitude_axis_title),
+        tooltip=[
+            alt.Tooltip("Frequency:Q", title=frequency_axis_title),
+            alt.Tooltip("Magnitude:Q", title=amplitude_axis_title, format=".4f")
+        ]
+    ).properties(width=chart_width, height=chart_height, title=f"{title_prefix}: Amplitude vs Frequency")
+
+    real_plot = base.mark_line(color="#2ca02c").encode(
+        y=alt.Y("Real:Q", title=real_axis_title),
+        tooltip=[
+            alt.Tooltip("Frequency:Q", title=frequency_axis_title),
+            alt.Tooltip("Real:Q", title=real_axis_title, format=".4f")
+        ]
+    ).properties(width=chart_width, height=chart_height, title=f"{title_prefix}: Real vs Frequency")
+
+    imaginary_plot = base.mark_line(color="#d62728").encode(
+        y=alt.Y("Imaginary:Q", title=imaginary_axis_title),
+        tooltip=[
+            alt.Tooltip("Frequency:Q", title=frequency_axis_title),
+            alt.Tooltip("Imaginary:Q", title=imaginary_axis_title, format=".4f")
+        ]
+    ).properties(width=chart_width, height=chart_height, title=f"{title_prefix}: Imaginary vs Frequency")
+
+    real_imag_df = pd.concat([
+        fft_df[["Frequency", "Real"]].rename(columns={"Real": "Value"}).assign(Component="Real"),
+        fft_df[["Frequency", "Imaginary"]].rename(columns={"Imaginary": "Value"}).assign(Component="Imaginary")
+    ], ignore_index=True)
+    real_imag_plot = alt.Chart(real_imag_df).mark_line().encode(
+        x=alt.X("Frequency:Q", title=frequency_axis_title),
+        y=alt.Y("Value:Q", title="Real / Imaginary"),
+        color=alt.Color(
+            "Component:N",
+            title="Component",
+            scale=alt.Scale(domain=["Real", "Imaginary"], range=["#2ca02c", "#d62728"])
+        ),
+        tooltip=[
+            alt.Tooltip("Frequency:Q", title=frequency_axis_title),
+            alt.Tooltip("Component:N", title="Component"),
+            alt.Tooltip("Value:Q", title="Value", format=".4f")
+        ]
+    ).properties(width=chart_width, height=chart_height, title=f"{title_prefix}: Real + Imaginary vs Frequency")
+
+    power_plot = base.mark_line(color="#9467bd").encode(
+        y=alt.Y("Power_MSA:Q", title=power_axis_title),
+        tooltip=[
+            alt.Tooltip("Frequency:Q", title=frequency_axis_title),
+            alt.Tooltip("Power_MSA:Q", title=power_axis_title, format=".4f")
+        ]
+    ).properties(width=chart_width, height=chart_height, title=f"{title_prefix}: Power (MSA) vs Frequency")
+
+    return {
+        "phase": style_altair_chart(phase_plot),
+        "amplitude": style_altair_chart(amplitude_plot),
+        "real": style_altair_chart(real_plot),
+        "imaginary": style_altair_chart(imaginary_plot),
+        "real_imaginary": style_altair_chart(real_imag_plot),
+        "power": style_altair_chart(power_plot)
+    }
 
 def remove_outliers(df, single_thresh=4, distance_thresh=6, coeff_thresh=4):
     import numpy as np
@@ -971,159 +1223,6 @@ def tsne(df, perplexity=5, n_iter=500, label_df=None):
     )
 
     return tsne_df, tsne_plot
-def svm(df, test_size, kernel='RBF', C=1, class_weight='None', degree=0, gamma="scale", label_df=None):
-    
-
-    '''
-    Support Vector Machine for classification.
-
-    input
-        df: input dataframe
-        kernel: Defines how the SVM maps data into a feature space
-        C: Regularization term
-        class_weight: Weigh classes inversely proportional to their frequency
-        degree: Degree of the polynomial kernel
-        gamma: Controls the "reach" of each training sample.
-        label_df: Class label dataframe. 2 class label columns required
-
-    output
-        Plot of Support Vectors, Confusion Matrix, ROC Curve
-    '''
-    import altair as alt
-    import pandas as pd
-    import numpy as np
-    from sklearn.metrics import confusion_matrix, accuracy_score, roc_curve, auc, classification_report
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.svm import SVC
-    from sklearn.model_selection import train_test_split, RepeatedStratifiedKFold, cross_val_score
-    from sklearn.pipeline import Pipeline
-
-    # label_df = df.T['Label'] if 'Label' in df.T.columns else None
-    # print(df.T)
-    
-    print(label_df)
-    # ── Prepare data ──
-    df_original = df.set_index('Ramanshift').T
-    # Filter label_df to only spectra in current df, then reorder to match
-    label_df = label_df[label_df['Ramanshift'].isin(df_original.index)].set_index('Ramanshift').loc[df_original.index].reset_index()
-    X = StandardScaler().fit_transform(df_original)
-    y = label_df['Label']
-    if y.nunique() < 2:
-        raise ValueError("SVM classification requires at least two different labels. Please assign labels from at least two classes before running SVM.")
-
-    indices = np.arange(len(X))
-    
-    test_size = test_size / 100 if test_size > 1 else test_size
-    min_class_count = y.value_counts().min()
-    test_size = max(round(test_size * len(y)) / 100, y.nunique()) if test_size != 0 else 0
-    if test_size != 0:
-        X_train, X_test, y_train, y_test, idx_train, idx_test = train_test_split(
-            X, y, indices, test_size=test_size, random_state=42, stratify=y
-        )
-    else:
-        X_train, X_test, y_train, y_test, idx_train, idx_test = X, X, y, y, indices, indices
-    print("Test Size: ", test_size)
-    
-
-    # ── Fit ──
-    svc = SVC(
-        kernel='poly' if kernel == 'Polynomial' else kernel.lower(), C=C, degree=degree, gamma=gamma.lower(),
-        class_weight='balanced' if class_weight == 'Balanced' else None
-    )
-    svc.fit(X_train, y_train)
-    y_pred = svc.predict(X_test)
-    print(f"SVM accuracy: {accuracy_score(y_test, y_pred):.3f}")
-    # report_df = pd.DataFrame(classification_report(y_test, y_pred, output_dict=True, zero_division=0)).T.reset_index()
-    # report_df = report_df.rename(columns={'index': 'Class'})
-    display_names = [f"Class {int(name)}" for name in svc.classes_]
-    report_dict = classification_report(y_test, y_pred, target_names=display_names, output_dict=True)
-    report_df = pd.DataFrame(report_dict).transpose() 
-    report_df = report_df.loc[display_names]
-
-    classes = y.unique()
-    cm = confusion_matrix(y_test, y_pred, labels=classes)
-    cm_df = pd.DataFrame(cm, index=classes, columns=classes).reset_index()
-    cm_df = cm_df.melt(id_vars='index', var_name='Predicted', value_name='Count')
-    cm_df.columns = ['Actual', 'Predicted', 'Count']
-
-    base_cm = alt.Chart(cm_df).encode(
-        x=alt.X('Predicted:N', title='Predicted Label'),
-        y=alt.Y('Actual:N', title='Actual Label')
-    )
-    cm_plot = (
-        base_cm.mark_rect().encode(
-            color=alt.Color('Count:Q', scale=alt.Scale(scheme='blues'), title='Count'),
-            tooltip=['Actual', 'Predicted', 'Count']
-        ) +
-        base_cm.mark_text(baseline='middle').encode(
-            text='Count:Q',
-            color=alt.condition(
-                alt.datum.Count > int(cm.max() / 2),
-                alt.value('white'),
-                alt.value('black')
-            )
-        )
-    ).properties(width=600, height=600, title='Confusion Matrix')
-
-    # ── Chart 3: Support Vectors ──
-    sv_row_idx = idx_train[svc.support_]
-    print(f"Number of support vectors: {len(svc.support_)}")
-    print(f"Per class: {list(svc.n_support_)}")
-
-    def to_long(source_df, label):
-        return (source_df.copy()
-                .assign(sample=source_df.index.astype(str))
-                .melt(id_vars='sample', var_name='raman_shift', value_name='intensity')
-                .assign(raman_shift=lambda d: d['raman_shift'].astype(float),
-                        label=label))
-
-    sv_plot = (
-        alt.Chart(to_long(df_original.iloc[idx_train], 'background')).mark_line(
-            opacity=0.15, color='gray', strokeWidth=1
-        ).encode(
-            x=alt.X('raman_shift:Q', title='Raman Shift (cm⁻¹)'),
-            y=alt.Y('intensity:Q',   title='Intensity'),
-            detail='sample:N'
-        )
-        + alt.Chart(to_long(df_original.iloc[sv_row_idx], 'sv')).mark_line(strokeWidth=2).encode(
-            x='raman_shift:Q',
-            y='intensity:Q',
-            color=alt.Color('sample:N', legend=alt.Legend(title='Support Vectors')),
-            detail='sample:N'
-        )
-    ).properties(title=alt.Title('Support Vectors Highlighted', fontSize=14), width=800, height=300)
-
-    # ── Chart 4: ROC Curve, first two classes only ──
-    roc_classes = svc.classes_[:2]
-    mask = y_test.isin(roc_classes)
-
-    scores = svc.decision_function(X_test)
-    scores = scores if scores.ndim == 1 else scores[:, 1]
-
-    fpr, tpr, _ = roc_curve(y_test[mask], scores[mask], pos_label=roc_classes[1])
-    auc_score = auc(fpr, tpr)
-
-    roc_df = pd.DataFrame({
-        'fpr': fpr,
-        'tpr': tpr,
-        'label': f'{roc_classes[1]} vs {roc_classes[0]} (AUC = {auc_score:.3f})'
-    })
-
-    roc_plot = (
-        alt.Chart(roc_df).mark_line(strokeWidth=2).encode(
-            x=alt.X('fpr:Q', title='False Positive Rate', scale=alt.Scale(domain=[0, 1])),
-            y=alt.Y('tpr:Q', title='True Positive Rate', scale=alt.Scale(domain=[0, 1])),
-            color=alt.Color('label:N', legend=alt.Legend(title=None, orient='bottom-right'))
-        )
-        + alt.Chart(pd.DataFrame({'fpr': [0, 1], 'tpr': [0, 1]}))
-        .mark_line(strokeDash=[6, 4], color='black').encode(x='fpr:Q', y='tpr:Q')
-    ).properties(title=alt.Title('ROC Curve', fontSize=14), width=600, height=600)
-
-    return cm_plot, sv_plot, roc_plot, report_df
-
-    
-
-    
 
 def mixed_gauss_lorentz(x, A, v_g, sigma_g, L, v_l, sigma_l, I_0):
     '''
@@ -1187,6 +1286,319 @@ def GLF(spectra_col, wavenumber, fitting_ranges, max_iteration=1000000, gtol=1e-
     return baseline
 
 #####
+def _analytics_ml_classification_prepare_data(df, label_df):
+    import numpy as np
+    import pandas as pd
+    from sklearn.preprocessing import StandardScaler
+
+    if label_df is None:
+        raise ValueError("Classification requires label data. Upload or assign labels before running this analysis.")
+
+    if "Ramanshift" not in df.columns:
+        raise ValueError("Classification input must include a Ramanshift column.")
+
+    spectra_df = df.drop(columns=["Average"], errors="ignore").set_index("Ramanshift").T
+    sample_names = spectra_df.index.astype(str).tolist()
+    if not sample_names:
+        raise ValueError("Classification requires at least one selected spectrum.")
+
+    label_df = label_df.copy()
+    first_col = label_df.columns[0]
+    if first_col != "Ramanshift":
+        label_df = label_df.rename(columns={first_col: "Ramanshift"})
+    if "Label" not in label_df.columns:
+        raise ValueError("Classification label data must include a Label column.")
+
+    label_df["Ramanshift"] = label_df["Ramanshift"].astype(str)
+    label_map = dict(zip(label_df["Ramanshift"], label_df["Label"]))
+    missing = [name for name in sample_names if name not in label_map or pd.isna(label_map[name])]
+    if missing:
+        raise ValueError(
+            "Classification requires labels for all selected spectra. Missing labels for: "
+            + ", ".join(missing)
+        )
+
+    y = np.array([label_map[name] for name in sample_names])
+    unique_labels = np.unique(y)
+    if len(unique_labels) < 2:
+        raise ValueError("Classification requires at least two classes. Add labels from at least two classes before running this analysis.")
+
+    X = StandardScaler().fit_transform(spectra_df.values)
+    return X, y, sample_names, spectra_df
+
+
+def _analytics_ml_classification_split(X, y, test_size_percent):
+    import math
+    import numpy as np
+    from sklearn.model_selection import train_test_split
+
+    requested_percent = float(test_size_percent)
+    if requested_percent < 0 or requested_percent > 80:
+        raise ValueError("Test size must be between 0% and 80%.")
+
+    n_samples = len(y)
+    classes, counts = np.unique(y, return_counts=True)
+    n_classes = len(classes)
+
+    if requested_percent == 0:
+        return {
+            "mode": "full_dataset",
+            "X_train": X,
+            "X_test": X,
+            "y_train": y,
+            "y_test": y,
+            "train_indices": np.arange(n_samples),
+            "test_indices": np.arange(n_samples),
+            "split_info": {
+                "requested_test_size": 0,
+                "actual_test_size": 0,
+                "train_count": n_samples,
+                "test_count": n_samples,
+            },
+        }
+
+    single_sample_classes = [str(cls) for cls, count in zip(classes, counts) if count < 2]
+    if single_sample_classes:
+        raise ValueError(
+            "Train/test split requires at least two spectra in every class. "
+            f"Class(es) with one spectrum: {', '.join(single_sample_classes)}. "
+            "Use 0% test size or add spectra to these classes."
+        )
+
+    requested_count = int(math.ceil(n_samples * requested_percent / 100.0))
+    actual_count = max(requested_count, n_classes)
+    max_test_count = n_samples - n_classes
+    if actual_count > max_test_count:
+        raise ValueError(
+            "Test size leaves too few training spectra to include every class. "
+            f"Choose 0% or a smaller test size. Maximum test spectra for this dataset: {max_test_count}."
+        )
+
+    info_message = None
+    if actual_count != requested_count:
+        actual_percent = actual_count / n_samples * 100
+        info_message = (
+            f"Requested test size {requested_percent:g}% would use {requested_count} spectrum/s; "
+            f"adjusted to {actual_count} spectra ({actual_percent:.1f}%) so every class is represented."
+        )
+
+    indices = np.arange(n_samples)
+    X_train, X_test, y_train, y_test, idx_train, idx_test = train_test_split(
+        X,
+        y,
+        indices,
+        test_size=actual_count,
+        random_state=42,
+        stratify=y,
+    )
+
+    return {
+        "mode": "train_test_split",
+        "X_train": X_train,
+        "X_test": X_test,
+        "y_train": y_train,
+        "y_test": y_test,
+        "train_indices": idx_train,
+        "test_indices": idx_test,
+        "split_info": {
+            "requested_test_size": requested_percent,
+            "actual_test_size": actual_count / n_samples * 100,
+            "train_count": len(y_train),
+            "test_count": len(y_test),
+            "info_message": info_message,
+        },
+    }
+
+
+def _analytics_ml_classification_metrics_df(y_true, y_pred):
+    import pandas as pd
+    from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
+
+    return pd.DataFrame({
+        "Metric": ["Accuracy", "Precision", "Recall", "F1"],
+        "Value": [
+            accuracy_score(y_true, y_pred),
+            precision_score(y_true, y_pred, average="macro", zero_division=0),
+            recall_score(y_true, y_pred, average="macro", zero_division=0),
+            f1_score(y_true, y_pred, average="macro", zero_division=0),
+        ],
+    })
+
+
+def _analytics_ml_classification_confusion_matrix_chart(y_true, y_pred, classes, title):
+    import altair as alt
+    import pandas as pd
+    from sklearn.metrics import confusion_matrix
+
+    cm = confusion_matrix(y_true, y_pred, labels=classes)
+    cm_df = pd.DataFrame(cm, index=classes, columns=classes).reset_index()
+    cm_df = cm_df.melt(id_vars="index", var_name="Predicted Label", value_name="Count")
+    cm_df = cm_df.rename(columns={"index": "Actual Label"})
+    threshold = cm.max() / 2 if cm.size else 0
+
+    base = alt.Chart(cm_df).encode(
+        x=alt.X("Predicted Label:N", title="Predicted Label"),
+        y=alt.Y("Actual Label:N", title="Actual Label"),
+    )
+    chart = (
+        base.mark_rect().encode(
+            color=alt.Color("Count:Q", scale=alt.Scale(scheme="blues"), title="Count"),
+            tooltip=["Actual Label", "Predicted Label", "Count"],
+        )
+        + base.mark_text(baseline="middle").encode(
+            text=alt.Text("Count:Q", format=".0f"),
+            color=alt.condition(alt.datum.Count > threshold, alt.value("white"), alt.value("black")),
+        )
+    ).properties(width=600, height=500, title=title)
+    return style_altair_chart(chart)
+
+
+def _analytics_ml_classification_roc_chart(y_true, y_score, classes, title):
+    import altair as alt
+    import pandas as pd
+    from sklearn.metrics import auc, roc_curve
+
+    roc_frames = []
+    for index, class_name in enumerate(classes):
+        fpr, tpr, _ = roc_curve(y_true == class_name, y_score[:, index])
+        roc_auc = auc(fpr, tpr)
+        roc_frames.append(pd.DataFrame({
+            "False Positive Rate": fpr,
+            "True Positive Rate": tpr,
+            "Class": f"{class_name} (AUC={roc_auc:.2f})",
+        }))
+
+    roc_df = pd.concat(roc_frames, ignore_index=True)
+    roc_chart = alt.Chart(roc_df).mark_line().encode(
+        x=alt.X("False Positive Rate:Q", title="False Positive Rate", scale=alt.Scale(domain=[0, 1])),
+        y=alt.Y("True Positive Rate:Q", title="True Positive Rate", scale=alt.Scale(domain=[0, 1])),
+        color=alt.Color("Class:N", legend=alt.Legend(title="Class")),
+        tooltip=["Class", "False Positive Rate", "True Positive Rate"],
+    )
+    chance = alt.Chart(pd.DataFrame({
+        "False Positive Rate": [0, 1],
+        "True Positive Rate": [0, 1],
+    })).mark_line(strokeDash=[5, 5], color="gray").encode(
+        x="False Positive Rate:Q",
+        y="True Positive Rate:Q",
+    )
+    return style_altair_chart((roc_chart + chance).properties(width=600, height=500, title=title))
+
+
+def _analytics_ml_classification_evaluate(model, X_eval, y_eval, classes, section_name, confusion_title, roc_title):
+    y_pred = model.predict(X_eval)
+    y_score = model.predict_proba(X_eval)
+    return {
+        "name": section_name,
+        "metrics": _analytics_ml_classification_metrics_df(y_eval, y_pred),
+        "confusion_matrix": _analytics_ml_classification_confusion_matrix_chart(y_eval, y_pred, classes, confusion_title),
+        "roc_curve": _analytics_ml_classification_roc_chart(y_eval, y_score, classes, roc_title),
+    }
+
+
+def analytics_ml_classification_svm(
+    df,
+    label_df,
+    test_size=0,
+    kernel="RBF",
+    C=1.0,
+    class_weight="None",
+    degree=3,
+    gamma="scale",
+):
+    import altair as alt
+    import pandas as pd
+    from sklearn.svm import SVC
+
+    X, y, sample_names, spectra_df = _analytics_ml_classification_prepare_data(df, label_df)
+    split = _analytics_ml_classification_split(X, y, test_size)
+
+    model = SVC(
+        kernel="poly" if kernel == "Polynomial" else str(kernel).lower(),
+        C=float(C),
+        class_weight="balanced" if class_weight == "Balanced" else None,
+        degree=int(degree),
+        gamma=str(gamma).lower(),
+        probability=True,
+        random_state=42,
+    )
+    model.fit(split["X_train"], split["y_train"])
+    classes = model.classes_
+
+    if split["mode"] == "full_dataset":
+        sections = [_analytics_ml_classification_evaluate(
+            model,
+            split["X_test"],
+            split["y_test"],
+            classes,
+            "Full Dataset Performance",
+            "Full Dataset Confusion Matrix",
+            "Full Dataset ROC Curve",
+        )]
+    else:
+        sections = [
+            _analytics_ml_classification_evaluate(
+                model,
+                split["X_train"],
+                split["y_train"],
+                classes,
+                "Training Set Performance",
+                "Training Set Confusion Matrix",
+                "Training Set ROC Curve",
+            ),
+            _analytics_ml_classification_evaluate(
+                model,
+                split["X_test"],
+                split["y_test"],
+                classes,
+                "Test Set Performance",
+                "Test Set Confusion Matrix",
+                "Test Set ROC Curve",
+            ),
+        ]
+
+    train_sample_indices = split["train_indices"]
+    support_sample_indices = train_sample_indices[model.support_]
+
+    def to_long(source_df, sample_role):
+        return (
+            source_df.copy()
+            .assign(Spectrum=source_df.index.astype(str))
+            .melt(id_vars="Spectrum", var_name="Raman Shift", value_name="Intensity")
+            .assign(Role=sample_role)
+        )
+
+    train_df = spectra_df.iloc[train_sample_indices]
+    support_df = spectra_df.iloc[support_sample_indices]
+    support_plot = (
+        alt.Chart(to_long(train_df, "Training Spectrum")).mark_line(
+            opacity=0.15,
+            color="gray",
+            strokeWidth=1,
+        ).encode(
+            x=alt.X("Raman Shift:Q", title="Raman Shift"),
+            y=alt.Y("Intensity:Q", title="Intensity"),
+            detail="Spectrum:N",
+        )
+        + alt.Chart(to_long(support_df, "Support Vector")).mark_line(strokeWidth=2).encode(
+            x=alt.X("Raman Shift:Q", title="Raman Shift"),
+            y=alt.Y("Intensity:Q", title="Intensity"),
+            color=alt.Color("Spectrum:N", legend=alt.Legend(title="Support Vectors")),
+            detail="Spectrum:N",
+        )
+    ).properties(width=800, height=350, title="Support Vectors Highlighted")
+
+    return {
+        "mode": split["mode"],
+        "split_info": split["split_info"],
+        "sections": sections,
+        "extra_plots": [{
+            "name": "Support Vectors",
+            "chart": style_altair_chart(support_plot),
+        }],
+    }
+
+
 def style_altair_chart(chart):
     return chart.configure_axis(
         labelFontSize=16,
@@ -1888,5 +2300,40 @@ def snip_1d(y, iterations=50, use_lls=True, poly_window=15, poly_deg=1, return_b
 
     if return_baseline:
         return baseline
-    
+
+    return y - baseline
+
+def als_baseline_removal(spectra, lam=1e7, p=0.001, d=2, max_iter=50, return_baseline=False):
+    import numpy as np
+    from scipy import sparse
+    from scipy.sparse.linalg import spsolve
+
+    y = np.asarray(spectra, dtype=float)
+    if y.size < 5:
+        return np.full_like(y, np.nan) if return_baseline else y.copy()
+
+    lam = float(max(lam, 1.0))
+    p = float(np.clip(p, 1e-6, 1.0 - 1e-6))
+    d = int(np.clip(d, 1, 3))
+    max_iter = int(max(max_iter, 1))
+
+    eye = sparse.eye(y.size, format="csc")
+    diff = eye.copy()
+    for _ in range(d):
+        diff = diff[1:, :] - diff[:-1, :]
+
+    penalty = lam * diff.T.dot(diff)
+    weights = np.ones(y.size)
+    baseline = y.copy()
+
+    for _ in range(max_iter):
+        weight_matrix = sparse.diags(weights, 0, shape=(y.size, y.size), format="csc")
+        baseline = spsolve(weight_matrix + penalty, weight_matrix.dot(y))
+        new_weights = np.where(y > baseline, p, 1.0 - p)
+        if np.array_equal(new_weights, weights):
+            break
+        weights = new_weights
+
+    if return_baseline:
+        return baseline
     return y - baseline

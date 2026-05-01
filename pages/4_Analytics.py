@@ -32,12 +32,13 @@ if 'df' in st.session_state:
                         options= ("Average Plot with Original Spectra", 
                                 "Confidence Interval Plot",
                                 "Spectra Derivation",
+                                "Fast Fourier Transform (FFT)",
                                 "Correlation Heatmap",
                                 "Peak Identification and Stats",
                                 "Hierarchically-clustered Heatmap",
                                 "Principal Components Analysis (PCA)-Beta",
                                 "T-SNE Dimensionality Reduction-Beta",
-                                "Support Vector Machine"),
+                                "Support Vector Machine(SVM) Classification"),
                         key="stats_plot_select")
 
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
@@ -99,8 +100,24 @@ if 'df' in st.session_state:
             index=0,
             key="deriv_norm_method",
             help="Apply per-spectrum Min–Max scaling before taking derivatives.")
+    elif st.session_state.stats_plot_select == "Fast Fourier Transform (FFT)":
+        fft_target_options = ["Average"] + [
+            column for column in st.session_state.temp.columns
+            if column not in ("Ramanshift", "Average", "Standard Deviation")
+        ]
+        st.sidebar.selectbox(
+            label="Select spectrum for FFT",
+            options=fft_target_options,
+            index=0,
+            key="fft_target_spectrum"
+        )
+        st.sidebar.toggle(
+            label="Subtract average value before FFT",
+            value=False,
+            key="fft_subtract_average"
+        )
     elif st.session_state.stats_plot_select == "Correlation Heatmap":
-        
+
         st.sidebar.selectbox(
             label='Correlation Algorithm',
             options=('Pearson Correlation', 'Cosine Similarity'),
@@ -189,72 +206,51 @@ if 'df' in st.session_state:
         max_perplexity = st.session_state.df.shape[1] - 1
         st.sidebar.select_slider(label="t-SNE Perplexity", options=list(range(1,max_perplexity)),value=2, key="tSNE_perplexity")
         st.sidebar.select_slider(label="t-SNE Maximum number of iterations", options=list(range(200,1001)), value=500, key="tSNE_n_iter")
-    elif st.session_state.stats_plot_select == "Support Vector Machine":
-        svm_kernel = st.sidebar.selectbox(label="Select the Kernel", 
-                                options = ["RBF", "Linear", "Polynomial", "Sigmoid"],
-                                key='svm_kernel',
-                                help=(
-                                    "Defines how the SVM maps data into a feature space.\n\n"
-                                    "- **RBF**: Maps to infinite-dimensional space via Gaussian similarity. \n\n"
-                                    "> $K(\mathbf{x}_i, \mathbf{x}_j) = \exp(-\gamma \|\mathbf{x}_i - \mathbf{x}_j\|^2)$ \n\n"
-                                    "- **Linear**: No mapping (hyperplane in original space). \n\n"
-                                    "> $K(\mathbf{x}_i, \mathbf{x}_j) = \mathbf{x}_i \cdot \mathbf{x}_j$ \n\n"
-                                    "- **Polynomial**: Maps via polynomial combinations of features. \n\n"
-                                    "> $K(\mathbf{x}_i, \mathbf{x}_j) = (\gamma \, \mathbf{x}_i \cdot \mathbf{x}_j + coef0)^{degree}$ \n\n"
-                                    "- **Sigmoid**: Tanh-based mapping, similar to a neural network activation. \n\n "
-                                    "> $K(\mathbf{x}_i, \mathbf{x}_j) = tanh(\gamma \, \mathbf{x}_i \cdot \mathbf{x}_j + coef0)$ \n\n"
-                                    )
-                                )
-        st.sidebar.number_input(label='Regularization Term (C)',min_value= 1, max_value= 100, placeholder='Insert a number',
-                                    key = 'svm_C', step = 1, value = 5,
-                                    help = ("Penalty for misclassified points. Controls margin width vs misclassification tradeoff.\n\n"
-                                            "**Small C** → wide margin, tolerates errors. **Large C** → narrow margin, fits training data tightly (risk of overfitting).\n\n"
-                                            "Applies to all kernel options. "
-                                            )
-                                )
-        
-        st.sidebar.selectbox(label='Class Weight',
-                                options = ["None", "Balanced"],
-                                key = 'svm_class_weight',
-                                help = ("Change when class sizes are unequal.\n\n"
-                                        "- **None**: Treat all samples equally.\n\n"
-                                        "- **Balanced**: Weighs classes inversely proportional to their frequency, so the minority class gets more influence.\n\n"
-                                        "Applicable to all kernels."
-                                        )
-                            )
-        
-        if svm_kernel == "Polynomial":
-            st.sidebar.number_input(label='Degree',min_value= 1, max_value= 10000, placeholder='Insert a number',
-                            key = 'svm_degree', step = 1, value = 2,
-                            help = ("Degree of the polynomial kernel\n\n"
-                                    "> For example: **degree=2** results in a decision boundary reflecting a parabola,"
-                                    " while **degree=3** would be a cubic decision boundary.\n\n"
-                                    "Higher degrees capture more complex patterns but risks overfitting.\n\n"
-                                    "*Only applicable to polynomial kernel.*"
-                                    )
-                                )
-        if svm_kernel == "Polynomial" or svm_kernel == "RBF" or svm_kernel == "Sigmoid":
-            st.sidebar.selectbox(label='Gamma',
-                            options = ["Auto", "Scale"],
-                            key = 'svm_gamma',
-                            help = ("Controls the 'reach' of each training sample.\n\n"
-                                    "> High gamma → each sample only influences nearby points (complex, tight boundaries). \n\n"
-                                    "> Low gamma → each sample influences a wide area (smoother boundaries).\n\n"
-                                    "- **auto** = 1/n_features\n\n"
-                                    "- **scale** = 1/(n_features * variance). Accounts for feature variance.\n\n"
-                                    "*Only applicable to Polynomial, RBF, or Sigmoid kernels.*"
-                                    )
-                                )
-        st.sidebar.number_input(label='Test Size (%)', min_value = 0, max_value = 80, placeholder='Insert a number',
-                                    key = 'svm_test_size', step = 10, value = 20,
-                                    help = ("Sets the ratio for train test split.\n\n"
-                                            "Setting to 0% results in training and testing on full dataset\n\n"
-                                            "Suggested: **20**"
-                                            )
-                                )
-            
-        
-        
+    elif st.session_state.stats_plot_select == "Support Vector Machine(SVM) Classification":
+        with st.sidebar.form("svm_classification_form"):
+            st.selectbox(
+                label="Kernel",
+                options=("RBF", "Linear", "Polynomial", "Sigmoid"),
+                index=0,
+                key="svm_kernel",
+            )
+            st.number_input(
+                label="C",
+                min_value=0.01,
+                max_value=100.0,
+                step=0.1,
+                value=1.0,
+                key="svm_C",
+            )
+            st.selectbox(
+                label="Class Weight",
+                options=("None", "Balanced"),
+                index=0,
+                key="svm_class_weight",
+            )
+            st.number_input(
+                label="Polynomial Degree",
+                min_value=1,
+                max_value=10,
+                step=1,
+                value=3,
+                key="svm_degree",
+            )
+            st.selectbox(
+                label="Gamma",
+                options=("scale", "auto"),
+                index=0,
+                key="svm_gamma",
+            )
+            st.slider(
+                label="Test Size (%)",
+                min_value=0,
+                max_value=80,
+                step=1,
+                value=0,
+                key="svm_test_size",
+            )
+            svm_run = st.form_submit_button("Run SVM")
 
 # Stats section layout
 """"""""""""
@@ -591,7 +587,83 @@ else:
                 log.log_plot_generated_count()
             except Exception as e:
                 st.error(f"Error during processing: {e}")
-        
+
+        elif st.session_state.stats_plot_select == "Fast Fourier Transform (FFT)":
+            selected_fft_target = st.session_state.get("fft_target_spectrum", "Average")
+            filtered_fft_df = stats_data_melted[stats_data_melted["Sample ID"] == selected_fft_target]
+            try:
+                filtered_fft_df = filtered_fft_df.copy()
+                filtered_fft_df["Ramanshift"] = pd.to_numeric(filtered_fft_df["Ramanshift"], errors="coerce")
+                filtered_fft_df["Intensity"] = pd.to_numeric(filtered_fft_df["Intensity"], errors="coerce")
+                filtered_fft_df = filtered_fft_df.dropna(subset=["Ramanshift", "Intensity"])
+
+                if filtered_fft_df.empty:
+                    raise ValueError(f"No valid data found for spectrum '{selected_fft_target}'.")
+
+                fft_plot_title = f"FFT: {selected_fft_target}"
+                frequency_axis_title = "Positive Frequency (cycles/cm^-1)"
+                fft_df = function.compute_fft_spectrum(
+                    ramanshift=filtered_fft_df["Ramanshift"].to_numpy(),
+                    intensity=filtered_fft_df["Intensity"].to_numpy(),
+                    source_spectrum=selected_fft_target,
+                    subtract_average=st.session_state.get("fft_subtract_average", False)
+                )
+                fft_plots = function.build_fft_plots(
+                    fft_df=fft_df,
+                    frequency_axis_title=frequency_axis_title,
+                    phase_axis_title="Phase (deg)",
+                    amplitude_axis_title="Amplitude",
+                    real_axis_title="Real",
+                    imaginary_axis_title="Imaginary",
+                    power_axis_title="Power (MSA)",
+                    title_prefix=fft_plot_title
+                )
+
+                row1_col1, row1_col2 = st.columns(2)
+                with row1_col1:
+                    st.altair_chart(fft_plots["phase"], use_container_width=True)
+                with row1_col2:
+                    st.altair_chart(fft_plots["amplitude"], use_container_width=True)
+
+                row2_col1, row2_col2 = st.columns(2)
+                with row2_col1:
+                    st.altair_chart(fft_plots["real"], use_container_width=True)
+                with row2_col2:
+                    st.altair_chart(fft_plots["imaginary"], use_container_width=True)
+
+                row3_col1, row3_col2 = st.columns(2)
+                with row3_col1:
+                    st.altair_chart(fft_plots["real_imaginary"], use_container_width=True)
+                with row3_col2:
+                    st.altair_chart(fft_plots["power"], use_container_width=True)
+
+                for _ in range(6):
+                    log.log_plot_generated_count()
+                log.log_function_call(
+                    "Analytics_FFT",
+                    f_params={
+                        "target_spectrum": selected_fft_target,
+                        "subtract_average": st.session_state.get("fft_subtract_average", False)
+                    }
+                )
+
+                @st.cache_data
+                def download_fft_df(df):
+                    return df.to_csv(index=False).encode("utf-8")
+
+                fft_download_df = download_fft_df(fft_df)
+                current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+                download_file_name = f"data_FFT_{selected_fft_target}_{current_time}.csv"
+
+                st.download_button(
+                    label="Download FFT Data as CSV",
+                    data=fft_download_df,
+                    file_name=download_file_name,
+                    mime="text/csv",
+                )
+            except Exception as e:
+                st.error(f"Error during FFT processing: {e}")
+
         elif st.session_state.stats_plot_select == "Correlation Heatmap":
             # Select only the columns we need for correlation calculation
             # Filter out the columns
@@ -1030,7 +1102,7 @@ else:
             st.write(pca_result_df)
         
         elif st.session_state.stats_plot_select == "T-SNE Dimensionality Reduction-Beta":
-            
+
             st.write("**T‑Distributed Stochastic Neighbor Embedding (t‑SNE) ‑ Beta**")
 
             temp = st.session_state.temp.drop(columns=['Average'])
@@ -1053,57 +1125,54 @@ else:
                                     })
 
             st.write(tsne_df)
-        elif st.session_state.stats_plot_select == "Support Vector Machine":
-            st.write("**Support Vector Machine ‑ Beta**")
-            temp = st.session_state.temp.drop(columns=['Average'])
 
-            label_df = st.session_state.get('label_df')
-            if label_df is None:
-                st.error(
-                    "SVM classification requires labeled data. "
-                    "Please assign labels to your spectra before running SVM."
-                )
-                st.stop()
-            print(label_df)
-            first_col = label_df.columns[0]
-            if first_col != 'Ramanshift':
-                label_df = label_df.rename(columns={first_col: 'Ramanshift'})
+        elif st.session_state.stats_plot_select == "Support Vector Machine(SVM) Classification":
+            st.write("**Support Vector Machine(SVM) Classification**")
+            if not svm_run:
+                st.info("Set SVM parameters in the sidebar, then click Run SVM.")
+            elif st.session_state.get("label_df") is None:
+                st.error("Classification requires label data. Upload or assign labels before running this analysis.")
+            else:
+                try:
+                    temp = st.session_state.temp.drop(columns=["Average"], errors="ignore")
+                    svm_result = function.analytics_ml_classification_svm(
+                        temp,
+                        st.session_state.label_df,
+                        test_size=st.session_state.svm_test_size,
+                        kernel=st.session_state.svm_kernel,
+                        C=st.session_state.svm_C,
+                        class_weight=st.session_state.svm_class_weight,
+                        degree=st.session_state.svm_degree,
+                        gamma=st.session_state.svm_gamma,
+                    )
 
-            svm_degree = st.session_state.svm_degree if st.session_state.get('svm_degree') else 0
-            svm_gamma = st.session_state.svm_gamma if st.session_state.get('svm_gamma') else "scale"
+                    split_info = svm_result.get("split_info", {})
+                    if split_info.get("info_message"):
+                        st.info(split_info["info_message"])
 
-            try:
-                svm_confusion_matrix, svm_support_vectors, svm_roc_curve, svm_classification_report = function.svm(temp,
-                                st.session_state.svm_test_size,
-                                st.session_state.svm_kernel,
-                                st.session_state.svm_C,
-                                st.session_state.svm_class_weight,
-                                svm_degree,
-                                svm_gamma,
-                                label_df
-                                )
-            except ValueError as e:
-                st.error(str(e))
-                st.stop()
+                    for section in svm_result["sections"]:
+                        st.write(f"### {section['name']}")
+                        st.dataframe(section["metrics"], use_container_width=False)
+                        st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                        st.altair_chart(section["roc_curve"], use_container_width=False)
+                        log.log_plot_generated_count()
+                        log.log_plot_generated_count()
 
-            st.altair_chart(function.style_altair_chart(svm_confusion_matrix), use_container_width=False)
-            log.log_plot_generated_count()
+                    for extra_plot in svm_result.get("extra_plots", []):
+                        st.write(f"### {extra_plot['name']}")
+                        st.altair_chart(extra_plot["chart"], use_container_width=False)
+                        log.log_plot_generated_count()
 
-            st.altair_chart(function.style_altair_chart(svm_support_vectors), use_container_width=True)
-            log.log_plot_generated_count()
-
-            st.altair_chart(function.style_altair_chart(svm_roc_curve), use_container_width=False)
-            log.log_plot_generated_count()
-
-            st.write("### Classification Report")
-            st.dataframe(svm_classification_report, use_container_width=True)
-
-            log.log_function_call("Analytics_SVM",
-                                    f_params={
-                                        'kernel':st.session_state.svm_kernel,
-                                        'C':st.session_state.svm_C,
-                                        'class_weight':st.session_state.svm_class_weight,
-                                        'degree':svm_degree,
-                                        'gamma':svm_gamma,
-                                        'test_size':st.session_state.svm_test_size
-                                    })
+                    log.log_function_call(
+                        "Analytics_ML_Classification_SVM",
+                        f_params={
+                            "kernel": st.session_state.svm_kernel,
+                            "C": st.session_state.svm_C,
+                            "class_weight": st.session_state.svm_class_weight,
+                            "degree": st.session_state.svm_degree,
+                            "gamma": st.session_state.svm_gamma,
+                            "test_size": st.session_state.svm_test_size,
+                        },
+                    )
+                except Exception as e:
+                    st.error(f"Error running SVM classification: {e}")

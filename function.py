@@ -233,6 +233,121 @@ def median_filter_spectra(spectra, window_size=3, padding_method='mirror'):
         mode=padding_method
     )
 
+def _wavelet_trim_or_pad(signal, target_size):
+    import numpy as np
+
+    if signal.size > target_size:
+        return signal[:target_size]
+    if signal.size < target_size:
+        return np.pad(signal, (0, target_size - signal.size), mode='edge')
+    return signal
+
+def _resolve_wavelet_level(signal_size, wavelet_obj, level, default_level):
+    import pywt
+
+    max_level = pywt.dwt_max_level(signal_size, wavelet_obj.dec_len)
+    if max_level < 1:
+        return None
+    if level is None:
+        return min(default_level, max_level)
+    return max(1, min(int(level), max_level))
+
+def wavelet_denoise_standard(spectra, wavelet='sym4', level=None, mode='soft'):
+    import numpy as np
+    import pywt
+
+    y = np.asarray(spectra, dtype=float)
+    if y.size < 2:
+        return y.copy()
+
+    if mode not in {'soft', 'hard'}:
+        raise ValueError("mode must be 'soft' or 'hard'")
+
+    wavelet_obj = pywt.Wavelet(wavelet)
+    resolved_level = _resolve_wavelet_level(y.size, wavelet_obj, level, default_level=6)
+    if resolved_level is None:
+        return y.copy()
+
+    coeffs = pywt.wavedec(y, wavelet=wavelet_obj, level=resolved_level)
+    approx_coeffs = coeffs[0]
+    detail_coeffs = coeffs[1:]
+    if not detail_coeffs:
+        return y.copy()
+
+    finest_detail = detail_coeffs[-1]
+    sigma = np.median(np.abs(finest_detail - np.median(finest_detail))) / 0.6745
+    if not np.isfinite(sigma) or sigma <= 0:
+        return y.copy()
+
+    threshold = sigma * np.sqrt(2 * np.log(y.size))
+    denoised_details = [
+        pywt.threshold(detail, threshold, mode=mode)
+        for detail in detail_coeffs
+    ]
+    denoised = pywt.waverec([approx_coeffs] + denoised_details, wavelet=wavelet_obj)
+    return _wavelet_trim_or_pad(denoised, y.size)
+
+def wavelet_denoise_sardy(
+    spectra,
+    wavelet='sym4',
+    level=None,
+    n_iter=10,
+    loss='huber',
+    huber_delta=1.5,
+    lam_scale=1.0,
+):
+    import numpy as np
+    import pywt
+
+    y = np.asarray(spectra, dtype=float)
+    if y.size < 2:
+        return y.copy()
+
+    n_iter = max(1, int(n_iter))
+    if loss not in {'huber', 'l1'}:
+        raise ValueError("loss must be 'huber' or 'l1'")
+
+    wavelet_obj = pywt.Wavelet(wavelet)
+    resolved_level = _resolve_wavelet_level(y.size, wavelet_obj, level, default_level=4)
+    if resolved_level is None:
+        return y.copy()
+
+    coeffs = pywt.wavedec(y, wavelet_obj, level=resolved_level)
+    approx_coeffs = coeffs[0]
+    detail_coeffs = list(coeffs[1:])
+    if not detail_coeffs:
+        return y.copy()
+
+    sigma = np.median(np.abs(detail_coeffs[-1])) / 0.6745
+    if not np.isfinite(sigma) or sigma <= 1e-12:
+        return y.copy()
+
+    threshold = float(lam_scale) * sigma * np.sqrt(2.0 * np.log(y.size))
+
+    for _ in range(n_iter):
+        y_hat = pywt.waverec([approx_coeffs] + detail_coeffs, wavelet_obj)
+        y_hat = _wavelet_trim_or_pad(y_hat, y.size)
+        residual = y - y_hat
+
+        if loss == 'l1':
+            weights = 1.0 / np.maximum(np.abs(residual), 1e-6 * sigma)
+        else:
+            cutoff = float(huber_delta) * sigma
+            weights = np.where(
+                np.abs(residual) <= cutoff,
+                1.0,
+                cutoff / np.maximum(np.abs(residual), 1e-10),
+            )
+
+        gradient_coeffs = pywt.wavedec(weights * residual, wavelet_obj, level=resolved_level)
+        detail_coeffs = [
+            pywt.threshold(detail + gradient, threshold, mode='soft')
+            for detail, gradient in zip(detail_coeffs, gradient_coeffs[1:])
+        ]
+
+    denoised = pywt.waverec([approx_coeffs] + detail_coeffs, wavelet_obj)
+    return _wavelet_trim_or_pad(denoised, y.size)
+
 # def FFT_spectra (spectra, FFT_threshold = 0.1):
 #     import numpy as np
 #     spectra_FFT = np.fft.fft(spectra)

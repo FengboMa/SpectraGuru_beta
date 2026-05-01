@@ -131,6 +131,34 @@ def collect_current_preprocessing_entries():
                     "padding_method": st.session_state.smoothening_act_FFT_padding
                 }
             })
+        elif st.session_state.smoothening_function == "Median filter":
+            run_log_entries.append({
+                "step": "smoothening",
+                "display_name": "Smoothening",
+                "parameters": {
+                    "function": "Median filter",
+                    "window_size": st.session_state.smoothening_act_median_filter_window_size,
+                    "padding_method": st.session_state.smoothening_act_median_filter_padding_method
+                }
+            })
+        elif st.session_state.smoothening_function == "Wavelet Denoising":
+            method = st.session_state.wavelet_method
+            params = {
+                "function": "Wavelet Denoising",
+                "method": method,
+                "wavelet": st.session_state.wavelet_family,
+                "level": st.session_state.wavelet_level
+            }
+            if method == "Sardy BCR":
+                params["n_iter"] = st.session_state.wavelet_n_iter
+                params["loss"] = st.session_state.wavelet_loss
+            else:
+                params["mode"] = st.session_state.wavelet_mode
+            run_log_entries.append({
+                "step": "smoothening",
+                "display_name": "Smoothening",
+                "parameters": params
+            })
 
     if st.session_state.baselineremoval_act:
         if st.session_state.baselineremoval_function == "airPLS":
@@ -165,6 +193,15 @@ def collect_current_preprocessing_entries():
                     "fitting_ranges": st.session_state.fitting_ranges
                 }
             })
+        if st.session_state.baselineremoval_function == "SNIP":
+            run_log_entries.append({
+                "step": "baseline_removal",
+                "display_name": "Baseline Removal",
+                "parameters": {
+                    "function": "SNIP",
+                    "num_iterations": st.session_state.baselineremoval_SNIP_num_iterations
+                }
+            })
         if st.session_state.baselineremoval_function == "ALS":
             run_log_entries.append({
                 "step": "baseline_removal",
@@ -173,9 +210,11 @@ def collect_current_preprocessing_entries():
                     "function": "ALS",
                     "lambda": st.session_state.baselineremoval_ALS_lambda,
                     "p": st.session_state.baselineremoval_ALS_p,
-                    "d": st.session_state.baselineremoval_ALS_d
+                    "d": st.session_state.baselineremoval_ALS_d,
+                    "max_iter": st.session_state.baselineremoval_ALS_max_iter
                 }
             })
+
 
     if st.session_state.normalization_act:
         run_log_entries.append({
@@ -262,6 +301,34 @@ def apply_preprocessing_step(df, step_entry):
                     padding_method=params["padding_method"]
                 )
             )
+        elif params["function"] == "Median filter":
+            result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
+                lambda col: function.median_filter_spectra(
+                    col,
+                    window_size=params["window_size"],
+                    padding_method=params["padding_method"]
+                )
+            )
+        elif params["function"] == "Wavelet Denoising":
+            if params["method"] == "Sardy BCR":
+                result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
+                    lambda col: function.wavelet_denoise_sardy(
+                        col,
+                        wavelet=params["wavelet"],
+                        level=params["level"],
+                        n_iter=params["n_iter"],
+                        loss=params["loss"]
+                    )
+                )
+            elif params["method"] == "Standard":
+                result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
+                    lambda col: function.wavelet_denoise_standard(
+                        col,
+                        wavelet=params["wavelet"],
+                        level=params["level"],
+                        mode=params["mode"]
+                    )
+                )
         return result_df, remove_outliers_log
 
     if step == "baseline_removal":
@@ -287,20 +354,27 @@ def apply_preprocessing_step(df, step_entry):
                     fitting_ranges=params["fitting_ranges"]
                 )
             )
+        elif params["function"] == "SNIP":
+            result_df.iloc[:, 1:] = result_df.iloc[:, 1:] - result_df.iloc[:, 1:].apply(
+                lambda col: function.snip_1d(
+                    col.values,
+                    iterations=params["num_iterations"],
+                    use_lls=True, # hardcoded
+                    poly_window=15, # hardcoded
+                    poly_deg=1, # hardcoded
+                    return_baseline=True # hardcoded
+                )
+            )
         elif params["function"] == "ALS":
-            wavenumber = result_df.iloc[:, 0].values
-            for col_name in result_df.columns[1:]:
-                single_spectrum_df = pd.DataFrame({
-                    "Ramanshift": wavenumber,
-                    "Intensity": result_df[col_name].values
-                }).reset_index(drop=True)
-                corrected = function.als_baseline_removal(
-                    single_spectrum_df,
+            result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
+                lambda col: function.als_baseline_removal(
+                    col.values,
                     lam=params["lambda"],
                     p=params["p"],
-                    d=params["d"]
-                ).reset_index(drop=True)
-                result_df[col_name] = corrected["Intensity"].values
+                    d=params["d"],
+                    max_iter=params["max_iter"]
+                )
+            )
         return result_df, remove_outliers_log
 
     if step == "normalization":
@@ -498,7 +572,7 @@ else:
         
         if smoothening_act:
             # Add more functions to this selectbox if needed
-            st.session_state.smoothening_function = st.selectbox(label="Select your smoothening function",  options=["Savitzky-Golay filter","1D Fast Fourier Transform filter"])
+            st.session_state.smoothening_function = st.selectbox(label="Select your smoothening function",  options=["Savitzky-Golay filter","1D Fast Fourier Transform filter", "Median filter", "Wavelet Denoising"])
             
             if st.session_state.smoothening_function == "Savitzky-Golay filter":
             # Add more functions to this selectbox if needed
@@ -540,6 +614,78 @@ else:
                                                                                                                     "zero"],
                                                                 key = "smoothening_act_FFT_padding",
                                                                 help = help_txt2)
+            elif st.session_state.smoothening_function == "Median filter":
+                window_size_help = '''
+                The window size parameter specifies the length of the window for the median filter to use. A small window size can remove sharp spikes or outliers while minimizing artifacts. Larger window sizes may result in feature loss and distortion of the original spectra.
+
+                Window size must be odd. The max window size is 51, but smaller window sizes may still produce significant distortion and artifacts. Be sure to select an appropriate window size considering the width of features in your spectra.
+                '''
+                st.number_input(label="Window size", key = "smoothening_act_median_filter_window_size",
+                                                min_value = 3, max_value = 51, value = 3,
+                                                step=2, placeholder="Insert a number", help=window_size_help)
+                padding_help = '''
+                The padding method parameter specifies the method used to pad the signal before applying the median filter. Padding helps to reduce edge effects and minimize artifacts introduced by the filtering process.
+                
+                **Mirror Padding ('mirror'):** Reflects the signal at its edges, creating a smooth transition.
+                
+                **Edge Padding ('edge'):** Repeats the edge values of the signal.
+                
+                **Zero Padding ('zero'):** Adds zeros to the edges of the signal. May introduce artifacts at the edges.
+                '''
+                st.selectbox(label="Padding method",
+                             options=["mirror", "edge", "zero"],
+                             key="smoothening_act_median_filter_padding_method",
+                             help=padding_help)
+            elif st.session_state.smoothening_function == "Wavelet Denoising":
+                wavelet_help = '''
+                Wavelet denoising suppresses broadband noise by decomposing the signal into wavelet coefficients, shrinking noise-dominated detail coefficients, and reconstructing the signal.
+
+                Sardy BCR is the recommended robust iterative method. Standard uses classic universal thresholding and is faster.
+                '''
+                st.selectbox(
+                    label="Wavelet denoising method",
+                    options=["Sardy BCR", "Standard"],
+                    help=wavelet_help,
+                    key="wavelet_method"
+                )
+                st.selectbox(
+                    label="Wavelet family",
+                    options=["sym4", "sym8", "db4", "db8", "coif1", "coif3", "haar"],
+                    index=0,
+                    help="'sym4' is a good default for smooth Raman spectra.",
+                    key="wavelet_family"
+                )
+                st.selectbox(
+                    label="Decomposition level",
+                    options=[1, 2, 3, 4, 5, 6],
+                    index=3,
+                    help="Each level recursively decomposes the signal. Level 4 is a practical default for Raman spectra.",
+                    key="wavelet_level"
+                )
+                if st.session_state.get("wavelet_method") == "Sardy BCR":
+                    st.number_input(
+                        label="BCR iterations",
+                        min_value=1,
+                        max_value=15,
+                        value=10,
+                        step=1,
+                        help="Higher values increase runtime. Convergence typically occurs by iteration 10.",
+                        key="wavelet_n_iter"
+                    )
+                    st.selectbox(
+                        label="Robust loss function",
+                        options=["huber", "l1"],
+                        index=0,
+                        help="Huber is smooth near zero; L1 more aggressively down-weights outlier residuals.",
+                        key="wavelet_loss"
+                    )
+                elif st.session_state.get("wavelet_method") == "Standard":
+                    st.selectbox(
+                        label="Thresholding mode",
+                        options=["soft", "hard"],
+                        index=0,
+                        key="wavelet_mode"
+                    )
         # Baseline removal
         # st.markdown("**Baseline Removal**")
         
@@ -553,7 +699,7 @@ else:
         
         if baselineremoval_act:
             # Add more functions to this selectbox if needed
-            st.session_state.baselineremoval_function = st.selectbox(label="Select your baseline removal function",  options=["airPLS", "ModPoly","Gaussian-Lorentzian Fitting","ALS"])
+            st.session_state.baselineremoval_function = st.selectbox(label="Select your baseline removal function",  options=["airPLS", "ModPoly","Gaussian-Lorentzian Fitting", "SNIP", "ALS"])
             
             if st.session_state.baselineremoval_function == "airPLS":
                 st.session_state.baselineremoval_airPLS_lambda = st.number_input(label="AirPLS lambda", help="The larger lambda is,  the smoother the resulting background, z.",
@@ -645,24 +791,50 @@ else:
                                 st.session_state.fitting_ranges =cleaned_ranges
                                 # st.write(st.session_state.despike_fitting_ranges)
                                 st.success(f"Saved {len(cleaned_ranges)} valid fitting ranges.")
+            elif st.session_state.baselineremoval_function == "SNIP":
+                st.session_state.baselineremoval_SNIP_num_iterations = st.number_input(label="SNIP Iterations",
+                                                                            help= "Determines the maximum peak width to be removed. Higher values create a smoother, lower baseline by allowing the algorithm to 'clip' wider peaks.",
+                                                                            min_value=10, max_value = 200, value = 50,
+                                                                            step = 1, placeholder="Insert a number")
             elif st.session_state.baselineremoval_function == "ALS":
                 st.session_state.baselineremoval_ALS_lambda = st.number_input(
                     label="ALS lambda (smoothness)",
-                    help="Smoothness penalty λ. Larger values produce a smoother baseline. Typical range: 1e4 – 1e9.",
-                    min_value=1.0, max_value=1e10, value=1e7,
-                    step=1e4, format="%.0f", placeholder="Insert a number")
-
+                    help="Higher values produce a smoother baseline.",
+                    min_value=1.0,
+                    max_value=1e10,
+                    value=1e7,
+                    step=1e4,
+                    format="%.0f",
+                    placeholder="Insert a number"
+                )
                 st.session_state.baselineremoval_ALS_p = st.number_input(
                     label="ALS asymmetry (p)",
-                    help="Asymmetry parameter. Smaller values push the baseline lower beneath peaks. Typical range: 1e-4 – 1e-2.",
-                    min_value=0.000001, max_value=0.999999, value=0.001,
-                    step=0.0001, format="%.6f", placeholder="Insert a number")
-
+                    help="Lower values make the estimated baseline fit lower beneath peaks.",
+                    min_value=0.000001,
+                    max_value=0.999999,
+                    value=0.001,
+                    step=0.0001,
+                    format="%.6f",
+                    placeholder="Insert a number"
+                )
                 st.session_state.baselineremoval_ALS_d = st.number_input(
                     label="ALS difference order (d)",
-                    help="Order of the finite-difference penalty. d=1 penalises slope, d=2 penalises curvature, d=3 penalises jerk.",
-                    min_value=1, max_value=3, value=2,
-                    step=1, placeholder="Insert a number")
+                    help="Order of the finite-difference smoothness penalty.",
+                    min_value=1,
+                    max_value=3,
+                    value=2,
+                    step=1,
+                    placeholder="Insert a number"
+                )
+                st.session_state.baselineremoval_ALS_max_iter = st.number_input(
+                    label="ALS maximum iterations",
+                    help="Maximum number of reweighted least-squares iterations.",
+                    min_value=1,
+                    max_value=200,
+                    value=50,
+                    step=1,
+                    placeholder="Insert a number"
+                )
         # Normalization
         # st.markdown("**Normalization**")
         
@@ -739,11 +911,32 @@ else:
                         'window_length': step_entry["parameters"]["window_length"],
                         'polyorder': step_entry["parameters"]["polynomial_order"]
                     })
-                else:
+                elif step_entry["parameters"]["function"] == "1D Fast Fourier Transform filter":
                     log.log_function_call("Processing_Smoothing_FFT_Filter", f_params={
                         'FFT_threshold': step_entry["parameters"]["fft_threshold"],
                         'padding_method': step_entry["parameters"]["padding_method"]
                     })
+                elif step_entry["parameters"]["function"] == "Median filter":
+                    log.log_function_call("Processing_Smoothing_Median_Filter", f_params={
+                        'window_size': step_entry["parameters"]["window_size"],
+                        'padding_method': step_entry["parameters"]["padding_method"]
+                    })
+                elif step_entry["parameters"]["function"] == "Wavelet Denoising":
+                    wavelet_params = {
+                        'method': step_entry["parameters"]["method"],
+                        'wavelet': step_entry["parameters"]["wavelet"],
+                        'level': step_entry["parameters"]["level"]
+                    }
+                    if step_entry["parameters"]["method"] == "Sardy BCR":
+                        wavelet_params.update({
+                            'n_iter': step_entry["parameters"]["n_iter"],
+                            'loss': step_entry["parameters"]["loss"]
+                        })
+                    else:
+                        wavelet_params.update({
+                            'mode': step_entry["parameters"]["mode"]
+                        })
+                    log.log_function_call("Processing_Smoothing_Wavelet_Denoising", f_params=wavelet_params)
             elif step_entry["step"] == "baseline_removal":
                 if step_entry["parameters"]["function"] == "airPLS":
                     log.log_function_call("Processing_Baseline_AirPLS", f_params={
@@ -756,15 +949,20 @@ else:
                     log.log_function_call("Processing_Baseline_Mod_Poly", f_params={
                         'degree': step_entry["parameters"]["degree"]
                     })
-                elif step_entry["parameters"]["function"] == "Gaussian-Lorentzian Fitting":
-                    log.log_function_call("Processing_Baseline_Gaussian_Lorentzian_Fitting", f_params={
-                        'fitting_ranges': step_entry["parameters"]["fitting_ranges"]
+                elif step_entry["parameters"]["function"] == "SNIP":
+                    log.log_function_call("Processing_Baseline_SNIP", f_params={
+                        'num_iterations': step_entry["parameters"]["num_iterations"]
                     })
                 elif step_entry["parameters"]["function"] == "ALS":
                     log.log_function_call("Processing_Baseline_ALS", f_params={
                         'lambda': step_entry["parameters"]["lambda"],
                         'p': step_entry["parameters"]["p"],
-                        'd': step_entry["parameters"]["d"]
+                        'd': step_entry["parameters"]["d"],
+                        'max_iter': step_entry["parameters"]["max_iter"]
+                    })
+                else:
+                    log.log_function_call("Processing_Baseline_Gaussian_Lorentzian_Fitting", f_params={
+                        'fitting_ranges': step_entry["parameters"]["fitting_ranges"]
                     })
             elif step_entry["step"] == "normalization":
                 if step_entry["parameters"]["function"] == "Normalize by area":

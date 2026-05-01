@@ -1,12 +1,13 @@
 import streamlit as st
 from streamlit_modal import Modal
-from auth_utils import login, logout, startup, populate
+from auth_utils import LOCAL_DEPLOY, login, logout, startup, populate
 from auth_utils import clerk_component
 # import streamlit.components.v1 as components
 
 import function
 import log_utils as log
 import os
+import base64
 
 # Get the current script's directory
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -113,16 +114,19 @@ if st.session_state.show_welcome_modal and not st.session_state.show_login_modal
         st.write("If you encounter a problem, please email Fengbo.Ma@uga.edu")
         st.write("**:arrow_upper_left: After starting, go to ‘Data Upload’ in the sidebar to begin!**")
 
-        col1, col2 = st.columns(2)
+        if LOCAL_DEPLOY:
+            st.button("Continue as Guest", on_click=guest_entry)
+        else:
+            col1, col2 = st.columns(2)
 
-        # left: guest
-        col1.button("Continue as Guest", on_click=guest_entry)
+            # left: guest
+            col1.button("Continue as Guest", on_click=guest_entry)
 
-        # right: login via Clerk—just a link
-        #signin_url = clerk_signin_url()           # already returns the full redirect URL
-        #col2.link_button("Log in", signin_url,type="primary")  
+            # right: login via Clerk—just a link
+            #signin_url = clerk_signin_url()           # already returns the full redirect URL
+            #col2.link_button("Log in", signin_url,type="primary")
 
-        col2.button("Log in here", on_click=login, type="primary")
+            col2.button("Log in here", on_click=login, type="primary")
 
 
         st.caption(
@@ -134,7 +138,7 @@ if st.session_state.show_welcome_modal and not st.session_state.show_login_modal
 print("Login modal:", st.session_state.show_login_modal)
 print("User decided:", st.session_state.user_decided)
 # ---------- login modal ----------- #
-if st.session_state.show_login_modal:
+if st.session_state.show_login_modal and not LOCAL_DEPLOY:
 
     def abort():
         st.session_state.show_login_modal = False
@@ -153,6 +157,8 @@ if st.session_state.show_login_modal:
     login_dialog()
 
 st.write("# SpectraGuru  - A Spectra Analysis Application ")
+if LOCAL_DEPLOY:
+    st.write("## Local deploy version")
 # st.info('SpectraGuru is still under development. Current version: SpectraGuru ver. 0.15')
 
 # ---------- greet authenticated users ----------
@@ -165,10 +171,10 @@ if st.session_state.user_logged_in:
 try:
     counts = function.read_counts(st.session_state.log_file_path)
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Views", st.session_state.current_user_count, None)
-    col2.metric("Plots generated", counts['Plot_Generated'], None)
-    col3.metric("Spectra processed", counts['Spectra_Processed'], None)
+    # col1, col2, col3 = st.columns(3)
+    # col1.metric("Views", st.session_state.current_user_count, None)
+    # col2.metric("Plots generated", counts['Plot_Generated'], None)
+    # col3.metric("Spectra processed", counts['Spectra_Processed'], None)
 except:
     pass
 
@@ -176,7 +182,7 @@ st.sidebar.success("Navigate to Data Upload page above to start")
 
 if st.session_state.user_logged_in:
     st.sidebar.button("Log Out", on_click=logout, type='primary')
-elif not st.session_state.show_welcome_modal:
+elif not st.session_state.show_welcome_modal and not LOCAL_DEPLOY:
     st.sidebar.button("Log In", on_click=login, type='primary')
 
 st.markdown(
@@ -193,7 +199,7 @@ st.info("Check out our latest news and updates on SpectraGuru!")
 
 # Add expander to show the flyer
 with st.expander("View SpectraGuru Flyer (v2, Oct 26)"):
-    st.image("news/Spectraguru flyer v2 oct26 (1).png", caption="SpectraGuru Flyer v2 – October 26", use_container_width=True)
+    st.image("element/Spectraguru flyer v2 oct26 (1).png", caption="SpectraGuru Flyer v2 – October 26", use_container_width=True)
 st.divider()
 
 
@@ -341,12 +347,20 @@ st.markdown(
 """
 )
 
+def image_data_uri(path):
+    with open(path, "rb") as image_file:
+        encoded = base64.b64encode(image_file.read()).decode("utf-8")
+    return f"data:image/png;base64,{encoded}"
+
+usda_logo = image_data_uri("element/USDA.png")
+nsf_logo = image_data_uri("element/nsf.png")
+
 st.markdown(
-    """
+    f"""
     ### SpectraGuru supported by:
-    <div style="display:flex; justify-content:center; align-items:center; gap:40px;">
-        <img src="element/USDA.png" style="height:100px; object-fit:contain;">
-        <img src="element/nsf.png" style="height:100px; object-fit:contain;">
+    <div style="display:flex; justify-content:center; align-items:center; gap:40px; flex-wrap:wrap;">
+        <img src="{usda_logo}" style="height:80px; width:auto; max-width:320px; object-fit:contain;">
+        <img src="{nsf_logo}" style="height:80px; width:auto; max-width:320px; object-fit:contain;">
     </div>
     """,
     unsafe_allow_html=True

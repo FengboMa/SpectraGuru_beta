@@ -32,6 +32,7 @@ if 'df' in st.session_state:
                         options= ("Average Plot with Original Spectra", 
                                 "Confidence Interval Plot",
                                 "Spectra Derivation",
+                                "Fast Fourier Transform (FFT)",
                                 "Correlation Heatmap",
                                 "Peak Identification and Stats",
                                 "Hierarchically-clustered Heatmap",
@@ -98,8 +99,24 @@ if 'df' in st.session_state:
             index=0,
             key="deriv_norm_method",
             help="Apply per-spectrum Min–Max scaling before taking derivatives.")
+    elif st.session_state.stats_plot_select == "Fast Fourier Transform (FFT)":
+        fft_target_options = ["Average"] + [
+            column for column in st.session_state.temp.columns
+            if column not in ("Ramanshift", "Average", "Standard Deviation")
+        ]
+        st.sidebar.selectbox(
+            label="Select spectrum for FFT",
+            options=fft_target_options,
+            index=0,
+            key="fft_target_spectrum"
+        )
+        st.sidebar.toggle(
+            label="Subtract average value before FFT",
+            value=False,
+            key="fft_subtract_average"
+        )
     elif st.session_state.stats_plot_select == "Correlation Heatmap":
-        
+
         st.sidebar.selectbox(
             label='Correlation Algorithm',
             options=('Pearson Correlation', 'Cosine Similarity'),
@@ -524,7 +541,83 @@ else:
                 log.log_plot_generated_count()
             except Exception as e:
                 st.error(f"Error during processing: {e}")
-        
+
+        elif st.session_state.stats_plot_select == "Fast Fourier Transform (FFT)":
+            selected_fft_target = st.session_state.get("fft_target_spectrum", "Average")
+            filtered_fft_df = stats_data_melted[stats_data_melted["Sample ID"] == selected_fft_target]
+            try:
+                filtered_fft_df = filtered_fft_df.copy()
+                filtered_fft_df["Ramanshift"] = pd.to_numeric(filtered_fft_df["Ramanshift"], errors="coerce")
+                filtered_fft_df["Intensity"] = pd.to_numeric(filtered_fft_df["Intensity"], errors="coerce")
+                filtered_fft_df = filtered_fft_df.dropna(subset=["Ramanshift", "Intensity"])
+
+                if filtered_fft_df.empty:
+                    raise ValueError(f"No valid data found for spectrum '{selected_fft_target}'.")
+
+                fft_plot_title = f"FFT: {selected_fft_target}"
+                frequency_axis_title = "Positive Frequency (cycles/cm^-1)"
+                fft_df = function.compute_fft_spectrum(
+                    ramanshift=filtered_fft_df["Ramanshift"].to_numpy(),
+                    intensity=filtered_fft_df["Intensity"].to_numpy(),
+                    source_spectrum=selected_fft_target,
+                    subtract_average=st.session_state.get("fft_subtract_average", False)
+                )
+                fft_plots = function.build_fft_plots(
+                    fft_df=fft_df,
+                    frequency_axis_title=frequency_axis_title,
+                    phase_axis_title="Phase (deg)",
+                    amplitude_axis_title="Amplitude",
+                    real_axis_title="Real",
+                    imaginary_axis_title="Imaginary",
+                    power_axis_title="Power (MSA)",
+                    title_prefix=fft_plot_title
+                )
+
+                row1_col1, row1_col2 = st.columns(2)
+                with row1_col1:
+                    st.altair_chart(fft_plots["phase"], use_container_width=True)
+                with row1_col2:
+                    st.altair_chart(fft_plots["amplitude"], use_container_width=True)
+
+                row2_col1, row2_col2 = st.columns(2)
+                with row2_col1:
+                    st.altair_chart(fft_plots["real"], use_container_width=True)
+                with row2_col2:
+                    st.altair_chart(fft_plots["imaginary"], use_container_width=True)
+
+                row3_col1, row3_col2 = st.columns(2)
+                with row3_col1:
+                    st.altair_chart(fft_plots["real_imaginary"], use_container_width=True)
+                with row3_col2:
+                    st.altair_chart(fft_plots["power"], use_container_width=True)
+
+                for _ in range(6):
+                    log.log_plot_generated_count()
+                log.log_function_call(
+                    "Analytics_FFT",
+                    f_params={
+                        "target_spectrum": selected_fft_target,
+                        "subtract_average": st.session_state.get("fft_subtract_average", False)
+                    }
+                )
+
+                @st.cache_data
+                def download_fft_df(df):
+                    return df.to_csv(index=False).encode("utf-8")
+
+                fft_download_df = download_fft_df(fft_df)
+                current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+                download_file_name = f"data_FFT_{selected_fft_target}_{current_time}.csv"
+
+                st.download_button(
+                    label="Download FFT Data as CSV",
+                    data=fft_download_df,
+                    file_name=download_file_name,
+                    mime="text/csv",
+                )
+            except Exception as e:
+                st.error(f"Error during FFT processing: {e}")
+
         elif st.session_state.stats_plot_select == "Correlation Heatmap":
             # Select only the columns we need for correlation calculation
             # Filter out the columns

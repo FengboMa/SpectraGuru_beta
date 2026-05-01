@@ -38,6 +38,7 @@ if 'df' in st.session_state:
                                 "Hierarchically-clustered Heatmap",
                                 "Principal Components Analysis (PCA)-Beta",
                                 "T-SNE Dimensionality Reduction-Beta",
+                                "Random Forest(RF) Classification",
                                 "K-Nearest Neighbors(KNN) Classification"),
                         key="stats_plot_select")
 
@@ -206,6 +207,42 @@ if 'df' in st.session_state:
         max_perplexity = st.session_state.df.shape[1] - 1
         st.sidebar.select_slider(label="t-SNE Perplexity", options=list(range(1,max_perplexity)),value=2, key="tSNE_perplexity")
         st.sidebar.select_slider(label="t-SNE Maximum number of iterations", options=list(range(200,1001)), value=500, key="tSNE_n_iter")
+    elif st.session_state.stats_plot_select == "Random Forest(RF) Classification":
+        with st.sidebar.form("rf_classification_form"):
+            st.number_input(
+                label="Number of Trees",
+                min_value=1,
+                max_value=500,
+                step=1,
+                value=100,
+                key="rf_n_estimators",
+            )
+            st.number_input(
+                label="Maximum Tree Depth",
+                min_value=0,
+                max_value=100,
+                step=1,
+                value=0,
+                key="rf_max_depth",
+                help="Use 0 for no maximum depth.",
+            )
+            st.number_input(
+                label="Minimum Samples per Leaf",
+                min_value=1,
+                max_value=50,
+                step=1,
+                value=1,
+                key="rf_min_samples_leaf",
+            )
+            st.slider(
+                label="Test Size (%)",
+                min_value=0,
+                max_value=80,
+                step=1,
+                value=0,
+                key="rf_test_size",
+            )
+            rf_run = st.form_submit_button("Run Random Forest")
     elif st.session_state.stats_plot_select == "K-Nearest Neighbors(KNN) Classification":
         with st.sidebar.form("knn_classification_form"):
             st.number_input(
@@ -1111,6 +1148,53 @@ else:
                                     })
 
             st.write(tsne_df)
+
+        elif st.session_state.stats_plot_select == "Random Forest(RF) Classification":
+            st.write("**Random Forest(RF) Classification**")
+            if not rf_run:
+                st.info("Set Random Forest parameters in the sidebar, then click Run Random Forest.")
+            elif st.session_state.get("label_df") is None:
+                st.error("Classification requires label data. Upload or assign labels before running this analysis.")
+            else:
+                try:
+                    temp = st.session_state.temp.drop(columns=["Average"], errors="ignore")
+                    rf_result = function.analytics_ml_classification_random_forest(
+                        temp,
+                        st.session_state.label_df,
+                        n_estimators=st.session_state.rf_n_estimators,
+                        max_depth=st.session_state.rf_max_depth,
+                        min_samples_leaf=st.session_state.rf_min_samples_leaf,
+                        test_size=st.session_state.rf_test_size,
+                    )
+
+                    split_info = rf_result.get("split_info", {})
+                    if split_info.get("info_message"):
+                        st.info(split_info["info_message"])
+
+                    for section in rf_result["sections"]:
+                        st.write(f"### {section['name']}")
+                        st.dataframe(section["metrics"], use_container_width=False)
+                        st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                        st.altair_chart(section["roc_curve"], use_container_width=False)
+                        log.log_plot_generated_count()
+                        log.log_plot_generated_count()
+
+                    for extra_plot in rf_result.get("extra_plots", []):
+                        st.write(f"### {extra_plot['name']}")
+                        st.altair_chart(extra_plot["chart"], use_container_width=False)
+                        log.log_plot_generated_count()
+
+                    log.log_function_call(
+                        "Analytics_ML_Classification_Random_Forest",
+                        f_params={
+                            "n_estimators": st.session_state.rf_n_estimators,
+                            "max_depth": st.session_state.rf_max_depth,
+                            "min_samples_leaf": st.session_state.rf_min_samples_leaf,
+                            "test_size": st.session_state.rf_test_size,
+                        },
+                    )
+                except Exception as e:
+                    st.error(f"Error running Random Forest classification: {e}")
 
         elif st.session_state.stats_plot_select == "K-Nearest Neighbors(KNN) Classification":
             st.write("**K-Nearest Neighbors(KNN) Classification**")

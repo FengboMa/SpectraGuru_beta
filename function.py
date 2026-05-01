@@ -1496,6 +1496,87 @@ def _analytics_ml_classification_evaluate(model, X_eval, y_eval, classes, sectio
     }
 
 
+def analytics_ml_classification_random_forest(
+    df,
+    label_df,
+    n_estimators=100,
+    max_depth=None,
+    min_samples_leaf=1,
+    test_size=0,
+):
+    import altair as alt
+    import pandas as pd
+    from sklearn.ensemble import RandomForestClassifier
+
+    X, y, sample_names, spectra_df = _analytics_ml_classification_prepare_data(df, label_df)
+    split = _analytics_ml_classification_split(X, y, test_size)
+
+    model = RandomForestClassifier(
+        n_estimators=int(n_estimators),
+        max_depth=None if max_depth in (None, 0) else int(max_depth),
+        min_samples_leaf=int(min_samples_leaf),
+        max_features="sqrt",
+        criterion="gini",
+        bootstrap=True,
+        random_state=42,
+    )
+    model.fit(split["X_train"], split["y_train"])
+    classes = model.classes_
+
+    if split["mode"] == "full_dataset":
+        sections = [_analytics_ml_classification_evaluate(
+            model,
+            split["X_test"],
+            split["y_test"],
+            classes,
+            "Full Dataset Performance",
+            "Full Dataset Confusion Matrix",
+            "Full Dataset ROC Curve",
+        )]
+    else:
+        sections = [
+            _analytics_ml_classification_evaluate(
+                model,
+                split["X_train"],
+                split["y_train"],
+                classes,
+                "Training Set Performance",
+                "Training Set Confusion Matrix",
+                "Training Set ROC Curve",
+            ),
+            _analytics_ml_classification_evaluate(
+                model,
+                split["X_test"],
+                split["y_test"],
+                classes,
+                "Test Set Performance",
+                "Test Set Confusion Matrix",
+                "Test Set ROC Curve",
+            ),
+        ]
+
+    feature_names = spectra_df.columns.astype(str).tolist()
+    feature_importance_df = pd.DataFrame({
+        "Feature": feature_names,
+        "Importance": model.feature_importances_,
+    }).sort_values("Importance", ascending=False).head(25)
+    feature_importance = alt.Chart(feature_importance_df).mark_bar().encode(
+        x=alt.X("Importance:Q", title="Importance"),
+        y=alt.Y("Feature:N", sort="-x", title="Raman Shift"),
+        tooltip=["Feature", "Importance"],
+    ).properties(width=700, height=500, title="Random Forest Feature Importance")
+
+    return {
+        "mode": split["mode"],
+        "split_info": split["split_info"],
+        "sections": sections,
+        "extra_plots": [{
+            "name": "Feature Importance",
+            "chart": style_altair_chart(feature_importance),
+        }],
+    }
+
+
 def analytics_ml_classification_knn(
     df,
     label_df,

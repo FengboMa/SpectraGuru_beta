@@ -32,12 +32,13 @@ if 'df' in st.session_state:
                         options= ("Average Plot with Original Spectra", 
                                 "Confidence Interval Plot",
                                 "Spectra Derivation",
+                                "Fast Fourier Transform (FFT)",
                                 "Correlation Heatmap",
                                 "Peak Identification and Stats",
                                 "Hierarchically-clustered Heatmap",
                                 "Principal Components Analysis (PCA)-Beta",
                                 "T-SNE Dimensionality Reduction-Beta",
-                                "K-Nearest Neighbors (KNN)"),
+                                "K-Nearest Neighbors(KNN) Classification"),
                         key="stats_plot_select")
 
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
@@ -99,8 +100,24 @@ if 'df' in st.session_state:
             index=0,
             key="deriv_norm_method",
             help="Apply per-spectrum Min–Max scaling before taking derivatives.")
+    elif st.session_state.stats_plot_select == "Fast Fourier Transform (FFT)":
+        fft_target_options = ["Average"] + [
+            column for column in st.session_state.temp.columns
+            if column not in ("Ramanshift", "Average", "Standard Deviation")
+        ]
+        st.sidebar.selectbox(
+            label="Select spectrum for FFT",
+            options=fft_target_options,
+            index=0,
+            key="fft_target_spectrum"
+        )
+        st.sidebar.toggle(
+            label="Subtract average value before FFT",
+            value=False,
+            key="fft_subtract_average"
+        )
     elif st.session_state.stats_plot_select == "Correlation Heatmap":
-        
+
         st.sidebar.selectbox(
             label='Correlation Algorithm',
             options=('Pearson Correlation', 'Cosine Similarity'),
@@ -189,54 +206,37 @@ if 'df' in st.session_state:
         max_perplexity = st.session_state.df.shape[1] - 1
         st.sidebar.select_slider(label="t-SNE Perplexity", options=list(range(1,max_perplexity)),value=2, key="tSNE_perplexity")
         st.sidebar.select_slider(label="t-SNE Maximum number of iterations", options=list(range(200,1001)), value=500, key="tSNE_n_iter")
-    elif st.session_state.stats_plot_select == "K-Nearest Neighbors (KNN)":
-        # max samples in training set
-        num_samples = int(len([col for col in st.session_state.temp.columns if col != 'Ramanshift']) * (1 - st.session_state.get("KNN_test_size", 20) / 100)) - 2
-        num_samples = max(1, num_samples) 
-
-        # tips for choosing best k value
-        knn_help = """
-        Number of closest known samples used to vote on the identity of an unknown sample.
-
-        * **K value should typically be odd**, typically between 3-9, to prevent ties when deciding the identity of a sample.
-        * **K value shouldn't be too small:** Very low values (like `K=1`) can lead to **overfitting**, where the model is too sensitive to noise or outliers in your spectra.
-        * **K value shouldn't be too large:** Very high values can lead to **underfitting**, where the model "over-smooths" and misses the unique signatures of specific virus strains. 
-        * **Aim for a middle point** that maintains high accuracy on your testing set.
-        """
-
-        # tips for choosing suitable test set size
-        test_help = """
-        Proportion of the dataset to include in the test split.
-
-        * **Test size should be small enough** to ensure that the model has enough data to learn from, yet large enough to provide a reliable estimate of its performance.
-        * Test sizes are typically chosen in **multiples of 10** (10%, 20%, 30%, etc.).
-        * Common choices typically range between **20-30%** of the dataset.
-        """
-        
-        # test size settings
-        st.sidebar.number_input(
-            label="Test Set Size (%)", 
-            min_value=0, 
-            max_value=80, 
-            step=1,
-            value=20, 
-            key="KNN_test_size",
-            help=test_help) # description for test size
-
-        # if current k is greater than available samples, force down to default or max possible samples (whichever is smaller)
-        if st.session_state.get("KNN_n_neighbors", 3) > num_samples:
-            st.session_state["KNN_n_neighbors"] = max(1, min(3, num_samples))
-        
-        # k value settings
-        st.sidebar.number_input(
-            label="Number of Neighbors (K)", 
-            min_value=1, 
-            max_value=num_samples, 
-            step=2,
-            value=min(3, num_samples),
-            key="KNN_n_neighbors",
-            help=knn_help) # description for K value
-
+    elif st.session_state.stats_plot_select == "K-Nearest Neighbors(KNN) Classification":
+        with st.sidebar.form("knn_classification_form"):
+            st.number_input(
+                label="Number of Neighbors (K)",
+                min_value=1,
+                max_value=100,
+                step=1,
+                value=3,
+                key="knn_n_neighbors",
+            )
+            st.selectbox(
+                label="Weights",
+                options=("uniform", "distance"),
+                index=0,
+                key="knn_weights",
+            )
+            st.selectbox(
+                label="Distance Metric",
+                options=("euclidean", "manhattan", "minkowski"),
+                index=0,
+                key="knn_metric",
+            )
+            st.slider(
+                label="Test Size (%)",
+                min_value=0,
+                max_value=80,
+                step=1,
+                value=0,
+                key="knn_test_size",
+            )
+            knn_run = st.form_submit_button("Run KNN")
 
 # Stats section layout
 """"""""""""
@@ -573,7 +573,83 @@ else:
                 log.log_plot_generated_count()
             except Exception as e:
                 st.error(f"Error during processing: {e}")
-        
+
+        elif st.session_state.stats_plot_select == "Fast Fourier Transform (FFT)":
+            selected_fft_target = st.session_state.get("fft_target_spectrum", "Average")
+            filtered_fft_df = stats_data_melted[stats_data_melted["Sample ID"] == selected_fft_target]
+            try:
+                filtered_fft_df = filtered_fft_df.copy()
+                filtered_fft_df["Ramanshift"] = pd.to_numeric(filtered_fft_df["Ramanshift"], errors="coerce")
+                filtered_fft_df["Intensity"] = pd.to_numeric(filtered_fft_df["Intensity"], errors="coerce")
+                filtered_fft_df = filtered_fft_df.dropna(subset=["Ramanshift", "Intensity"])
+
+                if filtered_fft_df.empty:
+                    raise ValueError(f"No valid data found for spectrum '{selected_fft_target}'.")
+
+                fft_plot_title = f"FFT: {selected_fft_target}"
+                frequency_axis_title = "Positive Frequency (cycles/cm^-1)"
+                fft_df = function.compute_fft_spectrum(
+                    ramanshift=filtered_fft_df["Ramanshift"].to_numpy(),
+                    intensity=filtered_fft_df["Intensity"].to_numpy(),
+                    source_spectrum=selected_fft_target,
+                    subtract_average=st.session_state.get("fft_subtract_average", False)
+                )
+                fft_plots = function.build_fft_plots(
+                    fft_df=fft_df,
+                    frequency_axis_title=frequency_axis_title,
+                    phase_axis_title="Phase (deg)",
+                    amplitude_axis_title="Amplitude",
+                    real_axis_title="Real",
+                    imaginary_axis_title="Imaginary",
+                    power_axis_title="Power (MSA)",
+                    title_prefix=fft_plot_title
+                )
+
+                row1_col1, row1_col2 = st.columns(2)
+                with row1_col1:
+                    st.altair_chart(fft_plots["phase"], use_container_width=True)
+                with row1_col2:
+                    st.altair_chart(fft_plots["amplitude"], use_container_width=True)
+
+                row2_col1, row2_col2 = st.columns(2)
+                with row2_col1:
+                    st.altair_chart(fft_plots["real"], use_container_width=True)
+                with row2_col2:
+                    st.altair_chart(fft_plots["imaginary"], use_container_width=True)
+
+                row3_col1, row3_col2 = st.columns(2)
+                with row3_col1:
+                    st.altair_chart(fft_plots["real_imaginary"], use_container_width=True)
+                with row3_col2:
+                    st.altair_chart(fft_plots["power"], use_container_width=True)
+
+                for _ in range(6):
+                    log.log_plot_generated_count()
+                log.log_function_call(
+                    "Analytics_FFT",
+                    f_params={
+                        "target_spectrum": selected_fft_target,
+                        "subtract_average": st.session_state.get("fft_subtract_average", False)
+                    }
+                )
+
+                @st.cache_data
+                def download_fft_df(df):
+                    return df.to_csv(index=False).encode("utf-8")
+
+                fft_download_df = download_fft_df(fft_df)
+                current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+                download_file_name = f"data_FFT_{selected_fft_target}_{current_time}.csv"
+
+                st.download_button(
+                    label="Download FFT Data as CSV",
+                    data=fft_download_df,
+                    file_name=download_file_name,
+                    mime="text/csv",
+                )
+            except Exception as e:
+                st.error(f"Error during FFT processing: {e}")
+
         elif st.session_state.stats_plot_select == "Correlation Heatmap":
             # Select only the columns we need for correlation calculation
             # Filter out the columns
@@ -1012,7 +1088,7 @@ else:
             st.write(pca_result_df)
         
         elif st.session_state.stats_plot_select == "T-SNE Dimensionality Reduction-Beta":
-            
+
             st.write("**T‑Distributed Stochastic Neighbor Embedding (t‑SNE) ‑ Beta**")
 
             temp = st.session_state.temp.drop(columns=['Average'])
@@ -1035,41 +1111,45 @@ else:
                                     })
 
             st.write(tsne_df)
-        elif st.session_state.stats_plot_select == "K-Nearest Neighbors (KNN)":
-            # drop unnecessary average column
-            temp = st.session_state.temp.drop(columns=["Average"])
-            label_df = st.session_state.get("label_df")
 
-            # display subtitle
-            st.write("#### **K-Nearest Neighbors (KNN) Analysis**")
-            st.divider()
+        elif st.session_state.stats_plot_select == "K-Nearest Neighbors(KNN) Classification":
+            st.write("**K-Nearest Neighbors(KNN) Classification**")
+            if not knn_run:
+                st.info("Set KNN parameters in the sidebar, then click Run KNN.")
+            elif st.session_state.get("label_df") is None:
+                st.error("Classification requires label data. Upload or assign labels before running this analysis.")
+            else:
+                try:
+                    temp = st.session_state.temp.drop(columns=["Average"], errors="ignore")
+                    knn_result = function.analytics_ml_classification_knn(
+                        temp,
+                        st.session_state.label_df,
+                        n_neighbors=st.session_state.knn_n_neighbors,
+                        test_size=st.session_state.knn_test_size,
+                        weights=st.session_state.knn_weights,
+                        metric=st.session_state.knn_metric,
+                    )
 
-            try:
-                # run knn function using settings from the sidebar
-                cm_chart, df_report, roc = function.k_nearest_neighbors(
-                    temp,
-                    n_neighbors=st.session_state.KNN_n_neighbors,
-                    test_set_size=st.session_state.KNN_test_size,
-                    label_df=label_df
-                )
+                    split_info = knn_result.get("split_info", {})
+                    if split_info.get("info_message"):
+                        st.info(split_info["info_message"])
 
-                # display confusion matrix
-                st.altair_chart(cm_chart, use_container_width=False)
+                    for section in knn_result["sections"]:
+                        st.write(f"### {section['name']}")
+                        st.dataframe(section["metrics"], use_container_width=False)
+                        st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                        st.altair_chart(section["roc_curve"], use_container_width=False)
+                        log.log_plot_generated_count()
+                        log.log_plot_generated_count()
 
-                # display performance metrics
-                st.markdown("**Performance Metrics**")
-                st.dataframe(df_report, use_container_width=False)
-                st.write("\n")
-
-                # display ROC curve
-                st.altair_chart(roc, use_container_width=False)
-
-                # log plot generated count
-                log.log_plot_generated_count()
-                log.log_function_call("Analytics_Classification_KNN",
-                                        f_params={
-                                            "n_neighbors": st.session_state.KNN_n_neighbors,
-                                            "test_set_size": st.session_state.KNN_test_size
-                                        })
-            except Exception as e: # display any error messages w/ no traceback
-                st.error(f"**Error occurred**: {e}")
+                    log.log_function_call(
+                        "Analytics_ML_Classification_KNN",
+                        f_params={
+                            "n_neighbors": st.session_state.knn_n_neighbors,
+                            "weights": st.session_state.knn_weights,
+                            "metric": st.session_state.knn_metric,
+                            "test_size": st.session_state.knn_test_size,
+                        },
+                    )
+                except Exception as e:
+                    st.error(f"Error running KNN classification: {e}")

@@ -38,7 +38,8 @@ if 'df' in st.session_state:
                                 "Hierarchically-clustered Heatmap",
                                 "Principal Components Analysis (PCA)-Beta",
                                 "T-SNE Dimensionality Reduction-Beta",
-                                "Random Forest(RF) Classification"),
+                                "Random Forest(RF) Classification",
+                                "K-Nearest Neighbors(KNN) Classification"),
                         key="stats_plot_select")
 
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
@@ -242,6 +243,37 @@ if 'df' in st.session_state:
                 key="rf_test_size",
             )
             rf_run = st.form_submit_button("Run Random Forest")
+    elif st.session_state.stats_plot_select == "K-Nearest Neighbors(KNN) Classification":
+        with st.sidebar.form("knn_classification_form"):
+            st.number_input(
+                label="Number of Neighbors (K)",
+                min_value=1,
+                max_value=100,
+                step=1,
+                value=3,
+                key="knn_n_neighbors",
+            )
+            st.selectbox(
+                label="Weights",
+                options=("uniform", "distance"),
+                index=0,
+                key="knn_weights",
+            )
+            st.selectbox(
+                label="Distance Metric",
+                options=("euclidean", "manhattan", "minkowski"),
+                index=0,
+                key="knn_metric",
+            )
+            st.slider(
+                label="Test Size (%)",
+                min_value=0,
+                max_value=80,
+                step=1,
+                value=0,
+                key="knn_test_size",
+            )
+            knn_run = st.form_submit_button("Run KNN")
 
 # Stats section layout
 """"""""""""
@@ -1163,3 +1195,45 @@ else:
                     )
                 except Exception as e:
                     st.error(f"Error running Random Forest classification: {e}")
+
+        elif st.session_state.stats_plot_select == "K-Nearest Neighbors(KNN) Classification":
+            st.write("**K-Nearest Neighbors(KNN) Classification**")
+            if not knn_run:
+                st.info("Set KNN parameters in the sidebar, then click Run KNN.")
+            elif st.session_state.get("label_df") is None:
+                st.error("Classification requires label data. Upload or assign labels before running this analysis.")
+            else:
+                try:
+                    temp = st.session_state.temp.drop(columns=["Average"], errors="ignore")
+                    knn_result = function.analytics_ml_classification_knn(
+                        temp,
+                        st.session_state.label_df,
+                        n_neighbors=st.session_state.knn_n_neighbors,
+                        test_size=st.session_state.knn_test_size,
+                        weights=st.session_state.knn_weights,
+                        metric=st.session_state.knn_metric,
+                    )
+
+                    split_info = knn_result.get("split_info", {})
+                    if split_info.get("info_message"):
+                        st.info(split_info["info_message"])
+
+                    for section in knn_result["sections"]:
+                        st.write(f"### {section['name']}")
+                        st.dataframe(section["metrics"], use_container_width=False)
+                        st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                        st.altair_chart(section["roc_curve"], use_container_width=False)
+                        log.log_plot_generated_count()
+                        log.log_plot_generated_count()
+
+                    log.log_function_call(
+                        "Analytics_ML_Classification_KNN",
+                        f_params={
+                            "n_neighbors": st.session_state.knn_n_neighbors,
+                            "weights": st.session_state.knn_weights,
+                            "metric": st.session_state.knn_metric,
+                            "test_size": st.session_state.knn_test_size,
+                        },
+                    )
+                except Exception as e:
+                    st.error(f"Error running KNN classification: {e}")

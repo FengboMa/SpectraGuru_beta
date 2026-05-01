@@ -1577,6 +1577,77 @@ def analytics_ml_classification_random_forest(
     }
 
 
+def analytics_ml_classification_knn(
+    df,
+    label_df,
+    n_neighbors=3,
+    test_size=0,
+    weights="uniform",
+    metric="euclidean",
+):
+    from sklearn.neighbors import KNeighborsClassifier
+
+    X, y, sample_names, spectra_df = _analytics_ml_classification_prepare_data(df, label_df)
+    split = _analytics_ml_classification_split(X, y, test_size)
+    requested_neighbors = int(n_neighbors)
+    safe_neighbors = max(1, min(requested_neighbors, len(split["X_train"])))
+
+    model = KNeighborsClassifier(
+        n_neighbors=safe_neighbors,
+        weights=weights,
+        metric=metric,
+    )
+    model.fit(split["X_train"], split["y_train"])
+    classes = model.classes_
+
+    if split["mode"] == "full_dataset":
+        sections = [_analytics_ml_classification_evaluate(
+            model,
+            split["X_test"],
+            split["y_test"],
+            classes,
+            "Full Dataset Performance",
+            "Full Dataset Confusion Matrix",
+            "Full Dataset ROC Curve",
+        )]
+    else:
+        sections = [
+            _analytics_ml_classification_evaluate(
+                model,
+                split["X_train"],
+                split["y_train"],
+                classes,
+                "Training Set Performance",
+                "Training Set Confusion Matrix",
+                "Training Set ROC Curve",
+            ),
+            _analytics_ml_classification_evaluate(
+                model,
+                split["X_test"],
+                split["y_test"],
+                classes,
+                "Test Set Performance",
+                "Test Set Confusion Matrix",
+                "Test Set ROC Curve",
+            ),
+        ]
+
+    split_info = split["split_info"]
+    if safe_neighbors != requested_neighbors:
+        previous = split_info.get("info_message")
+        neighbor_message = (
+            f"Requested {requested_neighbors} neighbors, adjusted to {safe_neighbors} "
+            "because the training set is smaller."
+        )
+        split_info["info_message"] = f"{previous} {neighbor_message}" if previous else neighbor_message
+
+    return {
+        "mode": split["mode"],
+        "split_info": split_info,
+        "sections": sections,
+    }
+
+
 def style_altair_chart(chart):
     return chart.configure_axis(
         labelFontSize=16,

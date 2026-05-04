@@ -217,6 +217,7 @@ if 'df' in st.session_state:
                 step=1,
                 value=100,
                 key="rf_n_estimators",
+                help="Number of decision trees in the forest. Default: 100.",
             )
             st.number_input(
                 label="Maximum Tree Depth",
@@ -225,7 +226,7 @@ if 'df' in st.session_state:
                 step=1,
                 value=0,
                 key="rf_max_depth",
-                help="Use 0 for no maximum depth.",
+                help="Maximum number of splits per tree. Default: 0, meaning unlimited depth.",
             )
             st.number_input(
                 label="Minimum Samples per Leaf",
@@ -234,6 +235,7 @@ if 'df' in st.session_state:
                 step=1,
                 value=1,
                 key="rf_min_samples_leaf",
+                help="Minimum spectra required in a terminal tree leaf. Default: 1.",
             )
             st.slider(
                 label="Test Size (%)",
@@ -242,6 +244,7 @@ if 'df' in st.session_state:
                 step=1,
                 value=0,
                 key="rf_test_size",
+                help="Percentage of spectra held out for evaluation. Default: 0%, which fits and evaluates on the full selected dataset.",
             )
             rf_run = st.form_submit_button("Run Random Forest")
     elif st.session_state.stats_plot_select == "K-Nearest Neighbors(KNN) Classification":
@@ -253,18 +256,21 @@ if 'df' in st.session_state:
                 step=1,
                 value=3,
                 key="knn_n_neighbors",
+                help="Number of nearest training spectra used for voting. Default: 3.",
             )
             st.selectbox(
                 label="Weights",
                 options=("uniform", "distance"),
                 index=0,
                 key="knn_weights",
+                help="Voting rule for neighbors. Default: uniform, giving each neighbor equal weight.",
             )
             st.selectbox(
                 label="Distance Metric",
                 options=("euclidean", "manhattan", "minkowski"),
                 index=0,
                 key="knn_metric",
+                help="Distance function used to identify nearest spectra. Default: euclidean.",
             )
             st.slider(
                 label="Test Size (%)",
@@ -273,6 +279,7 @@ if 'df' in st.session_state:
                 step=1,
                 value=0,
                 key="knn_test_size",
+                help="Percentage of spectra held out for evaluation. Default: 0%, which fits and evaluates on the full selected dataset.",
             )
             knn_run = st.form_submit_button("Run KNN")
     elif st.session_state.stats_plot_select == "Support Vector Machine(SVM) Classification":
@@ -282,6 +289,7 @@ if 'df' in st.session_state:
                 options=("RBF", "Linear", "Polynomial", "Sigmoid"),
                 index=0,
                 key="svm_kernel",
+                help="Kernel transformation used to define the separating boundary. Default: RBF.",
             )
             st.number_input(
                 label="C",
@@ -290,12 +298,14 @@ if 'df' in st.session_state:
                 step=0.1,
                 value=1.0,
                 key="svm_C",
+                help="Regularization strength; larger values penalize training errors more strongly. Default: 1.0.",
             )
             st.selectbox(
                 label="Class Weight",
                 options=("None", "Balanced"),
                 index=0,
                 key="svm_class_weight",
+                help="Class weighting strategy for imbalanced labels. Default: None.",
             )
             st.number_input(
                 label="Polynomial Degree",
@@ -304,12 +314,14 @@ if 'df' in st.session_state:
                 step=1,
                 value=3,
                 key="svm_degree",
+                help="Polynomial kernel degree, used only when Kernel is Polynomial. Default: 3.",
             )
             st.selectbox(
                 label="Gamma",
                 options=("scale", "auto"),
                 index=0,
                 key="svm_gamma",
+                help="Kernel coefficient for RBF, Polynomial, and Sigmoid kernels. Default: scale.",
             )
             st.slider(
                 label="Test Size (%)",
@@ -318,6 +330,7 @@ if 'df' in st.session_state:
                 step=1,
                 value=0,
                 key="svm_test_size",
+                help="Percentage of spectra held out for evaluation. Default: 0%, which fits and evaluates on the full selected dataset.",
             )
             svm_run = st.form_submit_button("Run SVM")
 
@@ -1217,18 +1230,90 @@ else:
                     if split_info.get("info_message"):
                         st.info(split_info["info_message"])
 
-                    for section in rf_result["sections"]:
-                        st.write(f"### {section['name']}")
-                        st.dataframe(section["metrics"], use_container_width=False)
-                        st.altair_chart(section["confusion_matrix"], use_container_width=False)
-                        st.altair_chart(section["roc_curve"], use_container_width=False)
-                        log.log_plot_generated_count()
+                    eda = rf_result.get("eda", {})
+                    if eda:
+                        st.write("### Class Counts by Split")
+                        st.caption("Tabulates the fitted split composition by class; percentages are normalized within each split.")
+                        class_counts_df = eda["class_counts"].copy()
+                        for percent_column in [col for col in class_counts_df.columns if "Percent" in col]:
+                            class_counts_df[percent_column] = class_counts_df[percent_column].map(lambda value: f"{value:.1%}")
+                        st.dataframe(class_counts_df, use_container_width=True)
+
+                        st.write("### Class Balance")
+                        st.caption("Compares class-frequency distributions across the exact samples used for model fitting and evaluation.")
+                        st.altair_chart(eda["class_count_chart"], use_container_width=False)
                         log.log_plot_generated_count()
 
-                    for extra_plot in rf_result.get("extra_plots", []):
-                        st.write(f"### {extra_plot['name']}")
-                        st.altair_chart(extra_plot["chart"], use_container_width=False)
-                        log.log_plot_generated_count()
+                        spectra_envelopes = eda.get("spectra_envelopes", [])
+                        if rf_result.get("mode") == "train_test_split" and len(spectra_envelopes) == 2:
+                            st.write("### Split Class Spectra Visualization")
+                            st.caption("Class mean spectra are shown as lines; shaded envelopes span the class-wise minimum-to-maximum intensity range.")
+                            train_eda_col, test_eda_col = st.columns(2)
+                            with train_eda_col:
+                                st.altair_chart(spectra_envelopes[0]["chart"], use_container_width=False)
+                                log.log_plot_generated_count()
+                            with test_eda_col:
+                                st.altair_chart(spectra_envelopes[1]["chart"], use_container_width=False)
+                                log.log_plot_generated_count()
+                        else:
+                            st.write("### Full Dataset Class Spectra Visualization")
+                            st.caption("Class mean spectra are shown as lines; shaded envelopes span the class-wise minimum-to-maximum intensity range.")
+                            for envelope in spectra_envelopes:
+                                st.altair_chart(envelope["chart"], use_container_width=False)
+                                log.log_plot_generated_count()
+
+                    if rf_result.get("mode") == "train_test_split" and len(rf_result["sections"]) == 2:
+                        st.write("### Performance Table")
+                        st.caption("Macro-averaged metrics summarize model discrimination for each fitted split.")
+                        train_col, test_col = st.columns(2)
+                        with train_col:
+                            section = rf_result["sections"][0]
+                            st.write("#### Training Performance")
+                            st.dataframe(section["metrics"], use_container_width=False)
+                        with test_col:
+                            section = rf_result["sections"][1]
+                            st.write("#### Test Performance")
+                            st.dataframe(section["metrics"], use_container_width=False)
+
+                        st.write("### Confusion Matrix")
+                        st.caption("Rows encode observed classes and columns encode predicted classes; diagonal counts are correct predictions.")
+                        train_col, test_col = st.columns(2)
+                        with train_col:
+                            st.altair_chart(rf_result["sections"][0]["confusion_matrix"], use_container_width=False)
+                            log.log_plot_generated_count()
+                        with test_col:
+                            st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                            log.log_plot_generated_count()
+
+                        st.write("### ROC Curve")
+                        st.caption("One-vs-rest ROC curves quantify class separability; larger AUC values indicate stronger discrimination.")
+                        train_col, test_col = st.columns(2)
+                        with train_col:
+                            st.altair_chart(rf_result["sections"][0]["roc_curve"], use_container_width=False)
+                            log.log_plot_generated_count()
+                        with test_col:
+                            st.altair_chart(section["roc_curve"], use_container_width=False)
+                            log.log_plot_generated_count()
+                    else:
+                        st.write("### Performance Table")
+                        st.caption("Macro-averaged metrics summarize model discrimination on the full selected dataset.")
+                        for section in rf_result["sections"]:
+                            st.write("#### Full Dataset Performance")
+                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.write("### Full Dataset Confusion Matrix")
+                            st.caption("Rows encode observed classes and columns encode predicted classes; diagonal counts are correct predictions.")
+                            st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                            log.log_plot_generated_count()
+                            st.write("### Full Dataset ROC Curve")
+                            st.caption("One-vs-rest ROC curves quantify class separability; larger AUC values indicate stronger discrimination.")
+                            st.altair_chart(section["roc_curve"], use_container_width=False)
+                            log.log_plot_generated_count()
+
+                    # Model-specific extra plots are intentionally hidden for now.
+                    # for extra_plot in rf_result.get("extra_plots", []):
+                    #     st.write(f"### {extra_plot['name']}")
+                    #     st.altair_chart(extra_plot["chart"], use_container_width=False)
+                    #     log.log_plot_generated_count()
 
                     log.log_function_call(
                         "Analytics_ML_Classification_Random_Forest",
@@ -1264,13 +1349,84 @@ else:
                     if split_info.get("info_message"):
                         st.info(split_info["info_message"])
 
-                    for section in knn_result["sections"]:
-                        st.write(f"### {section['name']}")
-                        st.dataframe(section["metrics"], use_container_width=False)
-                        st.altair_chart(section["confusion_matrix"], use_container_width=False)
-                        st.altair_chart(section["roc_curve"], use_container_width=False)
+                    eda = knn_result.get("eda", {})
+                    if eda:
+                        st.write("### Class Counts by Split")
+                        st.caption("Tabulates the fitted split composition by class; percentages are normalized within each split.")
+                        class_counts_df = eda["class_counts"].copy()
+                        for percent_column in [col for col in class_counts_df.columns if "Percent" in col]:
+                            class_counts_df[percent_column] = class_counts_df[percent_column].map(lambda value: f"{value:.1%}")
+                        st.dataframe(class_counts_df, use_container_width=True)
+
+                        st.write("### Class Balance")
+                        st.caption("Compares class-frequency distributions across the exact samples used for model fitting and evaluation.")
+                        st.altair_chart(eda["class_count_chart"], use_container_width=False)
                         log.log_plot_generated_count()
-                        log.log_plot_generated_count()
+
+                        spectra_envelopes = eda.get("spectra_envelopes", [])
+                        if knn_result.get("mode") == "train_test_split" and len(spectra_envelopes) == 2:
+                            st.write("### Split Class Spectra Visualization")
+                            st.caption("Class mean spectra are shown as lines; shaded envelopes span the class-wise minimum-to-maximum intensity range.")
+                            train_eda_col, test_eda_col = st.columns(2)
+                            with train_eda_col:
+                                st.altair_chart(spectra_envelopes[0]["chart"], use_container_width=False)
+                                log.log_plot_generated_count()
+                            with test_eda_col:
+                                st.altair_chart(spectra_envelopes[1]["chart"], use_container_width=False)
+                                log.log_plot_generated_count()
+                        else:
+                            st.write("### Full Dataset Class Spectra Visualization")
+                            st.caption("Class mean spectra are shown as lines; shaded envelopes span the class-wise minimum-to-maximum intensity range.")
+                            for envelope in spectra_envelopes:
+                                st.altair_chart(envelope["chart"], use_container_width=False)
+                                log.log_plot_generated_count()
+
+                    if knn_result.get("mode") == "train_test_split" and len(knn_result["sections"]) == 2:
+                        st.write("### Performance Table")
+                        st.caption("Macro-averaged metrics summarize model discrimination for each fitted split.")
+                        train_col, test_col = st.columns(2)
+                        with train_col:
+                            section = knn_result["sections"][0]
+                            st.write("#### Training Performance")
+                            st.dataframe(section["metrics"], use_container_width=False)
+                        with test_col:
+                            section = knn_result["sections"][1]
+                            st.write("#### Test Performance")
+                            st.dataframe(section["metrics"], use_container_width=False)
+
+                        st.write("### Confusion Matrix")
+                        st.caption("Rows encode observed classes and columns encode predicted classes; diagonal counts are correct predictions.")
+                        train_col, test_col = st.columns(2)
+                        with train_col:
+                            st.altair_chart(knn_result["sections"][0]["confusion_matrix"], use_container_width=False)
+                            log.log_plot_generated_count()
+                        with test_col:
+                            st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                            log.log_plot_generated_count()
+
+                        st.write("### ROC Curve")
+                        st.caption("One-vs-rest ROC curves quantify class separability; larger AUC values indicate stronger discrimination.")
+                        train_col, test_col = st.columns(2)
+                        with train_col:
+                            st.altair_chart(knn_result["sections"][0]["roc_curve"], use_container_width=False)
+                            log.log_plot_generated_count()
+                        with test_col:
+                            st.altair_chart(section["roc_curve"], use_container_width=False)
+                            log.log_plot_generated_count()
+                    else:
+                        st.write("### Performance Table")
+                        st.caption("Macro-averaged metrics summarize model discrimination on the full selected dataset.")
+                        for section in knn_result["sections"]:
+                            st.write("#### Full Dataset Performance")
+                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.write("### Full Dataset Confusion Matrix")
+                            st.caption("Rows encode observed classes and columns encode predicted classes; diagonal counts are correct predictions.")
+                            st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                            log.log_plot_generated_count()
+                            st.write("### Full Dataset ROC Curve")
+                            st.caption("One-vs-rest ROC curves quantify class separability; larger AUC values indicate stronger discrimination.")
+                            st.altair_chart(section["roc_curve"], use_container_width=False)
+                            log.log_plot_generated_count()
 
                     log.log_function_call(
                         "Analytics_ML_Classification_KNN",
@@ -1308,18 +1464,90 @@ else:
                     if split_info.get("info_message"):
                         st.info(split_info["info_message"])
 
-                    for section in svm_result["sections"]:
-                        st.write(f"### {section['name']}")
-                        st.dataframe(section["metrics"], use_container_width=False)
-                        st.altair_chart(section["confusion_matrix"], use_container_width=False)
-                        st.altair_chart(section["roc_curve"], use_container_width=False)
-                        log.log_plot_generated_count()
+                    eda = svm_result.get("eda", {})
+                    if eda:
+                        st.write("### Class Counts by Split")
+                        st.caption("Tabulates the fitted split composition by class; percentages are normalized within each split.")
+                        class_counts_df = eda["class_counts"].copy()
+                        for percent_column in [col for col in class_counts_df.columns if "Percent" in col]:
+                            class_counts_df[percent_column] = class_counts_df[percent_column].map(lambda value: f"{value:.1%}")
+                        st.dataframe(class_counts_df, use_container_width=True)
+
+                        st.write("### Class Balance")
+                        st.caption("Compares class-frequency distributions across the exact samples used for model fitting and evaluation.")
+                        st.altair_chart(eda["class_count_chart"], use_container_width=False)
                         log.log_plot_generated_count()
 
-                    for extra_plot in svm_result.get("extra_plots", []):
-                        st.write(f"### {extra_plot['name']}")
-                        st.altair_chart(extra_plot["chart"], use_container_width=False)
-                        log.log_plot_generated_count()
+                        spectra_envelopes = eda.get("spectra_envelopes", [])
+                        if svm_result.get("mode") == "train_test_split" and len(spectra_envelopes) == 2:
+                            st.write("### Split Class Spectra Visualization")
+                            st.caption("Class mean spectra are shown as lines; shaded envelopes span the class-wise minimum-to-maximum intensity range.")
+                            train_eda_col, test_eda_col = st.columns(2)
+                            with train_eda_col:
+                                st.altair_chart(spectra_envelopes[0]["chart"], use_container_width=False)
+                                log.log_plot_generated_count()
+                            with test_eda_col:
+                                st.altair_chart(spectra_envelopes[1]["chart"], use_container_width=False)
+                                log.log_plot_generated_count()
+                        else:
+                            st.write("### Full Dataset Class Spectra Visualization")
+                            st.caption("Class mean spectra are shown as lines; shaded envelopes span the class-wise minimum-to-maximum intensity range.")
+                            for envelope in spectra_envelopes:
+                                st.altair_chart(envelope["chart"], use_container_width=False)
+                                log.log_plot_generated_count()
+
+                    if svm_result.get("mode") == "train_test_split" and len(svm_result["sections"]) == 2:
+                        st.write("### Performance Table")
+                        st.caption("Macro-averaged metrics summarize model discrimination for each fitted split.")
+                        train_col, test_col = st.columns(2)
+                        with train_col:
+                            section = svm_result["sections"][0]
+                            st.write("#### Training Performance")
+                            st.dataframe(section["metrics"], use_container_width=False)
+                        with test_col:
+                            section = svm_result["sections"][1]
+                            st.write("#### Test Performance")
+                            st.dataframe(section["metrics"], use_container_width=False)
+
+                        st.write("### Confusion Matrix")
+                        st.caption("Rows encode observed classes and columns encode predicted classes; diagonal counts are correct predictions.")
+                        train_col, test_col = st.columns(2)
+                        with train_col:
+                            st.altair_chart(svm_result["sections"][0]["confusion_matrix"], use_container_width=False)
+                            log.log_plot_generated_count()
+                        with test_col:
+                            st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                            log.log_plot_generated_count()
+
+                        st.write("### ROC Curve")
+                        st.caption("One-vs-rest ROC curves quantify class separability; larger AUC values indicate stronger discrimination.")
+                        train_col, test_col = st.columns(2)
+                        with train_col:
+                            st.altair_chart(svm_result["sections"][0]["roc_curve"], use_container_width=False)
+                            log.log_plot_generated_count()
+                        with test_col:
+                            st.altair_chart(section["roc_curve"], use_container_width=False)
+                            log.log_plot_generated_count()
+                    else:
+                        st.write("### Performance Table")
+                        st.caption("Macro-averaged metrics summarize model discrimination on the full selected dataset.")
+                        for section in svm_result["sections"]:
+                            st.write("#### Full Dataset Performance")
+                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.write("### Full Dataset Confusion Matrix")
+                            st.caption("Rows encode observed classes and columns encode predicted classes; diagonal counts are correct predictions.")
+                            st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                            log.log_plot_generated_count()
+                            st.write("### Full Dataset ROC Curve")
+                            st.caption("One-vs-rest ROC curves quantify class separability; larger AUC values indicate stronger discrimination.")
+                            st.altair_chart(section["roc_curve"], use_container_width=False)
+                            log.log_plot_generated_count()
+
+                    # Model-specific extra plots are intentionally hidden for now.
+                    # for extra_plot in svm_result.get("extra_plots", []):
+                    #     st.write(f"### {extra_plot['name']}")
+                    #     st.altair_chart(extra_plot["chart"], use_container_width=False)
+                    #     log.log_plot_generated_count()
 
                     log.log_function_call(
                         "Analytics_ML_Classification_SVM",

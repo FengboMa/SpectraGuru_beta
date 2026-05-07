@@ -25,7 +25,7 @@ names = {
     'Processing_Normalization_Minmax':("Normalization", "Min-max normalization"),
     'Processing_Remove_Outliers':("Outlier removal", "Outlier removal"),
     'Analytics_Spectra_Derivation':("Spectra derivation", "Spectra derivation"),
-    'Analytics_FFT':("Fast Fourier Transform", "Fast Fourier Transform"),
+    'Analytics_FFT':("Fast Fourier Transform (FFT) analysis", "Fast Fourier Transform (FFT) analysis"),
     'Analytics_Correlation_Heatmap':("Correlation heatmap", "Correlation heatmap"),
     'Analytics_Peak_Identification':("Peak identification", "Peak identification"),
     'Analytics_Clustering_Clustermap':("Hierarchical clustering", "Clustermap"),

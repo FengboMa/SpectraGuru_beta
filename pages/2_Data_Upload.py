@@ -109,7 +109,9 @@ def show_label_editor(temp_df, default_labels):
 
 # ----------------------------------------
 st.write("## Data upload")
-st.divider()
+st.info(
+    "Upload spectra by class, choose the data source and format, then assign labels before moving to processing."
+)
 
 # ----------------------------------------
 # --- Automatic database connection ------------------------------------------
@@ -181,6 +183,7 @@ if st.session_state.run_count > 1:
         type="primary"
     )
 
+st.divider()
 
 # --- Number of classes selector ---
 n_classes = st.number_input(
@@ -293,7 +296,7 @@ for idx in range(int(n_classes)):
             manual_count = max(0, df_cached.shape[1] - 1)  # minus RamanShift
             st.session_state.selected_counts[idx] = manual_count
             total_selected_preview = sum(st.session_state.selected_counts.values())
-            st.caption(f"This class: **{manual_count}** spectra · Total: **{total_selected_preview} / 1000**")
+            st.caption(f"Spectra: **{manual_count}** · Total: **{total_selected_preview}/1000**")
 
             class_labels.append(class_label)
             class_dfs.append((class_label, df_cached))
@@ -378,7 +381,7 @@ for idx in range(int(n_classes)):
                 manual_count = max(0, df_this.shape[1] - 1)  # minus RamanShift
                 st.session_state.selected_counts[idx] = manual_count
                 prospective_total = sum(st.session_state.selected_counts.values())
-                st.caption(f"This class: **{manual_count}** spectra · Total (all classes): **{prospective_total} / 1000**")
+                st.caption(f"Spectra: **{manual_count}** · Total: **{prospective_total}/1000**")
                 if prospective_total > 1000:
                     st.error("Total selected spectra exceed **1000**. Remove data to proceed.")
                     all_ready = False
@@ -451,7 +454,7 @@ for idx in range(int(n_classes)):
                         else:
                             sel_preview = ", ".join(f"{r['batch_analyte_name']}_{r['batch_id']}" for _, r in selected_rows.iterrows())
                             st.write(f"Selected: {sel_preview}")
-                            st.caption(f"This class: **{class_sel_count}** spectra · Total (all classes): **{prospective_total} / 1000**")
+                            st.caption(f"Spectra: **{class_sel_count}** · Total: **{prospective_total}/1000**")
 
                             # Global safeguards
                             if prospective_total > 1000:
@@ -572,7 +575,7 @@ for idx in range(int(n_classes)):
 
 # --- Global selection summary (after loop) -----------------------------------
 total_selected = sum(st.session_state.selected_counts.values()) if 'selected_counts' in st.session_state else 0
-st.markdown(f"**Total selected spectra across all classes:** {total_selected} / 1000")
+st.markdown(f"**Selected spectra:** {total_selected}/1000")
 if total_selected > 1000:
     st.error("Reduce your total below **1000** to proceed.")
 elif total_selected > 500:
@@ -628,6 +631,7 @@ if all_ready and all(df is not None for _, df in class_dfs) and int(n_classes) >
     for idx, (class_label, df_cls) in enumerate(interpolated_class_dfs, start=1):
         for col in df_cls.columns[1:]:
             default_lbls_multi[col] = idx
+    st.divider()
     show_label_editor(combined_df, default_lbls_multi)
 
 elif all_ready and all(df is not None for _, df in class_dfs) and int(n_classes) == 1:
@@ -636,6 +640,7 @@ elif all_ready and all(df is not None for _, df in class_dfs) and int(n_classes)
     st.session_state.backup = df.copy()
     st.session_state.class_data = class_dfs
     default_lbls_single = {col: 1 for col in df.columns[1:]}
+    st.divider()
     show_label_editor(df, default_lbls_single)
 
 else:
@@ -645,7 +650,7 @@ else:
 if 'df' in st.session_state:
     st.divider()
     col1, col2 = st.columns([2, 12])
-    if col1.button(label='Processing page', key=pkey('switch_processing_page')):
+    if col1.button(label='Processing page', key=pkey('switch_processing_page'), type="primary"):
         st.switch_page("pages/3_Processing.py")
     col2.markdown(' :arrow_left: **Go to the Processing page to process data**')
     if st.toggle(

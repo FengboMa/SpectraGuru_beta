@@ -346,7 +346,7 @@ col1.markdown(
     - Average plot with original spectra
     - Confidence interval plot
     - Spectra derivation
-    - Fast Fourier Transform (FFT)
+    - Fast Fourier Transform (FFT) analysis
     - Correlation heatmap
     - Peak identification and stats
     - Hierarchically clustered heatmap
@@ -358,10 +358,6 @@ col1.markdown(
 
     #### Toolbox page
     - Spectra simulation
-    - Distinct, joint, and consecutive peak structures
-    - Polynomial, exponential, Gaussian, and sigmoidal baselines
-    - Optional noise simulation
-    - Simulated spectra export
     """)
 
 

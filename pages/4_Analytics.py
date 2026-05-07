@@ -32,7 +32,7 @@ if 'df' in st.session_state:
                         options= ("Average Plot with Original Spectra",
                                 "Confidence Interval Plot",
                                 "Spectra Derivation",
-                                "Fast Fourier Transform (FFT)",
+                                "Fast Fourier Transform (FFT) analysis",
                                 "Correlation Heatmap",
                                 "Peak Identification and Stats",
                                 "Hierarchically-clustered Heatmap",
@@ -102,7 +102,7 @@ if 'df' in st.session_state:
             index=0,
             key="deriv_norm_method",
             help="Apply per-spectrum Min–Max scaling before taking derivatives.")
-    elif st.session_state.stats_plot_select == "Fast Fourier Transform (FFT)":
+    elif st.session_state.stats_plot_select == "Fast Fourier Transform (FFT) analysis":
         fft_target_options = ["Average"] + [
             column for column in st.session_state.temp.columns
             if column not in ("Ramanshift", "Average", "Standard Deviation")
@@ -670,7 +670,7 @@ else:
             except Exception as e:
                 st.error(f"Error during processing: {e}")
 
-        elif st.session_state.stats_plot_select == "Fast Fourier Transform (FFT)":
+        elif st.session_state.stats_plot_select == "Fast Fourier Transform (FFT) analysis":
             selected_fft_target = st.session_state.get("fft_target_spectrum", "Average")
             filtered_fft_df = stats_data_melted[stats_data_melted["Sample ID"] == selected_fft_target]
             try:
@@ -738,7 +738,7 @@ else:
                 download_file_name = f"data_FFT_{selected_fft_target}_{current_time}.csv"
 
                 st.download_button(
-                    label="Download FFT Data as CSV",
+                    label="Download FFT analysis data as CSV",
                     data=fft_download_df,
                     file_name=download_file_name,
                     mime="text/csv",

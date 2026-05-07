@@ -29,34 +29,24 @@ Our application is hosted [here](https://spectraguru.org)! Please use it directl
 You do not have to host it locally to use the application. But if you wish to deploy it locally, please follow these steps:
 
 1. Install Python and dependencies
-   
-   SpectraGuru runs on:
 
-       altair==5.5.0
+   SpectraGuru is tested with Python 3.12. The important runtime packages are pinned in `requirements.txt`:
 
-       Authlib==1.6.5
+   - `streamlit==1.49.1`
+   - `pandas==2.3.2`
+   - `numpy==2.3.3`
+   - `scipy==1.16.2`
+   - `scikit-learn==1.7.2`
+   - `matplotlib==3.10.6`
+   - `seaborn==0.13.2`
+   - `altair==5.5.0`
+   - `streamlit-extras==0.7.8`
+   - `psycopg2==2.9.10`
+   - `PyWavelets==1.9.0`
+   - `filelock==3.25.2`
+   - `deprecation==2.1.0`
 
-       deprecation==2.1.0
-
-       matplotlib==3.10.6
-
-       numpy==2.3.3
-
-       pandas==2.3.2
-
-       psycopg2==2.9.10
-
-       scikit_learn==1.7.2
-
-       scipy==1.16.2
-
-       seaborn==0.13.2
-
-       streamlit==1.49.1
-
-       streamlit_extras==0.7.8
-
-    Or use requirements.txt to install the dependencies: 
+   Install them with:
 
 ```
 pip install -r requirements.txt
@@ -88,7 +78,6 @@ The project was started in Jun 2024 by Dr. Yiping Zhao and Dr. Xianyan Chen from
 ### Help and Support
 
 If you have any questions, comments, and observations, please let us know! Email: zhao-nano-lab@uga.edu.
-
 
 
 

@@ -1,5 +1,4 @@
 altair==5.5.0
-Authlib==1.6.5
 deprecation==2.1.0
 filelock==3.25.2
 matplotlib==3.10.6
@@ -7,8 +6,8 @@ numpy==2.3.3
 pandas==2.3.2
 psycopg2==2.9.10
 PyWavelets==1.9.0
-scikit_learn==1.7.2
+scikit-learn==1.7.2
 scipy==1.16.2
 seaborn==0.13.2
 streamlit==1.49.1
-streamlit_extras==0.7.8
+streamlit-extras==0.7.8

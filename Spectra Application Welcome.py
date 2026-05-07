@@ -198,13 +198,13 @@ st.markdown(
 st.info("Check out our latest news and updates on SpectraGuru™!")
 
 # Add expander to show the flyer
-with st.expander("View SpectraGuru™ Flyer (v2, Oct 26)"):
-    st.image("element/Spectraguru flyer v2 oct26 (1).png", caption="SpectraGuru™ Flyer v2 – October 26", use_container_width=True)
+with st.expander("View SpectraGuru™ flyer"):
+    st.image("element/Spectraguru flyer v2 oct26 (1).png", caption="SpectraGuru™ flyer", use_container_width=True)
 st.divider()
 
 
 col1, col2 = st.columns([2, 12])
-if col1.button(label='Data upload page', key='switch_data_upload_page'):
+if col1.button(label='Data upload page', key='switch_data_upload_page', type="primary"):
     st.switch_page("pages/2_Data_Upload.py")
 col2.markdown(' :arrow_left: **Start by uploading your data on the Data Upload page**')
 

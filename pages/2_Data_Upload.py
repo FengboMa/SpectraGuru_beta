@@ -109,9 +109,7 @@ def show_label_editor(temp_df, default_labels):
 
 # ----------------------------------------
 st.write("## Data upload")
-st.info(
-    "Upload spectra by class, choose the data source and format, then assign labels before moving to processing."
-)
+st.write("Upload spectra by class, choose the data source and format, then assign labels before moving to processing.")
 
 # ----------------------------------------
 # --- Automatic database connection ------------------------------------------

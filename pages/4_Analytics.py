@@ -28,16 +28,16 @@ if 'df' in st.session_state:
     st.sidebar.write("#### Analytics")
 
     # Side bar to select which plot and parameters
-    st.sidebar.selectbox('Select Analytics Plot', 
-                        options= ("Average Plot with Original Spectra", 
+    st.sidebar.selectbox('Select analytics plot',
+                        options= ("Average Plot with Original Spectra",
                                 "Confidence Interval Plot",
                                 "Spectra Derivation",
                                 "Fast Fourier Transform (FFT)",
                                 "Correlation Heatmap",
                                 "Peak Identification and Stats",
                                 "Hierarchically-clustered Heatmap",
-                                "Principal Components Analysis (PCA)-Beta",
-                                "T-SNE Dimensionality Reduction-Beta",
+                                "Principal Components Analysis (PCA)",
+                                "T-SNE Dimensionality Reduction",
                                 "Random Forest(RF) Classification",
                                 "K-Nearest Neighbors(KNN) Classification",
                                 "Support Vector Machine(SVM) Classification"),
@@ -45,11 +45,11 @@ if 'df' in st.session_state:
 
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
         st.sidebar.toggle(label='Show spectra you selected', value=True, key = 'stats_avg_act',help='Show or hide original selected spectra.')
-        st.sidebar.toggle(label='Show Standard Deviation', value=True, key = 'stats_avg_std_act',help='Show or hide Standard Deviation.')
+        st.sidebar.toggle(label='Show standard deviation', value=True, key = 'stats_avg_std_act',help='Show or hide standard deviation.')
     elif st.session_state.stats_plot_select == "Confidence Interval Plot":
         # Interval method selector
         interval_method = st.sidebar.radio(
-            label="Interval Method",
+            label="Interval method",
             options=("Confidence Interval", "Standard Deviation"),
             index=0,   # default to Confidence Interval
             help=(
@@ -64,7 +64,7 @@ if 'df' in st.session_state:
         # If user selects Confidence Interval method
         if interval_method == "Confidence Interval":
             conf_lvl = st.sidebar.selectbox(
-                label="Confidence Level",
+                label="Confidence level",
                 options=(90, 95, 99),
                 index=1,   # default to 95 percent
                 key="conf_lvl",
@@ -83,7 +83,7 @@ if 'df' in st.session_state:
         else:
             # Standard deviation envelope
             std_multiplier = st.sidebar.selectbox(
-                label="Number of Standard Deviations",
+                label="Number of standard deviations",
                 options=(1, 2, 3),
                 index=0,   # default to 1 SD
                 key="std_mult",
@@ -97,7 +97,7 @@ if 'df' in st.session_state:
             )
     
     elif st.session_state.stats_plot_select == "Spectra Derivation":
-        st.sidebar.selectbox(label="Normalization Method",
+        st.sidebar.selectbox(label="Normalization method",
             options=("None", "Min-Max Normalization"),
             index=0,
             key="deriv_norm_method",
@@ -121,7 +121,7 @@ if 'df' in st.session_state:
     elif st.session_state.stats_plot_select == "Correlation Heatmap":
 
         st.sidebar.selectbox(
-            label='Correlation Algorithm',
+            label='Correlation algorithm',
             options=('Pearson Correlation', 'Cosine Similarity'),
             index=0,
             key='heatmap_corr_method',
@@ -135,16 +135,16 @@ if 'df' in st.session_state:
             )
         )
         
-        st.sidebar.toggle(label='Compute Average', value=False, key='heatmap_compute_avg', help='Add an average row/column at the end of the heatmap.')
-        
-        if st.sidebar.toggle(label='Customize Heatmap scale', value=False, key = 'heatmap_scale',help='Customize heatmap scale manually.'):
+        st.sidebar.toggle(label='Compute average', value=False, key='heatmap_compute_avg', help='Add an average row/column at the end of the heatmap.')
+
+        if st.sidebar.toggle(label='Customize heatmap scale', value=False, key = 'heatmap_scale',help='Customize heatmap scale manually.'):
             st.sidebar.number_input(label='Heatmap scale min',min_value= -1.0, max_value= 1.00, placeholder='Insert a number between -1 and 1',
                                     key = 'heatmap_min',step = 0.01, value = 0.5, format="%.2f")
             st.sidebar.number_input(label='Heatmap scale max',min_value= -1.00, max_value= 1.00, placeholder='Insert a number between -1 and 1',
                                     key = 'heatmap_max',step = 0.01, value = 1.00, format="%.2f")
             
             if st.session_state.heatmap_min >= st.session_state.heatmap_max:
-                st.sidebar.error('Invalid Number input.')
+                st.sidebar.error('Invalid number input.')
     elif st.session_state.stats_plot_select == "Peak Identification and Stats":
         peak_target_options = ["Average"] + [
             column for column in st.session_state.temp.columns
@@ -157,7 +157,7 @@ if 'df' in st.session_state:
             key="peak_identification_target"
         )
         
-        st.sidebar.toggle(label="Auto Peak Identification", value=True, key="peak_iden_auto")
+        st.sidebar.toggle(label="Auto peak identification", value=True, key="peak_iden_auto")
         
         if st.session_state.peak_iden_auto == True:
             st.session_state.peak_iden_height_p = 0
@@ -166,9 +166,9 @@ if 'df' in st.session_state:
             st.session_state.peak_iden_prominence_p = 0
             st.session_state.peak_iden_width_p = 0
             
-            st.sidebar.number_input(label='Number of Peaks to identify',min_value= 1, max_value= 10000, placeholder='Insert a number',
+            st.sidebar.number_input(label='Number of peaks to identify',min_value= 1, max_value= 10000, placeholder='Insert a number',
                                         key = 'peak_iden_auto_num',step = 1, value = 10,
-                                        help = "Number of peak you wish to identify automatically.")
+                                        help = "Number of peaks to identify automatically.")
             
         else:       
             st.sidebar.number_input(label='Height',min_value= 0.00, max_value= 10000.00, placeholder='Insert a number',
@@ -198,20 +198,20 @@ if 'df' in st.session_state:
             st.session_state.peak_iden_width_p = st.session_state.peak_iden_width
     elif st.session_state.stats_plot_select == "Hierarchically-clustered Heatmap":
         st.sidebar.toggle(label="Show clustered heatmap", value=True, key="HCA_heatmap")
-    elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)-Beta":
+    elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)":
         num_rows = st.session_state.df.shape[1] - 1
         pc_list = [f"PC{i+1}" for i in range(num_rows)] 
-        st.sidebar.selectbox(label="Select Horizontal PC", options=pc_list, index=0,key="PCA_horizontal")
-        st.sidebar.selectbox(label="Select Vertical PC", options=pc_list, index=1,key="PCA_vertical")
-        st.sidebar.toggle(label="Coloring by setting labels", value=True, key="PCA_label")
-    elif st.session_state.stats_plot_select == "T-SNE Dimensionality Reduction-Beta":
+        st.sidebar.selectbox(label="Select horizontal PC", options=pc_list, index=0,key="PCA_horizontal")
+        st.sidebar.selectbox(label="Select vertical PC", options=pc_list, index=1,key="PCA_vertical")
+        st.sidebar.toggle(label="Color by labels", value=True, key="PCA_label")
+    elif st.session_state.stats_plot_select == "T-SNE Dimensionality Reduction":
         max_perplexity = st.session_state.df.shape[1] - 1
         st.sidebar.select_slider(label="t-SNE Perplexity", options=list(range(1,max_perplexity)),value=2, key="tSNE_perplexity")
         st.sidebar.select_slider(label="t-SNE Maximum number of iterations", options=list(range(200,1001)), value=500, key="tSNE_n_iter")
     elif st.session_state.stats_plot_select == "Random Forest(RF) Classification":
         with st.sidebar.form("rf_classification_form"):
             st.number_input(
-                label="Number of Trees",
+                label="Number of trees",
                 min_value=1,
                 max_value=500,
                 step=1,
@@ -220,7 +220,7 @@ if 'df' in st.session_state:
                 help="Number of decision trees in the forest. Default: 100.",
             )
             st.number_input(
-                label="Maximum Tree Depth",
+                label="Maximum tree depth",
                 min_value=0,
                 max_value=100,
                 step=1,
@@ -229,7 +229,7 @@ if 'df' in st.session_state:
                 help="Maximum number of splits per tree. Default: 0, meaning unlimited depth.",
             )
             st.number_input(
-                label="Minimum Samples per Leaf",
+                label="Minimum samples per leaf",
                 min_value=1,
                 max_value=50,
                 step=1,
@@ -238,7 +238,7 @@ if 'df' in st.session_state:
                 help="Minimum spectra required in a terminal tree leaf. Default: 1.",
             )
             st.slider(
-                label="Test Size (%)",
+                label="Test size (%)",
                 min_value=0,
                 max_value=80,
                 step=1,
@@ -250,7 +250,7 @@ if 'df' in st.session_state:
     elif st.session_state.stats_plot_select == "K-Nearest Neighbors(KNN) Classification":
         with st.sidebar.form("knn_classification_form"):
             st.number_input(
-                label="Number of Neighbors (K)",
+                label="Number of neighbors (K)",
                 min_value=1,
                 max_value=100,
                 step=1,
@@ -266,14 +266,14 @@ if 'df' in st.session_state:
                 help="Voting rule for neighbors. Default: uniform, giving each neighbor equal weight.",
             )
             st.selectbox(
-                label="Distance Metric",
+                label="Distance metric",
                 options=("euclidean", "manhattan", "minkowski"),
                 index=0,
                 key="knn_metric",
                 help="Distance function used to identify nearest spectra. Default: euclidean.",
             )
             st.slider(
-                label="Test Size (%)",
+                label="Test size (%)",
                 min_value=0,
                 max_value=80,
                 step=1,
@@ -301,14 +301,14 @@ if 'df' in st.session_state:
                 help="Regularization strength; larger values penalize training errors more strongly. Default: 1.0.",
             )
             st.selectbox(
-                label="Class Weight",
+                label="Class weight",
                 options=("None", "Balanced"),
                 index=0,
                 key="svm_class_weight",
                 help="Class weighting strategy for imbalanced labels. Default: None.",
             )
             st.number_input(
-                label="Polynomial Degree",
+                label="Polynomial degree",
                 min_value=1,
                 max_value=10,
                 step=1,
@@ -324,7 +324,7 @@ if 'df' in st.session_state:
                 help="Kernel coefficient for RBF, Polynomial, and Sigmoid kernels. Default: scale.",
             )
             st.slider(
-                label="Test Size (%)",
+                label="Test size (%)",
                 min_value=0,
                 max_value=80,
                 step=1,
@@ -1123,7 +1123,7 @@ else:
         
             log.log_plot_generated_count()
         
-        elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)-Beta":
+        elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)":
             
             temp = st.session_state.temp.drop(columns=['Average'])
             label_df = st.session_state.get('label_df')
@@ -1180,12 +1180,12 @@ else:
 
             log.log_function_call("Analytics_PCA", f_params={})
 
-            st.write("### PCA Scores Table")
+            st.write("### PCA scores table")
             st.write(pca_result_df)
-        
-        elif st.session_state.stats_plot_select == "T-SNE Dimensionality Reduction-Beta":
 
-            st.write("**T‑Distributed Stochastic Neighbor Embedding (t‑SNE) ‑ Beta**")
+        elif st.session_state.stats_plot_select == "T-SNE Dimensionality Reduction":
+
+            st.write("**T‑Distributed stochastic neighbor embedding (t‑SNE)**")
 
             temp = st.session_state.temp.drop(columns=['Average'])
 

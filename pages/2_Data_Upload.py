@@ -295,8 +295,7 @@ for idx in range(int(n_classes)):
             # NEW: count spectra columns for cached data and store for this class
             manual_count = max(0, df_cached.shape[1] - 1)  # minus RamanShift
             st.session_state.selected_counts[idx] = manual_count
-            total_selected_preview = sum(st.session_state.selected_counts.values())
-            st.caption(f"Spectra: **{manual_count}** · Total: **{total_selected_preview}/1000**")
+            st.caption(f"This class: **{manual_count}** spectra")
 
             class_labels.append(class_label)
             class_dfs.append((class_label, df_cached))
@@ -381,7 +380,7 @@ for idx in range(int(n_classes)):
                 manual_count = max(0, df_this.shape[1] - 1)  # minus RamanShift
                 st.session_state.selected_counts[idx] = manual_count
                 prospective_total = sum(st.session_state.selected_counts.values())
-                st.caption(f"Spectra: **{manual_count}** · Total: **{prospective_total}/1000**")
+                st.caption(f"This class: **{manual_count}** spectra")
                 if prospective_total > 1000:
                     st.error("Total selected spectra exceed **1000**. Remove data to proceed.")
                     all_ready = False
@@ -454,7 +453,7 @@ for idx in range(int(n_classes)):
                         else:
                             sel_preview = ", ".join(f"{r['batch_analyte_name']}_{r['batch_id']}" for _, r in selected_rows.iterrows())
                             st.write(f"Selected: {sel_preview}")
-                            st.caption(f"Spectra: **{class_sel_count}** · Total: **{prospective_total}/1000**")
+                            st.caption(f"This class: **{class_sel_count}** spectra")
 
                             # Global safeguards
                             if prospective_total > 1000:
@@ -575,7 +574,7 @@ for idx in range(int(n_classes)):
 
 # --- Global selection summary (after loop) -----------------------------------
 total_selected = sum(st.session_state.selected_counts.values()) if 'selected_counts' in st.session_state else 0
-st.markdown(f"**Selected spectra:** {total_selected}/1000")
+st.markdown(f"**Total selected spectra across all classes:** {total_selected} / 1000")
 if total_selected > 1000:
     st.error("Reduce your total below **1000** to proceed.")
 elif total_selected > 500:

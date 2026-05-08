@@ -49,6 +49,15 @@ def _reorder_peak_assignment_columns(df):
     return df.loc[:, ordered_peak_columns + primary_columns + other_columns]
 
 
+def _flatten_peak_assignment_columns(df):
+    df = df.copy()
+    df.columns = [
+        field if section == "Section" else f"{section} - {field}"
+        for section, field in df.columns
+    ]
+    return df
+
+
 def _build_peak_assignment_descriptions(description_rows):
     rows = []
 
@@ -78,16 +87,17 @@ def _render_peak_assignment_info_table():
         ":material/policy: Usage terms": ":orange-badge[Research use only] No redistribution. Users must follow the restrictions of the original sources.",
         ":material/group: Maintainers": "[Zhao Nano Lab](https://www.zhao-nano-lab.com/)",
     }
-    info_df = pd.DataFrame.from_dict(info_table, orient="index", columns=[""])
+    info_df = pd.DataFrame.from_dict(info_table, orient="index", columns=["Value"])
+    info_styler = info_df.style.hide(axis="columns")
 
     try:
         st.table(
-            info_df,
+            info_styler,
             border="horizontal",
             width="content",
         )
     except TypeError:
-        st.table(info_df)
+        st.table(info_styler)
 
 
 @st.cache_data
@@ -95,6 +105,7 @@ def load_peak_assignment_table(file_path):
     description_rows = pd.read_csv(file_path, header=None, nrows=3, dtype=str, keep_default_na=False)
     peak_assignment_df = pd.read_csv(file_path, header=[0, 1], skiprows=[2])
     peak_assignment_df = _reorder_peak_assignment_columns(peak_assignment_df)
+    peak_assignment_df = _flatten_peak_assignment_columns(peak_assignment_df)
     peak_assignment_df.index = pd.RangeIndex(start=1, stop=len(peak_assignment_df) + 1, name="Index")
     description_df = _build_peak_assignment_descriptions(description_rows)
 
@@ -310,7 +321,7 @@ if st.session_state.tool_select == "Spectra Simulation":
         )
 elif st.session_state.tool_select == "Peak Assignment Table":
     st.write("##### Peak Assignment Table")
-    st.write("Browse a curated peak assignment table collection for research reference use. Move the cursor over the table to access search, full-screen view, column filtering, and other table tools.")
+    st.write("Browse a curated peak assignment table collection for research reference use. Move the cursor over the data table to access search, full-screen view, show/hide columns, and other table tools.")
 
     peak_assignment_df, peak_assignment_descriptions = load_peak_assignment_table(str(PEAK_ASSIGNMENT_TABLE_PATH))
 
@@ -326,16 +337,16 @@ elif st.session_state.tool_select == "Peak Assignment Table":
         st.session_state.peak_assignment_table_logged = True
 
     with st.expander("Column descriptions"):
-        st.dataframe(
-            peak_assignment_descriptions,
-            hide_index=True,
-            use_container_width=True,
-        )
+        st.table(peak_assignment_descriptions)
 
+    st.divider()
+    st.write("##### Peak assignment data")
     st.dataframe(
         peak_assignment_df,
         use_container_width=True,
         height=700,
     )
 
+    st.divider()
+    st.write("##### Table information")
     _render_peak_assignment_info_table()

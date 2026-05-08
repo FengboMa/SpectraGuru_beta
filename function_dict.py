@@ -36,6 +36,7 @@ names = {
     'Analytics_ML_Classification_KNN':("ML classification", "K-nearest neighbors (KNN)"),
     'Analytics_ML_Classification_SVM':("ML classification", "Support vector machine (SVM)"),
     'Toolbox_Spectra_Simulation':("Spectra simulation", "Spectra simulation"),
+    'Toolbox_Peak_Assignment_Table':("Peak assignment table", "Peak assignment table"),
 
 
 
@@ -143,7 +144,8 @@ reference_map = {
     'Analytics_ML_Classification_Random_Forest':[0,9],
     'Analytics_ML_Classification_KNN':[0,9],
     'Analytics_ML_Classification_SVM':[0,9],
-    'Toolbox_Spectra_Simulation':[0]
+    'Toolbox_Spectra_Simulation':[0],
+    'Toolbox_Peak_Assignment_Table':[0]
 
 
 

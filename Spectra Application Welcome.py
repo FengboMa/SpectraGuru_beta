@@ -358,6 +358,7 @@ col1.markdown(
 
     #### Toolbox page
     - Spectra simulation
+    - Peak assignment table
     """)
 
 

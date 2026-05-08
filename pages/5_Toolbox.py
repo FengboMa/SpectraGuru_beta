@@ -1,5 +1,7 @@
 import streamlit as st
 import altair as alt
+import pandas as pd
+from pathlib import Path
 import function
 import log_utils as log
 import datetime as dt
@@ -8,6 +10,95 @@ function.wide_space_default()
 
 DEFAULT_X_AXIS_TITLE = "Raman shift/cm⁻¹"
 DEFAULT_Y_AXIS_TITLE = "Intensity/a.u."
+PEAK_ASSIGNMENT_TABLE_PATH = Path(__file__).resolve().parents[1] / "element" / "peak_assignment_table.csv"
+PEAK_ASSIGNMENT_PRIMARY_SECTIONS = (
+    "Peak Row",
+    "Vibrational Mode (of structural environment)",
+)
+PEAK_ASSIGNMENT_PEAK_ORDER = (
+    "Peak",
+    "Peak High",
+    "Peak Low",
+    "Peak Width",
+    "Peak Unit",
+)
+
+
+def _reorder_peak_assignment_columns(df):
+    ordered_peak_columns = []
+    remaining_columns = []
+
+    for column in df.columns:
+        if column[0] == "Peak Row" and column[1] in PEAK_ASSIGNMENT_PEAK_ORDER:
+            ordered_peak_columns.append(column)
+        else:
+            remaining_columns.append(column)
+
+    ordered_peak_columns.sort(key=lambda column: PEAK_ASSIGNMENT_PEAK_ORDER.index(column[1]))
+    primary_columns = [
+        column
+        for column in remaining_columns
+        if column[0] in PEAK_ASSIGNMENT_PRIMARY_SECTIONS
+    ]
+    other_columns = [
+        column
+        for column in remaining_columns
+        if column[0] not in PEAK_ASSIGNMENT_PRIMARY_SECTIONS
+    ]
+
+    return df.loc[:, ordered_peak_columns + primary_columns + other_columns]
+
+
+def _build_peak_assignment_descriptions(description_rows):
+    rows = []
+
+    for section, field, description in zip(
+        description_rows.iloc[0],
+        description_rows.iloc[1],
+        description_rows.iloc[2],
+    ):
+        if not any([section, field, description]):
+            continue
+        rows.append(
+            {
+                "Section": section,
+                "Field": field,
+                "Description": description,
+            }
+        )
+
+    return pd.DataFrame(rows)
+
+
+def _render_peak_assignment_info_table():
+    info_table = {
+        ":material/folder: Project": "**SpectraGuru** - Peak assignment table collection",
+        ":material/code: Repository": "[github.com/FengboMa/SpectraGuru_beta](https://github.com/FengboMa/SpectraGuru_beta)",
+        ":material/license: License": ":green-badge[Apache 2.0]",
+        ":material/policy: Usage terms": ":orange-badge[Research use only] No redistribution. Users must follow the restrictions of the original sources.",
+        ":material/group: Maintainers": "[Zhao Nano Lab](https://www.zhao-nano-lab.com/)",
+    }
+    info_df = pd.DataFrame.from_dict(info_table, orient="index", columns=[""])
+
+    try:
+        st.table(
+            info_df,
+            border="horizontal",
+            width="content",
+        )
+    except TypeError:
+        st.table(info_df)
+
+
+@st.cache_data
+def load_peak_assignment_table(file_path):
+    description_rows = pd.read_csv(file_path, header=None, nrows=3, dtype=str, keep_default_na=False)
+    peak_assignment_df = pd.read_csv(file_path, header=[0, 1], skiprows=[2])
+    peak_assignment_df = _reorder_peak_assignment_columns(peak_assignment_df)
+    peak_assignment_df.index = pd.RangeIndex(start=1, stop=len(peak_assignment_df) + 1, name="Index")
+    description_df = _build_peak_assignment_descriptions(description_rows)
+
+    return peak_assignment_df, description_df
 
 with st.sidebar:
 
@@ -16,6 +107,7 @@ with st.sidebar:
     st.selectbox('Select tool',
                         options=(
                             "Spectra Simulation",
+                            "Peak Assignment Table",
                         ),
                         key="tool_select")
 
@@ -216,3 +308,35 @@ if st.session_state.tool_select == "Spectra Simulation":
             file_name=download_file_name,
             mime="text/csv",
         )
+elif st.session_state.tool_select == "Peak Assignment Table":
+    st.write("##### Peak Assignment Table")
+    st.write("Browse a curated peak assignment table collection for research reference use. Move the cursor over the table to access search, full-screen view, column filtering, and other table tools.")
+
+    peak_assignment_df, peak_assignment_descriptions = load_peak_assignment_table(str(PEAK_ASSIGNMENT_TABLE_PATH))
+
+    if not st.session_state.get("peak_assignment_table_logged", False):
+        log.log_function_call(
+            "Toolbox_Peak_Assignment_Table",
+            f_params={
+                "source_file": PEAK_ASSIGNMENT_TABLE_PATH.name,
+                "rows": len(peak_assignment_df),
+                "columns": len(peak_assignment_df.columns),
+            },
+        )
+        st.session_state.peak_assignment_table_logged = True
+
+    with st.expander("Column descriptions"):
+        st.dataframe(
+            peak_assignment_descriptions,
+            hide_index=True,
+            use_container_width=True,
+        )
+
+    st.dataframe(
+        peak_assignment_df,
+        use_container_width=True,
+        height=700,
+    )
+
+    st.divider()
+    _render_peak_assignment_info_table()

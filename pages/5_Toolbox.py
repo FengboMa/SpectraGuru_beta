@@ -15,19 +15,38 @@ PEAK_ASSIGNMENT_PRIMARY_SECTIONS = (
     "Peak Row",
     "Vibrational Mode (of structural environment)",
 )
+PEAK_ASSIGNMENT_PEAK_ORDER = (
+    "Peak",
+    "Peak High",
+    "Peak Low",
+    "Peak Width",
+    "Peak Unit",
+)
 
 
 def _reorder_peak_assignment_columns(df):
-    primary_columns = []
+    ordered_peak_columns = []
     remaining_columns = []
 
     for column in df.columns:
-        if column[0] in PEAK_ASSIGNMENT_PRIMARY_SECTIONS:
-            primary_columns.append(column)
+        if column[0] == "Peak Row" and column[1] in PEAK_ASSIGNMENT_PEAK_ORDER:
+            ordered_peak_columns.append(column)
         else:
             remaining_columns.append(column)
 
-    return df.loc[:, primary_columns + remaining_columns]
+    ordered_peak_columns.sort(key=lambda column: PEAK_ASSIGNMENT_PEAK_ORDER.index(column[1]))
+    primary_columns = [
+        column
+        for column in remaining_columns
+        if column[0] in PEAK_ASSIGNMENT_PRIMARY_SECTIONS
+    ]
+    other_columns = [
+        column
+        for column in remaining_columns
+        if column[0] not in PEAK_ASSIGNMENT_PRIMARY_SECTIONS
+    ]
+
+    return df.loc[:, ordered_peak_columns + primary_columns + other_columns]
 
 
 def _build_peak_assignment_descriptions(description_rows):
@@ -59,15 +78,16 @@ def _render_peak_assignment_info_table():
         ":material/policy: Usage terms": ":orange-badge[Research use only] No redistribution. Users must follow the restrictions of the original sources.",
         ":material/group: Maintainers": "[Zhao Nano Lab](https://www.zhao-nano-lab.com/)",
     }
+    info_df = pd.DataFrame.from_dict(info_table, orient="index", columns=[""])
 
     try:
         st.table(
-            info_table,
+            info_df,
             border="horizontal",
             width="content",
         )
     except TypeError:
-        st.table(info_table)
+        st.table(info_df)
 
 
 @st.cache_data
@@ -75,6 +95,7 @@ def load_peak_assignment_table(file_path):
     description_rows = pd.read_csv(file_path, header=None, nrows=3, dtype=str, keep_default_na=False)
     peak_assignment_df = pd.read_csv(file_path, header=[0, 1], skiprows=[2])
     peak_assignment_df = _reorder_peak_assignment_columns(peak_assignment_df)
+    peak_assignment_df.index = pd.RangeIndex(start=1, stop=len(peak_assignment_df) + 1, name="Index")
     description_df = _build_peak_assignment_descriptions(description_rows)
 
     return peak_assignment_df, description_df
@@ -289,9 +310,7 @@ if st.session_state.tool_select == "Spectra Simulation":
         )
 elif st.session_state.tool_select == "Peak Assignment Table":
     st.write("##### Peak Assignment Table")
-    st.write("Browse a curated peak assignment table collection for research reference use.")
-
-    _render_peak_assignment_info_table()
+    st.write("Browse a curated peak assignment table collection for research reference use. Move the cursor over the table to access search, full-screen view, column filtering, and other table tools.")
 
     peak_assignment_df, peak_assignment_descriptions = load_peak_assignment_table(str(PEAK_ASSIGNMENT_TABLE_PATH))
 
@@ -315,6 +334,8 @@ elif st.session_state.tool_select == "Peak Assignment Table":
 
     st.dataframe(
         peak_assignment_df,
-        hide_index=True,
         use_container_width=True,
+        height=700,
     )
+
+    _render_peak_assignment_info_table()

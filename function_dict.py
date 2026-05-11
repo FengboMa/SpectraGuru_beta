@@ -19,6 +19,7 @@ names = {
     'Processing_Baseline_AirPLS':("Baseline removal", "AirPLS"),
     'Processing_Baseline_Mod_Poly':("Baseline removal", "Modified polynomial fitting"),
     'Processing_Baseline_Gaussian_Lorentzian_Fitting':("Baseline removal", "Gaussian-Lorentzian fitting"),
+    'Processing_Baseline_SNIP':("Baseline removal", "SNIP"),
     'Processing_Baseline_ALS':("Baseline removal", "Asymmetric least squares (ALS)"),
     'Processing_Normalization_Area':("Normalization", "Normalization by area"),
     'Processing_Normalization_Peak':("Normalization", "Normalization by peak"),
@@ -43,8 +44,7 @@ names = {
 
 }
 
-# The list of references used by SpectraGuru. When adding entries to this list, use the blank templates at the bottom of the
-# dictionary. This ensures that the existing number assignments are never altered.
+# The list of documentation and literature references used by SpectraGuru.
 #
 #   "text": Either a raw string of text or a link to a reference. If a link, set "link" to True.
 #   "link": True if the content of "text" is a link, and False otherwise. Be sure to replace its default value of None when filling
@@ -54,7 +54,7 @@ names = {
 #   "notes": Can be anything (it is not used by the application), but ideally it should provide some information to other developers about
 #      what this reference is for.
 references = {
-    0:{"text":"Self-implemented", "link":False, "doc_page":False, "notes":None},
+    0:{"text":"", "link":False, "doc_page":False, "notes":"Reserved; do not display in the function usage table."},
     1:{"text":"https://doi.org/10.1038/s41592-019-0686-2", "link":True, "doc_page":False, "notes":"SciPy reference"},
     2:{"text":"https://doi.org/10.1021/ac60214a047", "link":True, "doc_page":False, "notes":"Savitzky-Golay reference"},
     3:{"text":"https://doi.org/10.1039/b922045c", "link":True, "doc_page":False, "notes":"AirPLS reference"},
@@ -67,8 +67,8 @@ references = {
     10:{"text":"https://doi.org/10.1037/h0071325", "link":True, "doc_page":False, "notes":"PCA reference"},
     11:{"text":"https://www.jmlr.org/papers/volume9/vandermaaten08a/vandermaaten08a.pdf", "link":True, "doc_page":False, "notes":"t-SNE reference"},
     12:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Processing_Page/Processing_Feature/Despike/", "link":True, "doc_page":True, "notes":"Despike doc page"},
-    13:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Processing_Page/Processing_Feature/Smoothening/Savitzky-Golay/", "link":True, "doc_page":True, "notes":"Savitzky-Golay doc page"},
-    14:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Processing_Page/Processing_Feature/Smoothening/Fast_Fourier_Transform/", "link":True, "doc_page":True, "notes":"FFT doc page"},
+    13:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Processing_Page/Processing_Feature/Smoothing/Savitzky-Golay/", "link":True, "doc_page":True, "notes":"Savitzky-Golay doc page"},
+    14:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Processing_Page/Processing_Feature/Smoothing/Fast_Fourier_Transform/", "link":True, "doc_page":True, "notes":"Processing FFT filter doc page"},
     15:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Processing_Page/Processing_Feature/Baseline_Removal/AirPLS/", "link":True, "doc_page":True, "notes":"AirPLS doc page"},
     16:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Processing_Page/Processing_Feature/Baseline_Removal/Mod_Poly/", "link":True, "doc_page":True, "notes":"ModPoly doc page"},
     17:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Processing_Page/Processing_Feature/Baseline_Removal/Gaussian-Lorentzian_Fitting/", "link":True, "doc_page":True, "notes":"Gaussian-Lorentzian Fitting doc page"},
@@ -88,18 +88,18 @@ references = {
     31:{"text":"https://www.unige.ch/~sardy/Papers/robustIEEE.pdf", "link":True, "doc_page":False, "notes":"Robust Wavelet Denoising (Sardy, Tseng & Bruce 2001)"},
     32:{"text":"https://doi.org/10.1093/biomet/81.3.425", "link":True, "doc_page":False, "notes":"Ideal spatial adaptation by wavelet shrinkage (Donoho & Johnstone 1994)"},
     33:{"text":"https://zanran_storage.s3.amazonaws.com/www.science.uva.nl/ContentPages/443199618.pdf", "link":True, "doc_page":False, "notes":"Eilers and Boelens (2005), Baseline Correction with Asymmetric Least Squares Smoothing"},
-    34:{"text":"", "link":None, "doc_page":None, "notes":""},
-    35:{"text":"", "link":None, "doc_page":None, "notes":""},
-    36:{"text":"", "link":None, "doc_page":None, "notes":""},
-    37:{"text":"", "link":None, "doc_page":None, "notes":""},
-    38:{"text":"", "link":None, "doc_page":None, "notes":""},
-    39:{"text":"", "link":None, "doc_page":None, "notes":""},
-    40:{"text":"", "link":None, "doc_page":None, "notes":""},
-    41:{"text":"", "link":None, "doc_page":None, "notes":""},
-    42:{"text":"", "link":None, "doc_page":None, "notes":""},
-    43:{"text":"", "link":None, "doc_page":None, "notes":""},
-    44:{"text":"", "link":None, "doc_page":None, "notes":""},
-    45:{"text":"", "link":None, "doc_page":None, "notes":""},
+    34:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Processing_Page/Processing_Feature/Baseline_Removal/SNIP/", "link":True, "doc_page":True, "notes":"SNIP doc page"},
+    35:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Processing_Page/Processing_Feature/Baseline_Removal/ALS_Baseline_Removal/", "link":True, "doc_page":True, "notes":"ALS doc page"},
+    36:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Processing_Page/Processing_Feature/Smoothing/Median_Filter/", "link":True, "doc_page":True, "notes":"Median Filter doc page"},
+    37:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Processing_Page/Processing_Feature/Smoothing/Wavelet_Denoising/", "link":True, "doc_page":True, "notes":"Wavelet Denoising doc page"},
+    38:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Machine_Learning_Feature/Random_Forest_Classification/", "link":True, "doc_page":True, "notes":"Random Forest classification doc page"},
+    39:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Machine_Learning_Feature/KNN_Classification/", "link":True, "doc_page":True, "notes":"KNN classification doc page"},
+    40:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Machine_Learning_Feature/SVM_Classification/", "link":True, "doc_page":True, "notes":"SVM classification doc page"},
+    41:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Toolbox_Page/Spectra_Simulation/", "link":True, "doc_page":True, "notes":"Spectra Simulation doc page"},
+    42:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Toolbox_Page/Peak_Assignment_Table/", "link":True, "doc_page":True, "notes":"Peak Assignment Table doc page"},
+    43:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/Fast_Fourier_Transform/", "link":True, "doc_page":True, "notes":"Analytics FFT doc page"},
+    44:{"text":"https://doi.org/10.1016/S0168-9002(97)01023-1", "link":True, "doc_page":False, "notes":"SNIP reference"},
+    45:{"text":"https://doi.org/10.1090/S0025-5718-1965-0178586-1", "link":True, "doc_page":False, "notes":"Cooley-Tukey FFT reference"},
     46:{"text":"", "link":None, "doc_page":None, "notes":""},
     47:{"text":"", "link":None, "doc_page":None, "notes":""},
     48:{"text":"", "link":None, "doc_page":None, "notes":""},
@@ -107,48 +107,38 @@ references = {
     50:{"text":"", "link":None, "doc_page":None, "notes":""},
 }
 
-# This dictionary maps functions to a specific set of references from the references list. These references will be listed alongside
-# the algorithms featured in the function usage table.
+# This dictionary maps functions to their documentation and literature references. These links are displayed in the
+# welcome-page function usage table.
 #
 #   - Use the same keynames from the names dict.
-#   - Entries are ordered arrays of integers corresponding to rows of the references dict (see above)
-#   - 0 corresponds to "self-implemented." Make sure 0 is the first element of the array if it is included at all.
-#   - Try not to map functions to more than 5 references unless necessary; this could clutter the function usage table.
-#
-#  Example: 'Processing_Normalization_Area':[0, 18] means that Area Normalization is self-implemented and has a
-#  corresponding reference at references[18], which is a link to the documentation page for Area Normalization on SpectraGuru's
-#  documentation website.
+#   - Entries are ordered arrays of integers corresponding to rows of the references dict.
 reference_map = {
-    'Processing_Despike_Auto':[0,12],
-    'Processing_Despike_Manual':[0,12],
-    'Processing_Smoothing_Savgol_Filter':[1,2,13],
-    'Processing_Smoothing_FFT_Filter':[0,14],
-    'Processing_Smoothing_Median_Filter':[1],
-    'Processing_Smoothing_Wavelet_Denoising':[31,32],
-    'Processing_Baseline_AirPLS':[3,4,15],
-    'Processing_Baseline_Mod_Poly':[5,16],
-    'Processing_Baseline_Gaussian_Lorentzian_Fitting':[6,7,17],
-    'Processing_Baseline_ALS':[0,33],
-    'Processing_Normalization_Area':[0,18],
-    'Processing_Normalization_Peak':[0,19],
-    'Processing_Normalization_Minmax':[0,20],
-    'Processing_Remove_Outliers':[0,21],
-    'Analytics_Spectra_Derivation':[0,24],
-    'Analytics_FFT':[0,14],
-    'Analytics_Correlation_Heatmap':[0,25],
-    'Analytics_Peak_Identification':[1,26],
-    'Analytics_Clustering_Clustermap':[1,8,28],
-    'Analytics_Clustering_Dendrogram':[1,8,28],
-    'Analytics_PCA':[9,10,29],
-    'Analytics_TSNE':[9,11,30],
-    'Analytics_ML_Classification_Random_Forest':[0,9],
-    'Analytics_ML_Classification_KNN':[0,9],
-    'Analytics_ML_Classification_SVM':[0,9],
-    'Toolbox_Spectra_Simulation':[0],
-    'Toolbox_Peak_Assignment_Table':[0]
-
-
-
-
-
+    'Processing_Despike_Auto':[12],
+    'Processing_Despike_Manual':[12],
+    'Processing_Smoothing_Savgol_Filter':[13,1,2],
+    'Processing_Smoothing_FFT_Filter':[14],
+    'Processing_Smoothing_Median_Filter':[36,1],
+    'Processing_Smoothing_Wavelet_Denoising':[37,31,32],
+    'Processing_Baseline_AirPLS':[15,3,4],
+    'Processing_Baseline_Mod_Poly':[16,5],
+    'Processing_Baseline_Gaussian_Lorentzian_Fitting':[17,6,7],
+    'Processing_Baseline_SNIP':[34,44],
+    'Processing_Baseline_ALS':[35,33],
+    'Processing_Normalization_Area':[18],
+    'Processing_Normalization_Peak':[19],
+    'Processing_Normalization_Minmax':[20],
+    'Processing_Remove_Outliers':[21],
+    'Analytics_Spectra_Derivation':[24,1,2],
+    'Analytics_FFT':[43,45],
+    'Analytics_Correlation_Heatmap':[25],
+    'Analytics_Peak_Identification':[26,1],
+    'Analytics_Clustering_Clustermap':[28,8],
+    'Analytics_Clustering_Dendrogram':[28,8],
+    'Analytics_PCA':[29,9,10],
+    'Analytics_TSNE':[30,9,11],
+    'Analytics_ML_Classification_Random_Forest':[38,9],
+    'Analytics_ML_Classification_KNN':[39,9],
+    'Analytics_ML_Classification_SVM':[40,9],
+    'Toolbox_Spectra_Simulation':[41],
+    'Toolbox_Peak_Assignment_Table':[42]
 }

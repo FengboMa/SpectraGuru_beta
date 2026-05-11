@@ -4,6 +4,7 @@ import os
 import streamlit as st
 import datetime as dt
 import pandas as pd
+from urllib.parse import quote
 from function_dict import names, references, reference_map
 
 count_log_file_path = "log/count_log.txt"
@@ -11,6 +12,12 @@ call_log_file_path = "log/call_log.txt"
 user_log_file_path = "log/user_log.txt"
 
 CULL_FUNCTION_TABLE_REFRESH = False # If false, function count table updates after any user interaction. If true, it only updates after a full browser refesh.
+
+PAGE_BADGES = {
+    "Processing": ":blue-badge[Processing]",
+    "Analytics": ":green-badge[Analytics]",
+    "Toolbox": ":orange-badge[Toolbox]",
+}
 
 def _ensure_parent_dir(file_path):
     dir_name = os.path.dirname(file_path)
@@ -72,15 +79,30 @@ def get_count_data():
     num_functions = 0
     for key in counts.keys():
         readable_name = get_readable_name(key)
-        reference = get_reference(key)
-        entry = [readable_name['feature'], readable_name['algorithm'], counts[key], reference]
+        page = get_page_badge(key)
+        references_text = get_reference(key)
+        entry = [page, readable_name['algorithm'], counts[key], references_text]
         data.append(entry)
         num_functions += 1
     
     data.sort(key=lambda entry: entry[2], reverse=True)
     
-    df = pd.DataFrame(data=data, index=pd.RangeIndex(start=1, stop=num_functions+1), columns=['Feature', 'Algorithm', 'Usage (Times Called)', 'Reference'])
+    df = pd.DataFrame(
+        data=data,
+        index=pd.RangeIndex(start=1, stop=num_functions+1),
+        columns=['Page', 'Algorithm', 'Usage Count', 'Documentation and References']
+    )
     return df
+
+
+def get_page_badge(keyname):
+    page = keyname.split("_", 1)[0]
+    return PAGE_BADGES.get(page, page)
+
+
+def format_markdown_link(label, url):
+    safe_url = quote(url, safe=":/?#[]@!$&'*,;=%~+-._")
+    return f"[{label}]({safe_url})"
 
 # Returns a user-readable name for a function given its keyname, in terms of both its feature name and algorithm name, if applicable.
 def get_readable_name(keyname):
@@ -98,32 +120,25 @@ def get_readable_name(keyname):
         }
     return readable_name
 
-# Returns a string representing reference(s) to the literature for a given algorithm.
+# Returns Streamlit Markdown for documentation and literature links for a given algorithm.
 def get_reference(keyname):
 
-    refs = ""
+    refs = []
 
     if keyname in reference_map:
         ref_ids = reference_map[keyname]
-        for i in range(len(ref_ids)):
-            ref_id = ref_ids[i]
+        for ref_id in ref_ids:
             text = references[ref_id]["text"]
 
-            ref_string = ""
-            # Decide whether the reference should be a link or raw text
-            if references[ref_id]["link"]:
-                if references[ref_id]["doc_page"]:
-                    ref_string = f"[Docs]({text})"
-                else:
-                    ref_string = f"[Ref{i+1}]({text})"
-            else:
-                ref_string = text
+            if not text or not references[ref_id]["link"]:
+                continue
 
-            # Format as a comma-separated list
-            if i > 0:
-                refs += ", "
-            refs += ref_string
-    return refs
+            if references[ref_id]["doc_page"]:
+                label = "Documentation"
+            else:
+                label = "Reference"
+            refs.append(format_markdown_link(label, text))
+    return ", ".join(refs)
 
 # Increments the counter for a specified metric in a given log file. Returns the new count and 
 # creates a new entry if the keyname doesn't already exist.

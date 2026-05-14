@@ -106,12 +106,12 @@ with st.sidebar:
 
     st.selectbox('Select tool',
                         options=(
-                            "Spectra Simulation",
+                            "Spectrum Simulation",
                             "Peak Assignment Table",
                         ),
                         key="tool_select")
 
-    if st.session_state.tool_select == "Spectra Simulation":
+    if st.session_state.tool_select == "Spectrum Simulation":
         # Display parameter select interface
         st.number_input("Number of spectra to generate", min_value=1, max_value=50, value=1, key="simulation_batch_size_select")
         st.number_input("Scale", min_value=0.01, max_value=10000.0, value=1.0, step=1.0, key="simulation_scale_select")
@@ -202,8 +202,8 @@ with st.sidebar:
 
 st.write("## Toolbox")
 
-if st.session_state.tool_select == "Spectra Simulation":
-    st.write("##### Spectra Simulation")
+if st.session_state.tool_select == "Spectrum Simulation":
+    st.write("##### Spectrum Simulation")
     if 'simulation_df' not in st.session_state and not st.session_state.simulation_button:
         st.write("Click \"Generate spectra\" to simulate random spectra.")
     else:
@@ -263,7 +263,7 @@ if st.session_state.tool_select == "Spectra Simulation":
                                                                         b_params=b_params,
                                                                         use_noise=use_noise,
                                                                         noise_amplifier=noise_amplifier)
-            log.log_function_call("Toolbox_Spectra_Simulation", f_params={
+            log.log_function_call("Toolbox_Spectrum_Simulation", f_params={
                                     'structure':structure,
                                     's_params':s_params,
                                     'num_spectra':num_spectra,

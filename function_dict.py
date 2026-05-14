@@ -25,7 +25,7 @@ names = {
     'Processing_Normalization_Peak':("Normalization", "Normalization by peak"),
     'Processing_Normalization_Minmax':("Normalization", "Min-max normalization"),
     'Processing_Remove_Outliers':("Outlier removal", "Outlier removal"),
-    'Analytics_Spectra_Derivation':("Spectra derivation", "Spectra derivation"),
+    'Analytics_Spectral_Derivation':("Spectral derivation", "Spectral derivation"),
     'Analytics_FFT':("Fast Fourier Transform (FFT) analysis", "Fast Fourier Transform (FFT) analysis"),
     'Analytics_Correlation_Heatmap':("Correlation heatmap", "Correlation heatmap"),
     'Analytics_Peak_Identification':("Peak identification", "Peak identification"),
@@ -36,7 +36,7 @@ names = {
     'Analytics_ML_Classification_Random_Forest':("ML classification", "Random Forest (RF)"),
     'Analytics_ML_Classification_KNN':("ML classification", "K-nearest neighbors (KNN)"),
     'Analytics_ML_Classification_SVM':("ML classification", "Support vector machine (SVM)"),
-    'Toolbox_Spectra_Simulation':("Spectra simulation", "Spectra simulation"),
+    'Toolbox_Spectrum_Simulation':("Spectrum simulation", "Spectrum simulation"),
     'Toolbox_Peak_Assignment_Table':("Peak assignment table", "Peak assignment table"),
 
 
@@ -78,7 +78,7 @@ references = {
     21:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Processing_Page/Processing_Feature/Outlier_Removal/", "link":True, "doc_page":True, "notes":"Outlier Removal doc page"},
     22:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/Average_Plot/", "link":True, "doc_page":True, "notes":"Average Plot doc page"},
     23:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/Confidence_Interval_Plot/", "link":True, "doc_page":True, "notes":"Confidence Interval Plot doc page"},
-    24:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/Derivative_Analysis/", "link":True, "doc_page":True, "notes":"Spectra Derivation doc page"},
+    24:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/Derivative_Analysis/", "link":True, "doc_page":True, "notes":"Spectral Derivation doc page"},
     25:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/Correlation_Heatmap/", "link":True, "doc_page":True, "notes":"Correlation Heatmap doc page"},
     26:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/Peak_Identification/", "link":True, "doc_page":True, "notes":"Peak Identification doc page"},
     27:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/Gaussian_Peak_Fitting/", "link":True, "doc_page":True, "notes":"Gaussian Peak Fitting doc page"},
@@ -95,7 +95,7 @@ references = {
     38:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Machine_Learning_Feature/Random_Forest_Classification/", "link":True, "doc_page":True, "notes":"Random Forest classification doc page"},
     39:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Machine_Learning_Feature/KNN_Classification/", "link":True, "doc_page":True, "notes":"KNN classification doc page"},
     40:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Machine_Learning_Feature/SVM_Classification/", "link":True, "doc_page":True, "notes":"SVM classification doc page"},
-    41:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Toolbox_Page/Spectra_Simulation/", "link":True, "doc_page":True, "notes":"Spectra Simulation doc page"},
+    41:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Toolbox_Page/Spectra_Simulation/", "link":True, "doc_page":True, "notes":"Spectrum Simulation doc page"},
     42:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Toolbox_Page/Peak_Assignment_Table/", "link":True, "doc_page":True, "notes":"Peak Assignment Table doc page"},
     43:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/Fast_Fourier_Transform/", "link":True, "doc_page":True, "notes":"Analytics FFT doc page"},
     44:{"text":"https://doi.org/10.1016/S0168-9002(97)01023-1", "link":True, "doc_page":False, "notes":"SNIP reference"},
@@ -128,7 +128,7 @@ reference_map = {
     'Processing_Normalization_Peak':[19],
     'Processing_Normalization_Minmax':[20],
     'Processing_Remove_Outliers':[21],
-    'Analytics_Spectra_Derivation':[24,1,2],
+    'Analytics_Spectral_Derivation':[24,1,2],
     'Analytics_FFT':[43,45],
     'Analytics_Correlation_Heatmap':[25],
     'Analytics_Peak_Identification':[26,1],
@@ -139,6 +139,6 @@ reference_map = {
     'Analytics_ML_Classification_Random_Forest':[38,9],
     'Analytics_ML_Classification_KNN':[39,9],
     'Analytics_ML_Classification_SVM':[40,9],
-    'Toolbox_Spectra_Simulation':[41],
+    'Toolbox_Spectrum_Simulation':[41],
     'Toolbox_Peak_Assignment_Table':[42]
 }

@@ -4,14 +4,14 @@
 [![License: Apache](https://img.shields.io/badge/License-Apache_2.0-yellow)](https://www.apache.org/licenses/LICENSE-2.0) 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_red.svg)](https://streamlit.io/)
 
-# SpectraGuru - Spectra Analysis Application
+# SpectraGuru - Spectral Analysis Application
 
 *SpectraGuru is currently under development! Thank you for your patience.*
 
 Find our documentation page: [here](https://fengboma.github.io/docs.spectraguru/)!
 
 ## What is SpectraGuru?
-SpectraGuru is a spectra analysis application designed to provide user-friendly tools for processing and visualizing spectra, aimed at accelerating your research. It functions as a dashboard or a specialized tool within a Python environment, organized with various modular functions that allow users to process spectroscopy data in a pipeline. SpectraGuru is based on the Python streamlit framework. 
+SpectraGuru is a spectral analysis application designed to provide user-friendly tools for processing and visualizing spectra, aimed at accelerating your research. It functions as a dashboard or a specialized tool within a Python environment, organized with various modular functions that allow users to process spectroscopy data in a pipeline. SpectraGuru is based on the Python Streamlit framework.
 
 ![Demo](element/demo.gif)
 
@@ -78,6 +78,4 @@ The project was started in Jun 2024 by Dr. Yiping Zhao and Dr. Xianyan Chen from
 ### Help and Support
 
 If you have any questions, comments, and observations, please let us know! Email: zhao-nano-lab@uga.edu.
-
-
 

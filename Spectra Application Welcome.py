@@ -15,7 +15,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 # Change the working directory
 os.chdir(current_dir)
 
-function.wide_space_default()
+function.wide_space_default(page_title="SpectraGuru")
 
 #####################
 #params = st.query_params
@@ -156,7 +156,7 @@ if st.session_state.show_login_modal and not LOCAL_DEPLOY:
 
     login_dialog()
 
-st.write("# SpectraGuru™ - A Spectra Analysis Application")
+st.write("# SpectraGuru™ - A Spectral Analysis Application")
 if LOCAL_DEPLOY:
     st.write("## Local deploy version")
 # st.info('SpectraGuru is still under development. Current version: SpectraGuru ver. 0.15')
@@ -187,7 +187,7 @@ elif not st.session_state.show_welcome_modal and not LOCAL_DEPLOY:
 
 st.markdown(
     """
-    SpectraGuru™ is a spectra analysis application designed to provide user-friendly tools for processing and visualizing spectra, aimed at accelerating your research. It functions as a dashboard or a specialized tool within a Python environment, organized with various modular functions that allow users to process spectroscopy data in a pipeline.
+    SpectraGuru™ is a spectral analysis application designed to provide user-friendly tools for processing and visualizing spectra, aimed at accelerating your research. It functions as a dashboard or a specialized tool within a Python environment, organized with various modular functions that allow users to process spectroscopy data in a pipeline.
 
     **Visit our [documentation](https://fengboma.github.io/docs.spectraguru/) for more information about SpectraGuru™.**
 
@@ -345,7 +345,7 @@ col1.markdown(
     #### Analytics page
     - Average plot with original spectra
     - Confidence interval plot
-    - Spectra derivation
+    - Spectral derivation
     - Fast Fourier Transform (FFT) analysis
     - Correlation heatmap
     - Peak identification and stats
@@ -357,7 +357,7 @@ col1.markdown(
     - Support vector machine (SVM) classification
 
     #### Toolbox page
-    - Spectra simulation
+    - Spectrum simulation
     - Peak assignment table
     """)
 

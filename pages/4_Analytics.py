@@ -31,7 +31,7 @@ if 'df' in st.session_state:
     st.sidebar.selectbox('Select analytics plot',
                         options= ("Average Plot with Original Spectra",
                                 "Confidence Interval Plot",
-                                "Spectra Derivation",
+                                "Spectral Derivation",
                                 "Fast Fourier Transform (FFT) analysis",
                                 "Correlation Heatmap",
                                 "Peak Identification and Stats",
@@ -96,7 +96,7 @@ if 'df' in st.session_state:
                 )
             )
     
-    elif st.session_state.stats_plot_select == "Spectra Derivation":
+    elif st.session_state.stats_plot_select == "Spectral Derivation":
         st.sidebar.selectbox(label="Normalization method",
             options=("None", "Min-Max Normalization"),
             index=0,
@@ -527,7 +527,7 @@ else:
             st.altair_chart(confidence_plot, use_container_width=False)
             log.log_plot_generated_count()
 
-        elif st.session_state.stats_plot_select == "Spectra Derivation":
+        elif st.session_state.stats_plot_select == "Spectral Derivation":
             with st.sidebar:
                 
                 # Window length input
@@ -551,17 +551,6 @@ else:
                     help="Controls local polynomial fitting. "
                         "Order must be smaller than the window length. "
                         "Typical choices: 2–3 for smooth baseline, 4–5 for sharper peaks."
-                )
-
-                # Richer tip for users
-                st.caption(
-                    "**Tips for tuning Savitzky–Golay parameters:**\n"
-                    "- Window length should be **odd**, typically between 3–25 for Raman/SERS spectra. "
-                    "Use larger values for noisy data, smaller for narrow/sharp peaks.\n"
-                    "- Polynomial order is usually **2 or 3**. "
-                    "Higher order can follow sharper features but may also fit noise.\n"
-                    "- Always ensure **poly < window length**. "
-                    "- Try starting with `win=11`, `poly=3` and adjust if peaks look oversmoothed or too noisy."
                 )
 
             try:
@@ -660,7 +649,7 @@ else:
                 #         mime="text/csv",
                     # )
                 # optional: your logger
-                log.log_function_call("Analytics_Spectra_Derivation",
+                log.log_function_call("Analytics_Spectral_Derivation",
                                         f_params={
                                             'norm_method':st.session_state.deriv_norm_method,
                                             'sg_win':win,
@@ -703,21 +692,21 @@ else:
 
                 row1_col1, row1_col2 = st.columns(2)
                 with row1_col1:
-                    st.altair_chart(fft_plots["phase"], use_container_width=True)
-                with row1_col2:
                     st.altair_chart(fft_plots["amplitude"], use_container_width=True)
+                with row1_col2:
+                    st.altair_chart(fft_plots["phase"], use_container_width=True)
 
                 row2_col1, row2_col2 = st.columns(2)
                 with row2_col1:
-                    st.altair_chart(fft_plots["real"], use_container_width=True)
+                    st.altair_chart(fft_plots["power"], use_container_width=True)
                 with row2_col2:
-                    st.altair_chart(fft_plots["imaginary"], use_container_width=True)
+                    st.altair_chart(fft_plots["real_imaginary"], use_container_width=True)
 
                 row3_col1, row3_col2 = st.columns(2)
                 with row3_col1:
-                    st.altair_chart(fft_plots["real_imaginary"], use_container_width=True)
+                    st.altair_chart(fft_plots["real"], use_container_width=True)
                 with row3_col2:
-                    st.altair_chart(fft_plots["power"], use_container_width=True)
+                    st.altair_chart(fft_plots["imaginary"], use_container_width=True)
 
                 for _ in range(6):
                     log.log_plot_generated_count()

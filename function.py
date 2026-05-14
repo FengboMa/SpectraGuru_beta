@@ -8,10 +8,15 @@ def update_mode_option():
         st.session_state['update_mode_option'] = False
         
 # Default to wide
-def wide_space_default():
+def wide_space_default(page_title=None):
     import streamlit as st
-    st.set_page_config(layout="wide", 
-                    page_icon=r"element/tab_bar_pic.png")
+    page_config = {
+        "layout": "wide",
+        "page_icon": r"element/tab_bar_pic.png",
+    }
+    if page_title:
+        page_config["page_title"] = page_title
+    st.set_page_config(**page_config)
 
 # Shared helper for processing-page toggles
 def clear_processing_toggles():

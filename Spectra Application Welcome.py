@@ -109,7 +109,7 @@ if st.session_state.show_welcome_modal and not st.session_state.show_login_modal
                   padding=20, max_width=600)
 
     with welcome_modal.container():
-        st.info("SpectraGuru™ is still under development. Current version: SpectraGuru™ ver. 1.2.1")
+        st.info("SpectraGuru™ is still under development.")
         st.write("Thanks for visiting SpectraGuru™, a spectroscopy processing and visualization tool.")
         st.write("If you encounter a problem, please email Fengbo.Ma@uga.edu")
         st.write("**:arrow_upper_left: After starting, go to ‘Data Upload’ in the sidebar to begin!**")
@@ -159,7 +159,6 @@ if st.session_state.show_login_modal and not LOCAL_DEPLOY:
 st.write("# SpectraGuru™ - A Spectral Analysis Application")
 if LOCAL_DEPLOY:
     st.write("## Local deploy version")
-# st.info('SpectraGuru is still under development. Current version: SpectraGuru ver. 0.15')
 
 # ---------- greet authenticated users ----------
 if st.session_state.user_logged_in:

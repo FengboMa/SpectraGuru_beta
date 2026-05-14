@@ -259,6 +259,14 @@ def process_upload(kind, uploaded):
         )
         return None
 
+def describe_loaded_spectra(df):
+    """Return a user-facing summary: spectra columns and wavenumber points."""
+    spectrum_count = max(0, df.shape[1] - 1)
+    point_count = df.shape[0]
+    spectrum_word = "spectrum" if spectrum_count == 1 else "spectra"
+    point_word = "point" if point_count == 1 else "points"
+    return f"{spectrum_count} {spectrum_word} loaded. Each spectrum has {point_count} wavenumber {point_word}."
+
 if n_classes > 1:
     st.warning(
         "All uploaded classes will be **automatically interpolated** to a "
@@ -286,7 +294,7 @@ for idx in range(int(n_classes)):
         cache_key = pkey(f"class_df_{idx}")
         df_cached = st.session_state.get(cache_key)
         if df_cached is not None:
-            st.success(f"{class_label} already loaded. Shape: {df_cached.shape}")
+            st.success(f"{class_label} already loaded. {describe_loaded_spectra(df_cached)}")
             if preview_data:
                 st.dataframe(df_cached, hide_index=True)
 
@@ -369,7 +377,7 @@ for idx in range(int(n_classes)):
                         st.error(f"Failed to load sample data: {e}")
 
             if df_this is not None:
-                st.success(f"{class_label} loaded. Shape: {df_this.shape}")
+                st.success(f"{class_label} loaded. {describe_loaded_spectra(df_this)}")
                 if preview_data:
                     st.dataframe(df_this, hide_index=True)
                 st.session_state[cache_key] = df_this

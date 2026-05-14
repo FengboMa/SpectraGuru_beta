@@ -259,13 +259,15 @@ def process_upload(kind, uploaded):
         )
         return None
 
-def describe_loaded_spectra(df):
-    """Return a user-facing summary: spectra columns and wavenumber points."""
+def describe_loaded_spectra(class_label, df, status="loaded"):
+    """Return a user-facing summary: spectra columns and data points."""
     spectrum_count = max(0, df.shape[1] - 1)
     point_count = df.shape[0]
     spectrum_word = "spectrum" if spectrum_count == 1 else "spectra"
     point_word = "point" if point_count == 1 else "points"
-    return f"{spectrum_count} {spectrum_word} loaded. Each spectrum has {point_count} wavenumber {point_word}."
+    if spectrum_count == 1:
+        return f"{class_label} {status} with 1 spectrum containing {point_count} data {point_word}."
+    return f"{class_label} {status} with {spectrum_count} spectra, each containing {point_count} data {point_word}."
 
 if n_classes > 1:
     st.warning(
@@ -294,7 +296,7 @@ for idx in range(int(n_classes)):
         cache_key = pkey(f"class_df_{idx}")
         df_cached = st.session_state.get(cache_key)
         if df_cached is not None:
-            st.success(f"{class_label} already loaded. {describe_loaded_spectra(df_cached)}")
+            st.success(describe_loaded_spectra(class_label, df_cached, status="is already loaded"))
             if preview_data:
                 st.dataframe(df_cached, hide_index=True)
 
@@ -377,7 +379,7 @@ for idx in range(int(n_classes)):
                         st.error(f"Failed to load sample data: {e}")
 
             if df_this is not None:
-                st.success(f"{class_label} loaded. {describe_loaded_spectra(df_this)}")
+                st.success(describe_loaded_spectra(class_label, df_this, status="loaded"))
                 if preview_data:
                     st.dataframe(df_this, hide_index=True)
                 st.session_state[cache_key] = df_this

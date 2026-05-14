@@ -60,11 +60,11 @@ cd <FILE LOCATION>
 git clone https://github.com/FengboMa/SpectraGuru_beta.git
 ```
 
-3. Run Spectra Application Welcome.py
+3. Run SpectraGuru Home.py
 4. Run the following command
 
 ```
-streamlit run SpectraGuru_beta/Spectra Application Welcome.py
+streamlit run "SpectraGuru_beta/SpectraGuru Home.py"
 ```
 5. Your local version should be up in port 8501 by default in your favorite browser!
 
@@ -78,4 +78,3 @@ The project was started in Jun 2024 by Dr. Yiping Zhao and Dr. Xianyan Chen from
 ### Help and Support
 
 If you have any questions, comments, and observations, please let us know! Email: zhao-nano-lab@uga.edu.
-

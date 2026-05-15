@@ -1,27 +1,19 @@
-<img src="logo.png" width="300">
+<img src="element/logo.png" width="300">
 
 [![Documentation Status](https://img.shields.io/badge/Documentation-latest-green)](https://fengboma.github.io/docs.spectraguru/) 
 [![License: Apache](https://img.shields.io/badge/License-Apache_2.0-yellow)](https://www.apache.org/licenses/LICENSE-2.0) 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_red.svg)](https://streamlit.io/)
-[![Publication](https://img.shields.io/badge/Publication-Analytical%20Chemistry-blue)](https://pubs.acs.org/doi/10.1021/acs.analchem.5c07799)
 
-# SpectraGuru - Spectra Analysis Application
+# SpectraGuru - Spectral Analysis Application
 
 *SpectraGuru is currently under development! Thank you for your patience.*
 
 Find our documentation page: [here](https://fengboma.github.io/docs.spectraguru/)!
 
 ## What is SpectraGuru?
-SpectraGuru is a spectra analysis application designed to provide user-friendly tools for processing and visualizing spectra, aimed at accelerating your research. It functions as a dashboard or a specialized tool within a Python environment, organized with various modular functions that allow users to process spectroscopy data in a pipeline. SpectraGuru is based on the Python streamlit framework. 
+SpectraGuru is a spectral analysis application designed to provide user-friendly tools for processing and visualizing spectra, aimed at accelerating your research. It functions as a dashboard or a specialized tool within a Python environment, organized with various modular functions that allow users to process spectroscopy data in a pipeline. SpectraGuru is based on the Python Streamlit framework.
 
 ![Demo](element/demo.gif)
-
-## If You Find SpectraGuru™ Useful
-If SpectraGuru™ contributes to your research, please consider citing our work.
-
-Fengbo Ma, Jiaheng Cui, Amit Kumar, Yanjun Yang, Xianyan Chen, and Yiping Zhao. "Comprehensive Open-Source Ecosystem for Raman and SERS Spectroscopy: Introducing SpectraGuru," *Analytical Chemistry*. [https://pubs.acs.org/doi/10.1021/acs.analchem.5c07799](https://pubs.acs.org/doi/10.1021/acs.analchem.5c07799)
-
-Fengbo Ma, Jiaheng Cui, Amit Kumar, Yanjun Yang, Jessica McCabe Hutcheson, Xianyan Chen, Haijian Sun, and Yiping Zhao. "SpectraGuru: a community-guided path toward scalable Raman and SERS analysis." In *Biomedical Vibrational Spectroscopy 2026: Advances in Research and Industry*, vol. 13846, pp. 31-41. SPIE, 2026.
 
 
 ---
@@ -37,28 +29,24 @@ Our application is hosted [here](https://spectraguru.org)! Please use it directl
 You do not have to host it locally to use the application. But if you wish to deploy it locally, please follow these steps:
 
 1. Install Python and dependencies
-   
-   SpectraGuru runs on:
 
-       altair==5.3.0
+   SpectraGuru is tested with Python 3.12. The important runtime packages are pinned in `requirements.txt`:
 
-       deprecation==2.1.0
+   - `streamlit==1.49.1`
+   - `pandas==2.3.2`
+   - `numpy==2.3.3`
+   - `scipy==1.16.2`
+   - `scikit-learn==1.7.2`
+   - `matplotlib==3.10.6`
+   - `seaborn==0.13.2`
+   - `altair==5.5.0`
+   - `streamlit-extras==0.7.8`
+   - `psycopg2==2.9.10`
+   - `PyWavelets==1.9.0`
+   - `filelock==3.25.2`
+   - `deprecation==2.1.0`
 
-       matplotlib==3.8.4
-
-       numpy==1.23.5
-
-       pandas==2.2.2
-
-       scikit_learn==1.5.1
-
-       scipy==1.14.0
-
-       streamlit==1.35.0
-
-       streamlit_extras==0.4.3
-
-    Or use requirements.txt to install the dependencies: 
+   Install them with:
 
 ```
 pip install -r requirements.txt
@@ -72,11 +60,11 @@ cd <FILE LOCATION>
 git clone https://github.com/FengboMa/SpectraGuru_beta.git
 ```
 
-3. Run Spectra Application Welcome.py
+3. Run SpectraGuru Home.py
 4. Run the following command
 
 ```
-streamlit run SpectraGuru_beta/Spectra Application Welcome.py
+streamlit run "SpectraGuru_beta/SpectraGuru Home.py"
 ```
 5. Your local version should be up in port 8501 by default in your favorite browser!
 
@@ -90,7 +78,3 @@ The project was started in Jun 2024 by Dr. Yiping Zhao and Dr. Xianyan Chen from
 ### Help and Support
 
 If you have any questions, comments, and observations, please let us know! Email: zhao-nano-lab@uga.edu.
-
-
-
-

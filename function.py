@@ -1931,11 +1931,10 @@ def style_altair_chart(chart):
 # --------------------  DATA UPLOAD HELPER DISPATCHER  ----------------------
 def get_db_connection():
     import psycopg2
-    import streamlit as st
     return psycopg2.connect(
         dbname="SpectraGuruDB",
-        user=st.session_state.user,
-        password=st.session_state.passkey,
+        user="sg_user",
+        password="Aa123456",
         host="localhost",
         port="5432"
     )

@@ -198,7 +198,7 @@ st.info("Check out our latest news and updates on SpectraGuru™!")
 
 # Add expander to show the flyer
 with st.expander("View SpectraGuru™ flyer"):
-    st.image("element/Spectraguru flyer v2 oct26 (1).png", caption="SpectraGuru™ flyer", use_container_width=True)
+    st.image("element/Spectraguru flyer.png", caption="SpectraGuru™ flyer", use_container_width=True)
 st.divider()
 
 

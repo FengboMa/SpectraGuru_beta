@@ -236,7 +236,7 @@ st.markdown(
         </p>
         <div style="padding: 0.9rem 1rem; background: rgba(255, 255, 255, 0.72); border-radius: 14px; border: 1px solid rgba(15, 23, 42, 0.08); margin-bottom: 0.85rem;">
             <p style="margin: 0; line-height: 1.6;">
-                Fengbo Ma, Jiaheng Cui, Amit Kumar, Yanjun Yang, Xianyan Chen, and Yiping Zhao. <em>Comprehensive Open-Source Ecosystem for Raman and SERS Spectroscopy: Introducing SpectraGuru</em>. Analytical Chemistry. <a href="https://pubs.acs.org/doi/10.1021/acs.analchem.5c07799" target="_blank">Read online</a>
+                Fengbo Ma, Jiaheng Cui, Amit Kumar, Yanjun Yang, Xianyan Chen, and Yiping Zhao. <em>Comprehensive Open-Source Ecosystem for Raman and SERS Spectroscopy: Introducing SpectraGuru</em>. <em>Analytical Chemistry</em> 2026, 98 (15), 11186-11196. <a href="https://pubs.acs.org/doi/10.1021/acs.analchem.5c07799" target="_blank">Read online</a>
             </p>
         </div>
         <div style="padding: 0.9rem 1rem; background: rgba(255, 255, 255, 0.72); border-radius: 14px; border: 1px solid rgba(15, 23, 42, 0.08);">

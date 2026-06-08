@@ -356,7 +356,7 @@ else:
             analytics_x_axis_title = DEFAULT_X_AXIS_TITLE
             analytics_y_axis_title = DEFAULT_Y_AXIS_TITLE
 
-        st.session_state.df_stats = st.session_state.temp
+        st.session_state.df_stats = st.session_state.temp.copy()
         st.session_state.df_stats['Average'] = st.session_state.df_stats.iloc[:, 1:].mean(axis=1)
         
         # st.write(st.session_state.df_stats)
@@ -366,7 +366,8 @@ else:
         # st.write(stats_data_melted)
         
         if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
-            
+            average_plot_key_suffix = f"{st.session_state.stats_avg_act}_{st.session_state.stats_avg_std_act}"
+
             if st.session_state.stats_avg_act:
                 avg_stats_base = alt.Chart(stats_data_melted).mark_line().encode(
                         x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
@@ -440,11 +441,19 @@ else:
                                                 x='shared'  # Share the x-axis between the plots
                                             )
                 combined_plot = function.style_altair_chart(combined_plot)
-                st.altair_chart(combined_plot, use_container_width=False)
+                st.altair_chart(
+                    combined_plot,
+                    use_container_width=False,
+                    key=f"analytics_average_plot_combined_{average_plot_key_suffix}"
+                )
                 log.log_plot_generated_count()
             else:
-                show_plot = function.style_altair_chart(show_plot)    
-                st.altair_chart(show_plot, use_container_width=False)
+                show_plot = function.style_altair_chart(show_plot)
+                st.altair_chart(
+                    show_plot,
+                    use_container_width=False,
+                    key=f"analytics_average_plot_single_{average_plot_key_suffix}"
+                )
             
             stats_download_df = st.session_state.df_stats
             if 'Average' in stats_download_df:

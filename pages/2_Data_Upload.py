@@ -126,8 +126,8 @@ if 'connection' not in st.session_state:
         )
         st.session_state.db_logged_in = True
         st.session_state.connection   = conn
-        st.session_state.user         = "sg_user"
-        st.session_state.passkey      = "Aa123456"
+        st.session_state.db_user      = "sg_user"
+        st.session_state.db_passkey   = "Aa123456"
     except Exception as e:
         st.session_state.connection = None
         st.session_state.db_logged_in = False
@@ -142,15 +142,25 @@ if 'connection' not in st.session_state:
 # ----------------------------------------
 def reset_application():
     """
-    Clears all keys in st.session_state except for 'run_count'.
-    This is important to prevent the button from disappearing after a reset.
+    Clears uploaded/processed data while preserving login and reset state.
     """
     st.toast("Application has been reset!", icon="✅")
+
+    keys_to_keep = {
+        'run_count',
+        'user_decided',
+        'user',
+        'user_logged_in',
+        'username',
+        'do_startup',
+        'show_welcome_modal',
+        'show_login_modal',
+    }
 
     # Keep track of the keys to delete
     keys_to_delete = []
     for key in st.session_state.keys():
-        if key != 'run_count': # We want to preserve the run_count
+        if key not in keys_to_keep:
             keys_to_delete.append(key)
 
     # Delete the keys

@@ -1110,7 +1110,7 @@ else:
             
             st.write("**Hierarchically-clustered Heatmap**")
             
-            temp = st.session_state.temp.drop(columns=['Average'])
+            temp = st.session_state.temp.drop(columns=['Average'], errors='ignore')
             
             if st.session_state.HCA_heatmap:
                 st.pyplot(function.hierarchical_clustering_heatmap(temp))
@@ -1123,7 +1123,7 @@ else:
         
         elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)":
             
-            temp = st.session_state.temp.drop(columns=['Average'])
+            temp = st.session_state.temp.drop(columns=['Average'], errors='ignore')
             label_df = st.session_state.get('label_df')
 
             if label_df is None:
@@ -1185,7 +1185,7 @@ else:
 
             st.write("**T‑Distributed stochastic neighbor embedding (t‑SNE)**")
 
-            temp = st.session_state.temp.drop(columns=['Average'])
+            temp = st.session_state.temp.drop(columns=['Average'], errors='ignore')
 
             label_df = st.session_state.get('label_df')   # could be None
 

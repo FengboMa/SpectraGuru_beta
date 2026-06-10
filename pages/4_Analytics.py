@@ -364,9 +364,10 @@ else:
         stats_data_melted = st.session_state.df_stats.melt(id_vars=['Ramanshift'], var_name='Sample ID', value_name='Intensity')
         
         # st.write(stats_data_melted)
-        
+
         if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
             average_plot_key_suffix = f"{st.session_state.stats_avg_act}_{st.session_state.stats_avg_std_act}"
+            average_plot_height = 600
 
             if st.session_state.stats_avg_act:
                 avg_stats_base = alt.Chart(stats_data_melted).mark_line().encode(
@@ -384,12 +385,11 @@ else:
                             alt.value(1)   # Line width for other samples
                         )
                         ).properties(
-                            width=1300,
-                            height=600,
+                            height=average_plot_height,
                             title='Spectra Data Plot'
                         )
                 # avg_stats_base = function.style_altair_chart(avg_stats_base)
-                # st.altair_chart(avg_stats_base, use_container_width=False)  
+                # st.altair_chart(avg_stats_base, use_container_width=False)
                 show_plot = avg_stats_base
                 log.log_plot_generated_count()
                 
@@ -402,15 +402,21 @@ else:
                         color=alt.value('blue'),
                         size=alt.value(3)
                         ).properties(
-                            width=1300,
-                            height=600,
+                            height=average_plot_height,
                             title='Spectra Average Data Plot'
                         )
-                
-                # st.altair_chart(avg_stats_base2, use_container_width=False)   
+
+                # st.altair_chart(avg_stats_base2, use_container_width=False)
                 show_plot = avg_stats_base2
                 log.log_plot_generated_count()
-            
+
+            show_plot = function.style_altair_chart(show_plot)
+            st.altair_chart(
+                show_plot,
+                use_container_width=True,
+                key=f"analytics_average_plot_main_{average_plot_key_suffix}"
+            )
+
             if st.session_state.stats_avg_std_act:
                 ramanshift = st.session_state.df_stats["Ramanshift"]
                 # Select only the columns we need for standard deviation calculation
@@ -433,28 +439,17 @@ else:
                     x=alt.X('Ramanshift', axis=alt.Axis(title=analytics_x_axis_title)),
                     y='Standard Deviation'
                 ).properties(
-                            width=1300,
-                            height=300,
+                            height=average_plot_height,
                 )
-                
-                combined_plot = alt.vconcat(show_plot, std_plot).resolve_scale(
-                                                x='shared'  # Share the x-axis between the plots
-                                            )
-                combined_plot = function.style_altair_chart(combined_plot)
+
+                std_plot = function.style_altair_chart(std_plot)
                 st.altair_chart(
-                    combined_plot,
-                    use_container_width=False,
-                    key=f"analytics_average_plot_combined_{average_plot_key_suffix}"
+                    std_plot,
+                    use_container_width=True,
+                    key=f"analytics_average_plot_std_{average_plot_key_suffix}"
                 )
                 log.log_plot_generated_count()
-            else:
-                show_plot = function.style_altair_chart(show_plot)
-                st.altair_chart(
-                    show_plot,
-                    use_container_width=False,
-                    key=f"analytics_average_plot_single_{average_plot_key_suffix}"
-                )
-            
+
             stats_download_df = st.session_state.df_stats
             if 'Average' in stats_download_df:
                 stats_download_df = stats_download_df.drop('Average', axis=1)

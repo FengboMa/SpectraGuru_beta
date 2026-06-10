@@ -44,8 +44,8 @@ if 'df' in st.session_state:
                         key="stats_plot_select")
 
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
-        st.sidebar.toggle(label='Show spectra you selected', value=True, key = 'stats_avg_act',help='Show or hide original selected spectra.')
-        st.sidebar.toggle(label='Show standard deviation', value=True, key = 'stats_avg_std_act',help='Show or hide standard deviation.')
+        st.sidebar.toggle(label='Show selected spectra', value=True, key = 'stats_avg_act',help='Show or hide original selected spectra.')
+        st.sidebar.toggle(label='Show standard deviation plot', value=True, key = 'stats_avg_std_act',help='Show or hide standard deviation.')
     elif st.session_state.stats_plot_select == "Confidence Interval Plot":
         # Interval method selector
         interval_method = st.sidebar.radio(
@@ -377,7 +377,7 @@ else:
                         color=alt.condition(
                             alt.datum['Sample ID'] == 'Average',
                             alt.value('blue'),  # Color for the "Average" sample
-                            'Sample ID:N'      # Default color for other samples
+                            alt.Color('Sample ID:N', legend=None)  # Default color for other samples
                         ),
                         size=alt.condition(
                             alt.datum['Sample ID'] == 'Average',

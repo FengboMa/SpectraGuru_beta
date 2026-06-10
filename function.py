@@ -539,6 +539,143 @@ def build_fft_plots(
         "power": style_altair_chart(power_plot)
     }
 
+# Spectrum calculation (Analytics)
+# Operator dispatch tables shared by the calculation functions and the Analytics UI.
+SPECTRUM_CALC_Y_OPERATORS = ("Add", "Subtract", "Multiply", "Divide")
+SPECTRUM_CALC_X_OPERATORS = ("Add", "Subtract")
+SPECTRUM_CALC_Y_OPERATIONS = {"Add": lambda a, b: a + b, "Subtract": lambda a, b: a - b,
+                              "Multiply": lambda a, b: a * b, "Divide": lambda a, b: a / b}
+SPECTRUM_CALC_X_OPERATIONS = {"Add": lambda x, s: x + s, "Subtract": lambda x, s: x - s}
+
+def _validate_spectrum_calculation_inputs(operator, valid_operators, scalar=None, target=None,
+                                          reference=None, x_target=None, x_reference=None):
+    """Shared guard for spectrum calculations: operator, numeric scalar, missing values,
+    zero divisors, and wavenumber-axis alignment. Raises ValueError with a clear message."""
+    import numpy as np
+
+    if operator not in valid_operators:
+        raise ValueError(f"Operator must be one of {tuple(valid_operators)}; got {operator!r}.")
+    if scalar is not None:
+        try:
+            scalar = float(scalar)
+        except (TypeError, ValueError):
+            raise ValueError(f"Value must be numeric; got {scalar!r}.")
+        if not np.isfinite(scalar):
+            raise ValueError(f"Value must be finite; got {scalar!r}.")
+        if operator == "Divide" and np.isclose(scalar, 0.0):
+            raise ValueError("Division by zero is not allowed.")
+    for name, arr in (("target", target), ("reference", reference)):
+        if arr is not None and not np.isfinite(np.asarray(arr, dtype=float)).all():
+            raise ValueError(f"The {name} spectrum contains missing or non-numeric values.")
+    if operator == "Divide" and reference is not None and np.any(
+            np.isclose(np.asarray(reference, dtype=float), 0.0)):
+        raise ValueError("Division by zero is not allowed (the reference spectrum contains zeros).")
+    if x_target is not None and x_reference is not None and not np.array_equal(
+            np.asarray(x_target, dtype=float), np.asarray(x_reference, dtype=float)):
+        raise ValueError("The target and reference spectra do not share the same wavenumber axis. "
+                         "Interpolation is not enabled.")
+
+def calculate_spectrum_with_constant(intensity, constant, operator="Add"):
+    """Apply ``y_result = y (operator) constant`` element-wise to one intensity spectrum.
+
+    Parameters: intensity array-like, numeric constant, operator in SPECTRUM_CALC_Y_OPERATORS.
+    Returns the calculated intensity as a float ndarray; the input is not modified.
+    """
+    import numpy as np
+    _validate_spectrum_calculation_inputs(operator, SPECTRUM_CALC_Y_OPERATIONS,
+                                          scalar=constant, target=intensity)
+    return SPECTRUM_CALC_Y_OPERATIONS[operator](np.asarray(intensity, dtype=float), float(constant))
+
+def calculate_spectrum_with_reference(target_intensity, reference_intensity, operator="Add",
+                                      target_axis=None, reference_axis=None):
+    """Apply ``y_result = y_target (operator) y_reference`` element-wise between two spectra.
+
+    Both spectra must be on the same wavenumber axis; pass ``target_axis``/``reference_axis``
+    to enforce the alignment check. Returns the calculated intensity as a float ndarray.
+    """
+    import numpy as np
+    _validate_spectrum_calculation_inputs(operator, SPECTRUM_CALC_Y_OPERATIONS,
+                                          target=target_intensity, reference=reference_intensity,
+                                          x_target=target_axis, x_reference=reference_axis)
+    return SPECTRUM_CALC_Y_OPERATIONS[operator](np.asarray(target_intensity, dtype=float),
+                                                np.asarray(reference_intensity, dtype=float))
+
+def shift_spectrum_axis(axis_values, shift, operator="Add"):
+    """Apply ``x_result = x (operator) shift`` to the wavenumber axis only.
+
+    Intensity values are intentionally left unchanged by the caller.
+    Returns the shifted axis as a float ndarray.
+    """
+    import numpy as np
+    _validate_spectrum_calculation_inputs(operator, SPECTRUM_CALC_X_OPERATIONS, scalar=shift)
+    return SPECTRUM_CALC_X_OPERATIONS[operator](np.asarray(axis_values, dtype=float), float(shift))
+
+def build_spectrum_calc_result_df(axis_values, target_intensity, calculated_values,
+                                  reference_intensity=None, original_axis=None):
+    """Assemble the single-result preview/download table in a consistent column order:
+    Ramanshift, [Original Ramanshift], Original Target Intensity, [Reference Intensity],
+    Calculated Intensity."""
+    import numpy as np
+    import pandas as pd
+
+    data = {"Ramanshift": np.asarray(axis_values, dtype=float)}
+    if original_axis is not None:
+        data["Original Ramanshift"] = np.asarray(original_axis, dtype=float)
+    data["Original Target Intensity"] = np.asarray(target_intensity, dtype=float)
+    if reference_intensity is not None:
+        data["Reference Intensity"] = np.asarray(reference_intensity, dtype=float)
+    data["Calculated Intensity"] = np.asarray(calculated_values, dtype=float)
+    return pd.DataFrame(data)
+
+def apply_spectrum_calculation_to_dataframe(df, calculation_type, operator, constant=None,
+                                            reference_intensity=None, shift=None):
+    """Apply the selected spectrum calculation to every intensity column of a wide dataframe.
+
+    Parameters
+    ----------
+    df : wide dataframe with a ``Ramanshift`` column followed by intensity columns
+        (derived ``Average``/``Standard Deviation`` columns are ignored).
+    calculation_type : "Y-axis with constant", "Y-axis with another spectrum", or "X-axis shift".
+    operator : operator name matching the calculation type.
+    constant / reference_intensity / shift : operand for the corresponding calculation type.
+
+    Returns a new wide dataframe (the input is never mutated): for Y-axis calculations the
+    intensity columns are renamed ``<name>_calculated``; for X-axis shift only the Ramanshift
+    column changes and intensity columns keep their original names and values.
+    """
+    import numpy as np
+    import pandas as pd
+
+    if not isinstance(df, pd.DataFrame) or "Ramanshift" not in df.columns or df.shape[1] < 2:
+        raise ValueError("Input must be a wide dataframe with a Ramanshift column and at least one intensity column.")
+
+    intensity_columns = [column for column in df.columns
+                         if column not in ("Ramanshift", "Average", "Standard Deviation")]
+    if not intensity_columns:
+        raise ValueError("No intensity columns are available to calculate on.")
+
+    axis_values = pd.to_numeric(df["Ramanshift"], errors="coerce").to_numpy(dtype=float)
+    if not np.isfinite(axis_values).all():
+        raise ValueError("The wavenumber axis contains missing or non-numeric values.")
+
+    if calculation_type == "X-axis shift":
+        result = {"Ramanshift": shift_spectrum_axis(axis_values, shift, operator)}
+        for column in intensity_columns:
+            result[column] = pd.to_numeric(df[column], errors="coerce").to_numpy(dtype=float)
+        return pd.DataFrame(result)
+
+    result = {"Ramanshift": axis_values}
+    for column in intensity_columns:
+        column_values = pd.to_numeric(df[column], errors="coerce").to_numpy(dtype=float)
+        if calculation_type == "Y-axis with constant":
+            result[f"{column}_calculated"] = calculate_spectrum_with_constant(column_values, constant, operator)
+        elif calculation_type == "Y-axis with another spectrum":
+            result[f"{column}_calculated"] = calculate_spectrum_with_reference(
+                column_values, reference_intensity, operator)
+        else:
+            raise ValueError(f"Unknown calculation type: {calculation_type!r}.")
+    return pd.DataFrame(result)
+
 def remove_outliers(df, single_thresh=4, distance_thresh=6, coeff_thresh=4):
     import numpy as np
     import pandas as pd

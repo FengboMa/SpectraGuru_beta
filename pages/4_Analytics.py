@@ -33,6 +33,7 @@ if 'df' in st.session_state:
                                 "Confidence Interval Plot",
                                 "Spectral Derivation",
                                 "Fast Fourier Transform (FFT) analysis",
+                                "Spectrum Calculation",
                                 "Correlation Heatmap",
                                 "Peak Identification and Stats",
                                 "Hierarchically-clustered Heatmap",
@@ -118,6 +119,90 @@ if 'df' in st.session_state:
             value=False,
             key="fft_subtract_average"
         )
+    elif st.session_state.stats_plot_select == "Spectrum Calculation":
+        spectrum_calc_target_options = ["Average"] + [
+            column for column in st.session_state.temp.columns
+            if column not in ("Ramanshift", "Average", "Standard Deviation")
+        ]
+        st.sidebar.selectbox(
+            label="Select target spectrum",
+            options=spectrum_calc_target_options,
+            index=0,
+            key="spectrum_calc_target",
+            help="Spectrum the calculation is applied to. Defaults to the Average spectrum."
+        )
+        st.sidebar.radio(
+            label="Calculation type",
+            options=("Y-axis with constant", "Y-axis with another spectrum", "X-axis shift"),
+            index=0,
+            key="spectrum_calc_type",
+            help=(
+                "Y-axis calculations change intensity values only.\n\n"
+                "X-axis shift moves the spectrum left or right along the wavenumber axis "
+                "without changing intensity values."
+            )
+        )
+
+        if st.session_state.spectrum_calc_type == "Y-axis with constant":
+            st.sidebar.selectbox(
+                label="Y-axis operator",
+                options=("Add", "Subtract", "Multiply", "Divide"),
+                index=0,
+                key="spectrum_calc_y_operator"
+            )
+            if st.session_state.spectrum_calc_y_operator in ("Multiply", "Divide"):
+                spectrum_calc_constant = st.sidebar.number_input(
+                    label="Constant value",
+                    value=1.0,
+                    step=0.1,
+                    format="%.4f",
+                    key="spectrum_calc_constant_scale",
+                    help="Constant used to scale intensity values. Division by zero is not allowed."
+                )
+                if st.session_state.spectrum_calc_y_operator == "Divide" and spectrum_calc_constant == 0:
+                    st.sidebar.error("Division by zero is not allowed.")
+            else:
+                spectrum_calc_constant = st.sidebar.number_input(
+                    label="Constant value",
+                    value=0.0,
+                    step=1.0,
+                    format="%.4f",
+                    key="spectrum_calc_constant_offset",
+                    help="Constant added to or subtracted from intensity values."
+                )
+        elif st.session_state.spectrum_calc_type == "Y-axis with another spectrum":
+            st.sidebar.selectbox(
+                label="Y-axis operator",
+                options=("Add", "Subtract", "Multiply", "Divide"),
+                index=0,
+                key="spectrum_calc_y_operator"
+            )
+            spectrum_calc_reference_options = [
+                option for option in spectrum_calc_target_options
+                if option != st.session_state.spectrum_calc_target
+            ]
+            st.sidebar.selectbox(
+                label="Reference spectrum",
+                options=spectrum_calc_reference_options,
+                index=0,
+                key="spectrum_calc_reference",
+                help="Second spectrum used as the operand. It must share the target's wavenumber axis."
+            )
+        else:
+            st.sidebar.radio(
+                label="X-axis operator",
+                options=("Add", "Subtract"),
+                index=0,
+                key="spectrum_calc_x_operator"
+            )
+            st.sidebar.number_input(
+                label="Shift value",
+                value=0.0,
+                step=1.0,
+                format="%.2f",
+                key="spectrum_calc_shift",
+                help="Wavenumber shift amount. Intensity values are not changed."
+            )
     elif st.session_state.stats_plot_select == "Correlation Heatmap":
 
         st.sidebar.selectbox(
@@ -743,6 +828,166 @@ else:
                 )
             except Exception as e:
                 st.error(f"Error during FFT processing: {e}")
+
+        elif st.session_state.stats_plot_select == "Spectrum Calculation":
+            selected_calc_target = st.session_state.get("spectrum_calc_target", "Average")
+            selected_calc_type = st.session_state.get("spectrum_calc_type", "Y-axis with constant")
+            try:
+                calc_ramanshift = pd.to_numeric(st.session_state.df_stats["Ramanshift"], errors="coerce").to_numpy(dtype=float)
+                calc_target_intensity = pd.to_numeric(st.session_state.df_stats[selected_calc_target], errors="coerce").to_numpy(dtype=float)
+
+                calc_reference_intensity = None
+                calc_logged_params = {"target_spectrum": selected_calc_target, "calculation_type": selected_calc_type}
+
+                # Preview only: nothing below mutates st.session_state.df or st.session_state.temp.
+                if selected_calc_type == "Y-axis with constant":
+                    calc_operator = st.session_state.spectrum_calc_y_operator
+                    calc_result_values = function.calculate_spectrum_with_constant(
+                        calc_target_intensity, spectrum_calc_constant, calc_operator)
+                    calc_result_df = function.build_spectrum_calc_result_df(
+                        calc_ramanshift, calc_target_intensity, calc_result_values)
+                    calc_result_x = calc_ramanshift
+                    calc_operation_text = f"{selected_calc_target} {calc_operator} {spectrum_calc_constant:g}"
+                    calc_logged_params.update({"operator": calc_operator, "constant": spectrum_calc_constant})
+                elif selected_calc_type == "Y-axis with another spectrum":
+                    calc_operator = st.session_state.spectrum_calc_y_operator
+                    selected_calc_reference = st.session_state.spectrum_calc_reference
+                    calc_reference_intensity = pd.to_numeric(
+                        st.session_state.df_stats[selected_calc_reference], errors="coerce").to_numpy(dtype=float)
+                    calc_result_values = function.calculate_spectrum_with_reference(
+                        calc_target_intensity, calc_reference_intensity, calc_operator,
+                        target_axis=calc_ramanshift, reference_axis=calc_ramanshift)
+                    calc_result_df = function.build_spectrum_calc_result_df(
+                        calc_ramanshift, calc_target_intensity, calc_result_values,
+                        reference_intensity=calc_reference_intensity)
+                    calc_result_x = calc_ramanshift
+                    calc_operation_text = f"{selected_calc_target} {calc_operator} {selected_calc_reference}"
+                    calc_logged_params.update({"operator": calc_operator, "reference_spectrum": selected_calc_reference})
+                else:
+                    calc_operator = st.session_state.spectrum_calc_x_operator
+                    calc_shift = st.session_state.spectrum_calc_shift
+                    calc_result_x = function.shift_spectrum_axis(calc_ramanshift, calc_shift, calc_operator)
+                    calc_result_values = calc_target_intensity
+                    calc_result_df = function.build_spectrum_calc_result_df(
+                        calc_result_x, calc_target_intensity, calc_result_values,
+                        original_axis=calc_ramanshift)
+                    calc_operation_text = f"{selected_calc_target} x-axis {calc_operator} {calc_shift:g}"
+                    calc_logged_params.update({"operator": calc_operator, "shift": calc_shift})
+
+                calc_plot_frames = [pd.DataFrame({
+                    "Ramanshift": calc_ramanshift,
+                    "Intensity": calc_target_intensity,
+                    "Trace": f"Original: {selected_calc_target}"
+                })]
+                if calc_reference_intensity is not None:
+                    calc_plot_frames.append(pd.DataFrame({
+                        "Ramanshift": calc_ramanshift,
+                        "Intensity": calc_reference_intensity,
+                        "Trace": f"Reference: {st.session_state.spectrum_calc_reference}"
+                    }))
+                calc_plot_frames.append(pd.DataFrame({
+                    "Ramanshift": calc_result_x,
+                    "Intensity": calc_result_values,
+                    "Trace": "Calculated result"
+                }))
+                calc_plot_df = pd.concat(calc_plot_frames, ignore_index=True)
+
+                calc_plot = alt.Chart(calc_plot_df).mark_line().encode(
+                    x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
+                    y=alt.Y('Intensity', title=analytics_y_axis_title, type='quantitative'),
+                    color=alt.Color('Trace:N', title='Spectrum'),
+                    tooltip=alt.value(None)
+                ).properties(
+                    width=1300,
+                    height=600,
+                    title=f'Spectrum Calculation: {calc_operation_text}'
+                )
+                calc_plot = function.style_altair_chart(calc_plot)
+                st.altair_chart(calc_plot, use_container_width=False)
+                log.log_plot_generated_count()
+                log.log_function_call("Analytics_Spectrum_Calculation", f_params=calc_logged_params)
+
+                st.write("**Calculation result preview**")
+                st.dataframe(calc_result_df, use_container_width=True)
+
+                @st.cache_data
+                def download_calc_df(df):
+                    return df.to_csv(index=False).encode("utf-8")
+
+                current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+                st.download_button(
+                    label="Download calculated result as CSV",
+                    data=download_calc_df(calc_result_df),
+                    file_name=f"data_SpectrumCalc_{selected_calc_target}_{current_time}.csv",
+                    mime="text/csv",
+                )
+
+                st.write("### Apply to all data")
+                st.caption(
+                    "Applies the selected operation to every spectrum column from the current session data. "
+                    "The preview above never modifies the session data; applying creates a new calculated dataframe."
+                )
+                if st.button("Apply calculation to all spectra", key="spectrum_calc_apply_all"):
+                    if selected_calc_type == "Y-axis with constant":
+                        calc_applied_df = function.apply_spectrum_calculation_to_dataframe(
+                            st.session_state.temp, selected_calc_type, calc_operator,
+                            constant=spectrum_calc_constant)
+                        calc_applied_text = f"all spectra {calc_operator} {spectrum_calc_constant:g}"
+                    elif selected_calc_type == "Y-axis with another spectrum":
+                        calc_applied_df = function.apply_spectrum_calculation_to_dataframe(
+                            st.session_state.temp, selected_calc_type, calc_operator,
+                            reference_intensity=calc_reference_intensity)
+                        calc_applied_text = f"all spectra {calc_operator} {st.session_state.spectrum_calc_reference}"
+                    else:
+                        calc_applied_df = function.apply_spectrum_calculation_to_dataframe(
+                            st.session_state.temp, selected_calc_type, calc_operator,
+                            shift=st.session_state.spectrum_calc_shift)
+                        calc_applied_text = f"all spectra x-axis {calc_operator} {st.session_state.spectrum_calc_shift:g}"
+                    # Apply-to-all results live under dedicated session keys so the upstream
+                    # df/temp dataframes from Data Upload and Processing are never overwritten.
+                    st.session_state.spectrum_calc_applied_df = calc_applied_df
+                    st.session_state.spectrum_calc_applied_text = calc_applied_text
+                    log.log_function_call("Analytics_Spectrum_Calculation",
+                                          f_params={**calc_logged_params, "apply_to_all": True})
+
+                if 'spectrum_calc_applied_df' in st.session_state:
+                    calc_applied_df = st.session_state.spectrum_calc_applied_df
+                    st.caption(f"Applied operation: {st.session_state.spectrum_calc_applied_text}")
+
+                    calc_applied_intensity_cols = [
+                        column for column in calc_applied_df.columns if column != "Ramanshift"
+                    ]
+                    calc_applied_avg_df = pd.DataFrame({
+                        "Ramanshift": calc_applied_df["Ramanshift"],
+                        "Intensity": calc_applied_df[calc_applied_intensity_cols].mean(axis=1)
+                    })
+                    calc_applied_plot = alt.Chart(calc_applied_avg_df).mark_line().encode(
+                        x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
+                        y=alt.Y('Intensity', title=analytics_y_axis_title, type='quantitative'),
+                        tooltip=alt.value(None),
+                        color=alt.value('blue'),
+                        size=alt.value(3)
+                    ).properties(
+                        width=1300,
+                        height=600,
+                        title='Average of Calculated Spectra'
+                    )
+                    calc_applied_plot = function.style_altair_chart(calc_applied_plot)
+                    st.altair_chart(calc_applied_plot, use_container_width=False)
+                    log.log_plot_generated_count()
+
+                    st.write("**Calculated dataframe (all spectra)**")
+                    st.dataframe(calc_applied_df, use_container_width=True)
+
+                    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    st.download_button(
+                        label="Download apply-to-all calculated data as CSV",
+                        data=download_calc_df(calc_applied_df),
+                        file_name=f"data_SpectrumCalc_all_{current_time}.csv",
+                        mime="text/csv",
+                    )
+            except Exception as e:
+                st.error(f"Error during spectrum calculation: {e}")
 
         elif st.session_state.stats_plot_select == "Correlation Heatmap":
             # Select only the columns we need for correlation calculation

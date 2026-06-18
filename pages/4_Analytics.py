@@ -133,13 +133,19 @@ if 'df' in st.session_state:
         )
         st.sidebar.radio(
             label="Calculation type",
-            options=("Y-axis with constant", "Y-axis with another spectrum", "X-axis shift"),
+            options=(
+                "Y-axis with constant",
+                "Y-axis with another spectrum",
+                "X-axis shift",
+                "Raman Calibration"
+            ),
             index=0,
             key="spectrum_calc_type",
             help=(
                 "Y-axis calculations change intensity values only.\n\n"
                 "X-axis shift moves the spectrum left or right along the wavenumber axis "
-                "without changing intensity values."
+                "without changing intensity values.\n\n"
+                "Raman Calibration fits a silicon reference peak and corrects the Raman-shift axis."
             )
         )
 
@@ -188,7 +194,7 @@ if 'df' in st.session_state:
                 key="spectrum_calc_reference",
                 help="Second spectrum used as the operand. It must share the target's wavenumber axis."
             )
-        else:
+        elif st.session_state.spectrum_calc_type == "X-axis shift":
             st.sidebar.radio(
                 label="X-axis operator",
                 options=("Add", "Subtract"),
@@ -202,6 +208,100 @@ if 'df' in st.session_state:
                 format="%.2f",
                 key="spectrum_calc_shift",
                 help="Wavenumber shift amount. Intensity values are not changed."
+            )
+        else:
+            st.sidebar.selectbox(
+                label="Silicon reference source",
+                options=("Current data spectrum", "Upload silicon reference CSV"),
+                index=0,
+                key="raman_calibration_reference_source",
+                help="Use a spectrum already loaded in this session or upload a separate silicon reference."
+            )
+            if st.session_state.raman_calibration_reference_source == "Current data spectrum":
+                st.sidebar.selectbox(
+                    label="Silicon reference spectrum",
+                    options=spectrum_calc_target_options,
+                    index=0,
+                    key="raman_calibration_reference_spectrum"
+                )
+            else:
+                silicon_reference_upload = st.sidebar.file_uploader(
+                    "Upload silicon reference CSV",
+                    type=("csv",),
+                    key="raman_calibration_reference_upload",
+                    help="A recognized Raman-shift column is used as the x-axis; choose the silicon spectrum below."
+                )
+                if silicon_reference_upload is not None:
+                    try:
+                        silicon_reference_upload.seek(0)
+                        uploaded_reference_preview = function.normalize_spectrum_dataframe(
+                            pd.read_csv(silicon_reference_upload)
+                        )
+                        silicon_reference_upload.seek(0)
+                        st.sidebar.selectbox(
+                            label="Uploaded silicon spectrum",
+                            options=[
+                                column for column in uploaded_reference_preview.columns
+                                if column != "Ramanshift"
+                            ],
+                            index=0,
+                            key="raman_calibration_uploaded_spectrum"
+                        )
+                    except Exception as upload_error:
+                        st.sidebar.error(f"Unable to read silicon reference: {upload_error}")
+
+            st.sidebar.selectbox(
+                label="Peak fitting model",
+                options=("Gaussian",),
+                index=0,
+                key="raman_calibration_fit_model",
+                help="Gaussian fitting is implemented first; the backend is structured for future models."
+            )
+            st.sidebar.number_input(
+                label="Expected silicon peak (cm⁻¹)",
+                value=520.7,
+                step=0.1,
+                format="%.1f",
+                key="raman_calibration_expected_peak"
+            )
+            fit_limit_col1, fit_limit_col2 = st.sidebar.columns(2)
+            with fit_limit_col1:
+                st.number_input(
+                    label="Fit lower",
+                    value=480.0,
+                    step=1.0,
+                    format="%.1f",
+                    key="raman_calibration_fit_lower"
+                )
+            with fit_limit_col2:
+                st.number_input(
+                    label="Fit upper",
+                    value=560.0,
+                    step=1.0,
+                    format="%.1f",
+                    key="raman_calibration_fit_upper"
+                )
+            st.sidebar.selectbox(
+                label="Calibration method",
+                options=(
+                    "Constant Raman-shift correction",
+                    "True laser wavelength correction"
+                ),
+                index=0,
+                key="raman_calibration_method"
+            )
+            if st.session_state.raman_calibration_method == "True laser wavelength correction":
+                st.sidebar.number_input(
+                    label="Nominal laser wavelength (nm)",
+                    min_value=1.0,
+                    value=785.0,
+                    step=1.0,
+                    format="%.2f",
+                    key="raman_calibration_nominal_laser"
+                )
+            st.sidebar.caption(
+                "Silicon 520.7 cm⁻¹ is the calibration reference. Nonlinear calibration is not "
+                "applied from a single peak."
             )
     elif st.session_state.stats_plot_select == "Correlation Heatmap":
 
@@ -837,6 +937,9 @@ else:
                 calc_target_intensity = pd.to_numeric(st.session_state.df_stats[selected_calc_target], errors="coerce").to_numpy(dtype=float)
 
                 calc_reference_intensity = None
+                calibration_fit = None
+                calibration_result = None
+                calibration_reference_name = None
                 calc_logged_params = {"target_spectrum": selected_calc_target, "calculation_type": selected_calc_type}
 
                 # Preview only: nothing below mutates st.session_state.df or st.session_state.temp.
@@ -863,7 +966,7 @@ else:
                     calc_result_x = calc_ramanshift
                     calc_operation_text = f"{selected_calc_target} {calc_operator} {selected_calc_reference}"
                     calc_logged_params.update({"operator": calc_operator, "reference_spectrum": selected_calc_reference})
-                else:
+                elif selected_calc_type == "X-axis shift":
                     calc_operator = st.session_state.spectrum_calc_x_operator
                     calc_shift = st.session_state.spectrum_calc_shift
                     calc_result_x = function.shift_spectrum_axis(calc_ramanshift, calc_shift, calc_operator)
@@ -873,6 +976,75 @@ else:
                         original_axis=calc_ramanshift)
                     calc_operation_text = f"{selected_calc_target} x-axis {calc_operator} {calc_shift:g}"
                     calc_logged_params.update({"operator": calc_operator, "shift": calc_shift})
+                else:
+                    calibration_reference_source = st.session_state.raman_calibration_reference_source
+                    if calibration_reference_source == "Current data spectrum":
+                        calibration_reference_name = st.session_state.raman_calibration_reference_spectrum
+                        calibration_reference_axis = calc_ramanshift
+                        calibration_reference_intensity = pd.to_numeric(
+                            st.session_state.df_stats[calibration_reference_name],
+                            errors="coerce"
+                        ).to_numpy(dtype=float)
+                    else:
+                        uploaded_reference = st.session_state.get("raman_calibration_reference_upload")
+                        if uploaded_reference is None:
+                            raise ValueError("Upload a silicon reference CSV to calculate Raman calibration.")
+                        uploaded_reference.seek(0)
+                        calibration_reference_df = function.normalize_spectrum_dataframe(
+                            pd.read_csv(uploaded_reference)
+                        )
+                        uploaded_intensity_columns = [
+                            column for column in calibration_reference_df.columns
+                            if column != "Ramanshift"
+                        ]
+                        calibration_reference_name = st.session_state.get(
+                            "raman_calibration_uploaded_spectrum",
+                            uploaded_intensity_columns[0]
+                        )
+                        if calibration_reference_name not in uploaded_intensity_columns:
+                            calibration_reference_name = uploaded_intensity_columns[0]
+                        calibration_reference_axis = calibration_reference_df["Ramanshift"].to_numpy(dtype=float)
+                        calibration_reference_intensity = calibration_reference_df[
+                            calibration_reference_name
+                        ].to_numpy(dtype=float)
+
+                    calibration_fit = function.fit_silicon_peak(
+                        calibration_reference_axis,
+                        calibration_reference_intensity,
+                        expected_peak=st.session_state.raman_calibration_expected_peak,
+                        search_lower=st.session_state.raman_calibration_fit_lower,
+                        search_upper=st.session_state.raman_calibration_fit_upper,
+                        model=st.session_state.raman_calibration_fit_model
+                    )
+                    calibration_result = function.calculate_raman_calibration_axis(
+                        calc_ramanshift,
+                        calibration_fit["center"],
+                        expected_peak=st.session_state.raman_calibration_expected_peak,
+                        method=st.session_state.raman_calibration_method,
+                        nominal_laser_wavelength_nm=st.session_state.get(
+                            "raman_calibration_nominal_laser", 785.0
+                        )
+                    )
+                    calc_result_x = calibration_result["corrected_axis"]
+                    calc_result_values = calc_target_intensity
+                    calc_result_df = function.build_spectrum_calc_result_df(
+                        calc_result_x,
+                        calc_target_intensity,
+                        calc_result_values,
+                        original_axis=calc_ramanshift
+                    )
+                    calc_operation_text = (
+                        f"Raman calibration: {calibration_result['correction']:+.4f} cm⁻¹"
+                    )
+                    calc_logged_params.update({
+                        "reference_source": calibration_reference_source,
+                        "reference_spectrum": calibration_reference_name,
+                        "fit_model": calibration_fit["model"],
+                        "measured_silicon_peak": calibration_fit["center"],
+                        "expected_silicon_peak": calibration_fit["expected_peak"],
+                        "correction": calibration_result["correction"],
+                        "calibration_method": calibration_result["method"],
+                    })
 
                 calc_plot_frames = [pd.DataFrame({
                     "Ramanshift": calc_ramanshift,
@@ -918,6 +1090,83 @@ else:
                 log.log_plot_generated_count()
                 log.log_function_call("Analytics_Spectrum_Calculation", f_params=calc_logged_params)
 
+                if calibration_fit is not None:
+                    corrected_fit_axis = function.calculate_raman_calibration_axis(
+                        calibration_fit["fit_x"],
+                        calibration_fit["center"],
+                        expected_peak=calibration_fit["expected_peak"],
+                        method=calibration_result["method"],
+                        nominal_laser_wavelength_nm=st.session_state.get(
+                            "raman_calibration_nominal_laser", 785.0
+                        )
+                    )["corrected_axis"]
+                    calibration_fit_plot_df = pd.concat([
+                        pd.DataFrame({
+                            "Ramanshift": calibration_fit["fit_x"],
+                            "Intensity": calibration_fit["fit_y"],
+                            "Trace": "Measured silicon reference"
+                        }),
+                        pd.DataFrame({
+                            "Ramanshift": calibration_fit["fit_x"],
+                            "Intensity": calibration_fit["fitted_y"],
+                            "Trace": "Gaussian fit before correction"
+                        }),
+                        pd.DataFrame({
+                            "Ramanshift": corrected_fit_axis,
+                            "Intensity": calibration_fit["fitted_y"],
+                            "Trace": "Gaussian fit after correction"
+                        })
+                    ], ignore_index=True)
+                    fit_plot = alt.Chart(calibration_fit_plot_df).mark_line().encode(
+                        x=alt.X("Ramanshift:Q", title=analytics_x_axis_title),
+                        y=alt.Y("Intensity:Q", title=analytics_y_axis_title),
+                        color=alt.Color(
+                            "Trace:N",
+                            legend=alt.Legend(title="Silicon reference")
+                        ),
+                        tooltip=alt.value(None)
+                    ).properties(
+                        height=420,
+                        title="Silicon peak fitting and calibration check"
+                    )
+                    expected_peak_rule = alt.Chart(pd.DataFrame({
+                        "Ramanshift": [calibration_fit["expected_peak"]]
+                    })).mark_rule(color="red", strokeDash=[6, 4]).encode(
+                        x="Ramanshift:Q"
+                    )
+                    st.altair_chart(
+                        function.style_altair_chart(fit_plot + expected_peak_rule),
+                        use_container_width=True,
+                        key="raman_calibration_silicon_fit_plot"
+                    )
+                    metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+                    metric_col1.metric("Fitted silicon peak", f"{calibration_fit['center']:.4f} cm⁻¹")
+                    metric_col2.metric("Axis correction", f"{calibration_result['correction']:+.4f} cm⁻¹")
+                    metric_col3.metric("Gaussian FWHM", f"{calibration_fit['fwhm']:.4f} cm⁻¹")
+                    metric_col4.metric("Fit R²", f"{calibration_fit['r_squared']:.6f}")
+                    if calibration_result["true_laser_wavelength_nm"] is not None:
+                        st.caption(
+                            "Estimated true laser wavelength: "
+                            f"{calibration_result['true_laser_wavelength_nm']:.6f} nm"
+                        )
+                    st.success(
+                        "Corrected silicon peak: "
+                        f"{calibration_result['corrected_peak']:.4f} cm⁻¹ "
+                        f"(expected {calibration_fit['expected_peak']:.4f} cm⁻¹)"
+                    )
+                    with st.expander("Raman calibration method notes"):
+                        st.markdown(
+                            """
+                            - Silicon **520.7 cm⁻¹** is a common Raman calibration reference.
+                            - Constant correction applies `520.7 - measured peak` to the full Raman-shift axis.
+                            - If the dominant error is laser wavelength drift and detector wavelength calibration
+                              is otherwise correct, true laser-wavelength correction is usually equivalent to a
+                              constant offset in Raman-shift units.
+                            - Nonlinear calibration should not be inferred from one reference peak. Consider it
+                              only when multiple known reference peaks show different shifts across the spectral range.
+                            """
+                        )
+
                 @st.cache_data
                 def download_calc_df(df):
                     return df.to_csv(index=False).encode("utf-8")
@@ -938,11 +1187,25 @@ else:
                             st.session_state.temp, selected_calc_type, calc_operator,
                             reference_intensity=calc_reference_intensity)
                         calc_applied_text = f"all spectra {calc_operator} {st.session_state.spectrum_calc_reference}"
-                    else:
+                    elif selected_calc_type == "X-axis shift":
                         calc_applied_df = function.apply_spectrum_calculation_to_dataframe(
                             st.session_state.temp, selected_calc_type, calc_operator,
                             shift=st.session_state.spectrum_calc_shift)
                         calc_applied_text = f"all spectra x-axis {calc_operator} {st.session_state.spectrum_calc_shift:g}"
+                    else:
+                        calc_applied_df = function.apply_raman_calibration_to_dataframe(
+                            st.session_state.temp,
+                            calibration_fit["center"],
+                            expected_peak=calibration_fit["expected_peak"],
+                            method=calibration_result["method"],
+                            nominal_laser_wavelength_nm=st.session_state.get(
+                                "raman_calibration_nominal_laser", 785.0
+                            )
+                        )
+                        calc_applied_text = (
+                            "Raman calibration applied to all spectra "
+                            f"({calibration_result['correction']:+.4f} cm⁻¹)"
+                        )
                     # Apply-to-all results live under dedicated session keys so the upstream
                     # df/temp dataframes from Data Upload and Processing are never overwritten.
                     st.session_state.spectrum_calc_applied_df = calc_applied_df
@@ -955,12 +1218,18 @@ else:
                     st.caption(f"Applied operation: {st.session_state.spectrum_calc_applied_text}")
 
                 current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+                if selected_calc_type == "Raman Calibration":
+                    preview_file_name = f"data_RamanCalibration_preview_{current_time}.csv"
+                    apply_all_file_name = f"data_RamanCalibrated_all_{current_time}.csv"
+                else:
+                    preview_file_name = f"data_SpectrumCalc_{selected_calc_target}_{current_time}.csv"
+                    apply_all_file_name = f"data_SpectrumCalc_all_{current_time}.csv"
                 preview_download_col, apply_all_download_col = st.columns(2)
                 with preview_download_col:
                     st.download_button(
                         label="Download preview result as CSV",
                         data=download_calc_df(calc_result_df),
-                        file_name=f"data_SpectrumCalc_{selected_calc_target}_{current_time}.csv",
+                        file_name=preview_file_name,
                         mime="text/csv",
                         width="stretch",
                     )
@@ -968,7 +1237,7 @@ else:
                     st.download_button(
                         label="Download apply-to-all calculated data as CSV",
                         data=download_calc_df(calc_applied_df) if calc_applied_df is not None else b"",
-                        file_name=f"data_SpectrumCalc_all_{current_time}.csv",
+                        file_name=apply_all_file_name,
                         mime="text/csv",
                         disabled=calc_applied_df is None,
                         width="stretch",

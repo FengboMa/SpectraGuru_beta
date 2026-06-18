@@ -676,6 +676,193 @@ def apply_spectrum_calculation_to_dataframe(df, calculation_type, operator, cons
             raise ValueError(f"Unknown calculation type: {calculation_type!r}.")
     return pd.DataFrame(result)
 
+SILICON_REFERENCE_PEAK = 520.7
+
+def normalize_spectrum_dataframe(df):
+    """Return a numeric SpectraGuru wide dataframe with a standardized Ramanshift column."""
+    import numpy as np
+    import pandas as pd
+
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        raise ValueError("The spectrum table is empty.")
+
+    cleaned = df.copy()
+    cleaned = cleaned.drop(
+        columns=[column for column in cleaned.columns if str(column).startswith("Unnamed")],
+        errors="ignore"
+    )
+    aliases = ("Ramanshift", "RamanShift", "Raman shift", "Raman Shift", "wavenumber", "Wavenumber")
+    axis_column = next((column for column in aliases if column in cleaned.columns), cleaned.columns[0])
+    cleaned = cleaned.rename(columns={axis_column: "Ramanshift"})
+    cleaned = cleaned.apply(pd.to_numeric, errors="coerce")
+
+    if "Ramanshift" not in cleaned.columns or cleaned.shape[1] < 2:
+        raise ValueError("The spectrum table must contain a Raman-shift axis and at least one intensity column.")
+    if not np.isfinite(cleaned["Ramanshift"].to_numpy(dtype=float)).all():
+        raise ValueError("The Raman-shift axis contains missing or non-numeric values.")
+    if cleaned["Ramanshift"].duplicated().any():
+        raise ValueError("The Raman-shift axis contains duplicate values.")
+    if cleaned.iloc[:, 1:].isna().all(axis=0).any():
+        raise ValueError("At least one intensity column contains no numeric values.")
+
+    return cleaned.sort_values("Ramanshift").reset_index(drop=True)
+
+def _gaussian_with_linear_baseline(x, amplitude, center, sigma, slope, intercept):
+    import numpy as np
+    return (
+        amplitude * np.exp(-0.5 * ((x - center) / sigma) ** 2)
+        + slope * (x - center)
+        + intercept
+    )
+
+def fit_silicon_peak(axis_values, intensity_values, expected_peak=SILICON_REFERENCE_PEAK,
+                     search_lower=480.0, search_upper=560.0, model="Gaussian"):
+    """Fit the silicon reference peak and return its center, width, quality, and fitted curve."""
+    import numpy as np
+    from scipy.optimize import curve_fit
+
+    if model != "Gaussian":
+        raise ValueError("Only the Gaussian fitting model is currently implemented.")
+
+    x = np.asarray(axis_values, dtype=float)
+    y = np.asarray(intensity_values, dtype=float)
+    if x.shape != y.shape or x.ndim != 1:
+        raise ValueError("Raman-shift and intensity arrays must be one-dimensional and have equal length.")
+    if not np.isfinite(x).all() or not np.isfinite(y).all():
+        raise ValueError("The silicon reference contains missing or non-numeric values.")
+    if search_lower >= search_upper:
+        raise ValueError("The silicon fitting lower limit must be smaller than the upper limit.")
+
+    mask = (x >= float(search_lower)) & (x <= float(search_upper))
+    fit_x = x[mask]
+    fit_y = y[mask]
+    if fit_x.size < 7:
+        raise ValueError("The silicon fitting window must contain at least seven data points.")
+
+    edge_count = max(2, min(10, fit_x.size // 5))
+    baseline_guess = float(np.median(np.concatenate((fit_y[:edge_count], fit_y[-edge_count:]))))
+    amplitude_guess = float(np.max(fit_y) - baseline_guess)
+    if amplitude_guess <= 0:
+        raise ValueError("No positive silicon peak was found in the selected fitting window.")
+
+    center_guess = float(fit_x[np.argmax(fit_y)])
+    spacing = float(np.median(np.abs(np.diff(fit_x))))
+    sigma_min = max(spacing / 4.0, 1e-6)
+    sigma_max = max((float(search_upper) - float(search_lower)) / 2.0, sigma_min * 2.0)
+    sigma_guess = min(max((float(search_upper) - float(search_lower)) / 12.0, sigma_min), sigma_max)
+
+    initial = [amplitude_guess, center_guess, sigma_guess, 0.0, baseline_guess]
+    lower_bounds = [0.0, float(search_lower), sigma_min, -np.inf, -np.inf]
+    upper_bounds = [np.inf, float(search_upper), sigma_max, np.inf, np.inf]
+    parameters, covariance = curve_fit(
+        _gaussian_with_linear_baseline,
+        fit_x,
+        fit_y,
+        p0=initial,
+        bounds=(lower_bounds, upper_bounds),
+        maxfev=50000
+    )
+    amplitude, center, sigma, slope, intercept = [float(value) for value in parameters]
+    fitted_y = _gaussian_with_linear_baseline(fit_x, *parameters)
+    residuals = fit_y - fitted_y
+    rmse = float(np.sqrt(np.mean(residuals ** 2)))
+    total_sum_squares = float(np.sum((fit_y - np.mean(fit_y)) ** 2))
+    r_squared = float(1.0 - np.sum(residuals ** 2) / total_sum_squares) if total_sum_squares > 0 else float("nan")
+    center_error = (
+        float(np.sqrt(covariance[1, 1]))
+        if covariance.shape == (5, 5) and np.isfinite(covariance[1, 1]) and covariance[1, 1] >= 0
+        else float("nan")
+    )
+
+    return {
+        "model": model,
+        "expected_peak": float(expected_peak),
+        "center": center,
+        "center_error": center_error,
+        "amplitude": amplitude,
+        "sigma": abs(sigma),
+        "fwhm": 2.354820045 * abs(sigma),
+        "rmse": rmse,
+        "r_squared": r_squared,
+        "baseline_slope": slope,
+        "baseline_intercept": intercept,
+        "fit_x": fit_x,
+        "fit_y": fit_y,
+        "fitted_y": fitted_y,
+    }
+
+def calculate_raman_calibration_axis(axis_values, measured_silicon_peak,
+                                     expected_peak=SILICON_REFERENCE_PEAK,
+                                     method="Constant Raman-shift correction",
+                                     nominal_laser_wavelength_nm=785.0):
+    """Calculate a corrected Raman-shift axis from a fitted silicon reference peak."""
+    import numpy as np
+
+    axis = np.asarray(axis_values, dtype=float)
+    measured_peak = float(measured_silicon_peak)
+    expected_peak = float(expected_peak)
+    if not np.isfinite(axis).all() or not np.isfinite(measured_peak) or not np.isfinite(expected_peak):
+        raise ValueError("Calibration values must be finite numbers.")
+
+    correction = expected_peak - measured_peak
+    result = {
+        "method": method,
+        "measured_peak": measured_peak,
+        "expected_peak": expected_peak,
+        "correction": correction,
+        "corrected_peak": measured_peak + correction,
+        "true_laser_wavelength_nm": None,
+    }
+
+    if method == "Constant Raman-shift correction":
+        result["corrected_axis"] = axis + correction
+        return result
+
+    if method != "True laser wavelength correction":
+        raise ValueError(f"Unknown Raman calibration method: {method!r}.")
+
+    nominal_laser = float(nominal_laser_wavelength_nm)
+    if not np.isfinite(nominal_laser) or nominal_laser <= 0:
+        raise ValueError("Nominal laser wavelength must be a positive finite number.")
+
+    detector_inverse_wavelength = 1.0 / nominal_laser - axis / 1e7
+    silicon_observed_inverse_wavelength = 1.0 / nominal_laser - measured_peak / 1e7
+    if np.any(detector_inverse_wavelength <= 0) or silicon_observed_inverse_wavelength <= 0:
+        raise ValueError("The Raman-shift range is incompatible with the nominal laser wavelength.")
+
+    silicon_observed_wavelength = 1.0 / silicon_observed_inverse_wavelength
+    true_laser = 1.0 / (1.0 / silicon_observed_wavelength + expected_peak / 1e7)
+    corrected_axis = (1.0 / true_laser - detector_inverse_wavelength) * 1e7
+    result["corrected_axis"] = corrected_axis
+    result["true_laser_wavelength_nm"] = float(true_laser)
+    result["corrected_peak"] = float(
+        (1.0 / true_laser - silicon_observed_inverse_wavelength) * 1e7
+    )
+    return result
+
+def apply_raman_calibration_to_dataframe(df, measured_silicon_peak,
+                                         expected_peak=SILICON_REFERENCE_PEAK,
+                                         method="Constant Raman-shift correction",
+                                         nominal_laser_wavelength_nm=785.0):
+    """Apply one silicon-derived calibration to every spectrum without mutating the input."""
+    import pandas as pd
+
+    cleaned = normalize_spectrum_dataframe(df)
+    calibration = calculate_raman_calibration_axis(
+        cleaned["Ramanshift"].to_numpy(dtype=float),
+        measured_silicon_peak,
+        expected_peak=expected_peak,
+        method=method,
+        nominal_laser_wavelength_nm=nominal_laser_wavelength_nm
+    )
+    source_columns = [
+        column for column in cleaned.columns
+        if column not in ("Ramanshift", "Average", "Standard Deviation")
+    ]
+    result = cleaned[["Ramanshift", *source_columns]].copy()
+    result["Ramanshift"] = calibration["corrected_axis"]
+    return result
+
 def remove_outliers(df, single_thresh=4, distance_thresh=6, coeff_thresh=4):
     import numpy as np
     import pandas as pd

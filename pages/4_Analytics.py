@@ -894,8 +894,16 @@ else:
 
                 calc_plot = alt.Chart(calc_plot_df).mark_line().encode(
                     x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
-                    y=alt.Y('Intensity', title=analytics_y_axis_title, type='quantitative'),
-                    color=alt.Color('Trace:N', title='Spectrum'),
+                    y=alt.Y(
+                        'Intensity',
+                        title=analytics_y_axis_title,
+                        type='quantitative',
+                        scale=alt.Scale(domain=[0, 1_000_000])
+                    ),
+                    color=alt.Color(
+                        'Trace:N',
+                        legend=alt.Legend(title='Spectrum')
+                    ),
                     tooltip=alt.value(None)
                 ).properties(
                     height=600,
@@ -910,20 +918,9 @@ else:
                 log.log_plot_generated_count()
                 log.log_function_call("Analytics_Spectrum_Calculation", f_params=calc_logged_params)
 
-                st.write("**Calculation result preview**")
-                st.dataframe(calc_result_df, use_container_width=True)
-
                 @st.cache_data
                 def download_calc_df(df):
                     return df.to_csv(index=False).encode("utf-8")
-
-                current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-                st.download_button(
-                    label="Download calculated result as CSV",
-                    data=download_calc_df(calc_result_df),
-                    file_name=f"data_SpectrumCalc_{selected_calc_target}_{current_time}.csv",
-                    mime="text/csv",
-                )
 
                 st.write("### Apply to all data")
                 st.caption(
@@ -953,45 +950,41 @@ else:
                     log.log_function_call("Analytics_Spectrum_Calculation",
                                           f_params={**calc_logged_params, "apply_to_all": True})
 
-                if 'spectrum_calc_applied_df' in st.session_state:
-                    calc_applied_df = st.session_state.spectrum_calc_applied_df
+                calc_applied_df = st.session_state.get("spectrum_calc_applied_df")
+                if calc_applied_df is not None:
                     st.caption(f"Applied operation: {st.session_state.spectrum_calc_applied_text}")
 
-                    calc_applied_intensity_cols = [
-                        column for column in calc_applied_df.columns if column != "Ramanshift"
-                    ]
-                    calc_applied_avg_df = pd.DataFrame({
-                        "Ramanshift": calc_applied_df["Ramanshift"],
-                        "Intensity": calc_applied_df[calc_applied_intensity_cols].mean(axis=1)
-                    })
-                    calc_applied_plot = alt.Chart(calc_applied_avg_df).mark_line().encode(
-                        x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
-                        y=alt.Y('Intensity', title=analytics_y_axis_title, type='quantitative'),
-                        tooltip=alt.value(None),
-                        color=alt.value('blue'),
-                        size=alt.value(3)
-                    ).properties(
-                        height=600,
-                        title='Average of Calculated Spectra'
+                current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+                preview_download_col, apply_all_download_col = st.columns(2)
+                with preview_download_col:
+                    st.download_button(
+                        label="Download preview result as CSV",
+                        data=download_calc_df(calc_result_df),
+                        file_name=f"data_SpectrumCalc_{selected_calc_target}_{current_time}.csv",
+                        mime="text/csv",
+                        width="stretch",
                     )
-                    calc_applied_plot = function.style_altair_chart(calc_applied_plot)
-                    st.altair_chart(
-                        calc_applied_plot,
-                        use_container_width=True,
-                        key=f"spectrum_calculation_applied_{st.session_state.spectrum_calc_applied_text}"
-                    )
-                    log.log_plot_generated_count()
-
-                    st.write("**Calculated dataframe (all spectra)**")
-                    st.dataframe(calc_applied_df, use_container_width=True)
-
-                    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+                with apply_all_download_col:
                     st.download_button(
                         label="Download apply-to-all calculated data as CSV",
-                        data=download_calc_df(calc_applied_df),
+                        data=download_calc_df(calc_applied_df) if calc_applied_df is not None else b"",
                         file_name=f"data_SpectrumCalc_all_{current_time}.csv",
                         mime="text/csv",
+                        disabled=calc_applied_df is None,
+                        width="stretch",
                     )
+
+                show_calc_data = st.toggle(
+                    "Preview calculated data",
+                    value=False,
+                    key="spectrum_calc_show_data"
+                )
+                if show_calc_data:
+                    st.write("**Preview calculation result**")
+                    st.dataframe(calc_result_df, width="stretch")
+                    if calc_applied_df is not None:
+                        st.write("**Apply-to-all calculated data**")
+                        st.dataframe(calc_applied_df, width="stretch")
             except Exception as e:
                 st.error(f"Error during spectrum calculation: {e}")
 

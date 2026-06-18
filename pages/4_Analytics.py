@@ -898,12 +898,15 @@ else:
                     color=alt.Color('Trace:N', title='Spectrum'),
                     tooltip=alt.value(None)
                 ).properties(
-                    width=1300,
                     height=600,
                     title=f'Spectrum Calculation: {calc_operation_text}'
                 )
                 calc_plot = function.style_altair_chart(calc_plot)
-                st.altair_chart(calc_plot, use_container_width=False)
+                st.altair_chart(
+                    calc_plot,
+                    use_container_width=True,
+                    key=f"spectrum_calculation_preview_{calc_operation_text}"
+                )
                 log.log_plot_generated_count()
                 log.log_function_call("Analytics_Spectrum_Calculation", f_params=calc_logged_params)
 
@@ -968,12 +971,15 @@ else:
                         color=alt.value('blue'),
                         size=alt.value(3)
                     ).properties(
-                        width=1300,
                         height=600,
                         title='Average of Calculated Spectra'
                     )
                     calc_applied_plot = function.style_altair_chart(calc_applied_plot)
-                    st.altair_chart(calc_applied_plot, use_container_width=False)
+                    st.altair_chart(
+                        calc_applied_plot,
+                        use_container_width=True,
+                        key=f"spectrum_calculation_applied_{st.session_state.spectrum_calc_applied_text}"
+                    )
                     log.log_plot_generated_count()
 
                     st.write("**Calculated dataframe (all spectra)**")

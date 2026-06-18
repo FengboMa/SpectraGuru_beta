@@ -159,22 +159,29 @@ if 'df' in st.session_state:
             if st.session_state.spectrum_calc_y_operator in ("Multiply", "Divide"):
                 spectrum_calc_constant = st.sidebar.number_input(
                     label="Constant value",
+                    min_value=0.0,
+                    max_value=1_000_000.0,
                     value=1.0,
                     step=0.1,
                     format="%.4f",
                     key="spectrum_calc_constant_scale",
-                    help="Constant used to scale intensity values. Division by zero is not allowed."
+                    help="Constant used to scale intensity values (0 to 1,000,000). "
+                         "Negative values are not allowed because intensities stay non-negative. "
+                         "Division by zero is not allowed."
                 )
                 if st.session_state.spectrum_calc_y_operator == "Divide" and spectrum_calc_constant == 0:
                     st.sidebar.error("Division by zero is not allowed.")
             else:
                 spectrum_calc_constant = st.sidebar.number_input(
                     label="Constant value",
+                    min_value=0.0,
+                    max_value=1_000_000.0,
                     value=0.0,
                     step=1.0,
                     format="%.4f",
                     key="spectrum_calc_constant_offset",
-                    help="Constant added to or subtracted from intensity values."
+                    help="Constant added to or subtracted from intensity values (0 to 1,000,000). "
+                         "Negative values are not allowed: for a downward shift use the Subtract operator."
                 )
         elif st.session_state.spectrum_calc_type == "Y-axis with another spectrum":
             st.sidebar.selectbox(
@@ -1070,7 +1077,7 @@ else:
                         'Intensity',
                         title=analytics_y_axis_title,
                         type='quantitative',
-                        scale=alt.Scale(domain=[0, 1_000_000])
+                        scale=alt.Scale(zero=False)
                     ),
                     color=alt.Color(
                         'Trace:N',

@@ -1176,7 +1176,7 @@ else:
 
                 @st.cache_data
                 def download_calc_df(df):
-                    return df.to_csv(index=False).encode("utf-8")
+                    return df.to_csv(index=False, float_format="%.4f").encode("utf-8")
 
                 st.write("### Apply to all data")
                 st.caption(

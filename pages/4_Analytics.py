@@ -170,7 +170,7 @@ if 'df' in st.session_state:
                     label="Constant value",
                     min_value=0.0,
                     max_value=1_000_000.0,
-                    value=0.0,
+                    value=None,
                     step=1.0,
                     format="%.4f",
                     key="spectrum_calc_constant_offset",
@@ -845,17 +845,25 @@ else:
 
                 calc_reference_intensity = None
                 calc_logged_params = {"target_spectrum": selected_calc_target, "calculation_type": selected_calc_type}
+                calculation_ready = not (
+                    selected_calc_type == "Y-axis with constant"
+                    and spectrum_calc_constant is None
+                )
 
                 # Preview only: nothing below mutates st.session_state.df or st.session_state.temp.
                 if selected_calc_type == "Y-axis with constant":
                     calc_operator = st.session_state.spectrum_calc_y_operator
-                    calc_result_values = function.calculate_spectrum_with_constant(
-                        calc_target_intensity, spectrum_calc_constant, calc_operator)
+                    calc_result_x = calc_ramanshift
+                    if calculation_ready:
+                        calc_result_values = function.calculate_spectrum_with_constant(
+                            calc_target_intensity, spectrum_calc_constant, calc_operator)
+                        calc_operation_text = f"{selected_calc_target} {calc_operator} {spectrum_calc_constant:g}"
+                        calc_logged_params.update({"operator": calc_operator, "constant": spectrum_calc_constant})
+                    else:
+                        calc_result_values = calc_target_intensity
+                        calc_operation_text = f"Original: {selected_calc_target}"
                     calc_result_df = function.build_spectrum_calc_result_df(
                         calc_ramanshift, calc_target_intensity, calc_result_values)
-                    calc_result_x = calc_ramanshift
-                    calc_operation_text = f"{selected_calc_target} {calc_operator} {spectrum_calc_constant:g}"
-                    calc_logged_params.update({"operator": calc_operator, "constant": spectrum_calc_constant})
                 elif selected_calc_type == "Y-axis with another spectrum":
                     calc_operator = st.session_state.spectrum_calc_y_operator
                     selected_calc_reference = st.session_state.spectrum_calc_reference
@@ -892,11 +900,12 @@ else:
                         "Intensity": calc_reference_intensity,
                         "Trace": f"Reference: {st.session_state.spectrum_calc_reference}"
                     }))
-                calc_plot_frames.append(pd.DataFrame({
-                    "Ramanshift": calc_result_x,
-                    "Intensity": calc_result_values,
-                    "Trace": "Calculated result"
-                }))
+                if calculation_ready:
+                    calc_plot_frames.append(pd.DataFrame({
+                        "Ramanshift": calc_result_x,
+                        "Intensity": calc_result_values,
+                        "Trace": "Calculated result"
+                    }))
                 calc_plot_df = pd.concat(calc_plot_frames, ignore_index=True)
 
                 calc_plot = alt.Chart(calc_plot_df).mark_line().encode(
@@ -922,8 +931,11 @@ else:
                     use_container_width=True,
                     key=f"spectrum_calculation_preview_{calc_operation_text}"
                 )
-                log.log_plot_generated_count()
-                log.log_function_call("Analytics_Spectrum_Calculation", f_params=calc_logged_params)
+                if calculation_ready:
+                    log.log_plot_generated_count()
+                    log.log_function_call("Analytics_Spectrum_Calculation", f_params=calc_logged_params)
+                else:
+                    st.info("Enter a constant value to add the calculated result to the plot.")
 
                 @st.cache_data
                 def download_calc_df(df):
@@ -934,7 +946,11 @@ else:
                     "Applies the selected operation to every spectrum column from the current session data. "
                     "The preview above never modifies the session data; applying creates a new calculated dataframe."
                 )
-                if st.button("Apply calculation to all spectra", key="spectrum_calc_apply_all"):
+                if st.button(
+                    "Apply calculation to all spectra",
+                    key="spectrum_calc_apply_all",
+                    disabled=not calculation_ready
+                ):
                     if selected_calc_type == "Y-axis with constant":
                         calc_applied_df = function.apply_spectrum_calculation_to_dataframe(
                             st.session_state.temp, selected_calc_type, calc_operator,
@@ -971,6 +987,7 @@ else:
                         data=download_calc_df(calc_result_df),
                         file_name=preview_file_name,
                         mime="text/csv",
+                        disabled=not calculation_ready,
                         width="stretch",
                     )
                 with apply_all_download_col:
@@ -986,7 +1003,8 @@ else:
                 show_calc_data = st.toggle(
                     "Preview calculated data",
                     value=False,
-                    key="spectrum_calc_show_data"
+                    key="spectrum_calc_show_data",
+                    disabled=not calculation_ready
                 )
                 if show_calc_data:
                     st.write("**Preview calculation result**")

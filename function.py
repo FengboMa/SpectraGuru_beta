@@ -2649,3 +2649,187 @@ def als_baseline_removal(spectra, lam=1e7, p=0.001, d=2, max_iter=50, return_bas
     if return_baseline:
         return baseline
     return y - baseline
+
+# Fits a set of curves to a spectrum by repeatedly checking the residual and locating its most prominent peak. The next peak
+# in the iteration is placed there. In this sense, this function behaves like a greedy algorithm to find the most efficient
+# distribution of curves.
+#
+# To further optimize performance, only peaks which are nearby to the target peak are calculated each iteration. The range of
+# this window can be controlled by `cofit_range_multiplier`. It is recommended that this value stay between 0.5 and 1.0; higher values
+# result in better fit quality, while lower values result in better performance.
+def fit_full_spectrum_v2(x, y, tolerance, num_peaks, cofit_range_multiplier, cfg: FullSpectrumFitConfig):
+    import numpy as np
+    from scipy.signal import curve_fit, find_peaks
+
+    total = np.zeros_like(y)
+    residual = y
+
+    def fit_local(x_local, y_local, target, cofits):
+
+        def _fwhm_to_sigma(fwhm):
+            return float(fwhm) / 2.35482
+
+        # Mathematical definitions for each of the three supported curve shapes.
+
+        def _gaussian(x, amp, cen, fwhm):
+            sig = max(_fwhm_to_sigma(fwhm), 1e-12)
+            return amp * np.exp(-((x-cen)**2)/(2*sig**2))
+
+        def _lorentzian(x, amp, cen, fwhm):
+            half = 0.5 * max(float(fwhm), 1e-12)
+            return amp * (half**2) / ((x-cen)**2 + half**2)
+
+        def _pseudovoigt(x, amp, cen, fwhm, eta):
+            eta = float(np.clip(eta, 0, 1))
+            return (1-eta)*_gaussian(x, amp, cen, fwhm) + eta*_lorentzian(x, amp, cen, fwhm)
+
+        # Wrapper for mathematical curve definitions. For pseudovoigt curves, `eta` must be specified.
+        def _component_curve(x, amp, cen, fwhm, shape, eta=None):
+            if shape == "gaussian":
+                return _gaussian(x, amp, cen, fwhm)
+            if shape == "lorentzian":
+                return _lorentzian(x, amp, cen, fwhm)
+            return _pseudovoigt(x, amp, cen, fwhm, 0.5 if eta is None or np.isnan(eta) else eta)
+        
+        # Constructs a function `model` which returns the sum of `ncomp` curves of a given `shape` provided a set of parameters.
+        # Parameters passed to `model` should cycle: [amplitude, center, FWHM, ...] for Gaussian and Lorentzian curves; [amplitude, center, FWHM, eta, ...]
+        # for Pseudovoigt curves.
+        def _build_sum_model(ncomp: int, shape: str):
+            uses_eta = shape == "pseudovoigt"
+            def model(x, *params):
+                y = np.zeros_like(x, dtype=float)
+                k = 0
+                for _ in range(ncomp):
+                    amp, cen, fwhm = params[k], params[k+1], params[k+2]
+                    k += 3
+                    eta = None
+                    if uses_eta:
+                        eta = params[k]
+                        k += 1
+                    y += _component_curve(x, amp, cen, fwhm, shape, eta)
+                return y
+            return model, uses_eta
+
+        # Formulates a guess at the full width at half maximum (FWHM) of a peak in data at `center`.
+        def _initial_fwhm_guess(x, y, center, cfg: MultiTargetConfig):
+            ii = int(np.argmin(abs(x-center)))
+            left, right = max(0, ii-6), min(len(x), ii+7)
+            yw, xw = y[left:right], x[left:right]
+            if len(yw) < 5:
+                return float(np.clip(cfg.default_fwhm_cm1, cfg.min_fwhm_cm1, cfg.max_fwhm_cm1))
+            peak_idx = int(np.argmax(yw))
+            half = 0.5 * float(np.max(yw))
+            li = peak_idx
+            ri = peak_idx
+            while li > 0 and yw[li] > half:
+                li -= 1
+            while ri < len(yw)-1 and yw[ri] > half:
+                ri += 1
+            if li == peak_idx or ri == peak_idx:
+                return float(np.clip(cfg.default_fwhm_cm1, cfg.min_fwhm_cm1, cfg.max_fwhm_cm1))
+            return float(np.clip(abs(xw[ri]-xw[li]), cfg.min_fwhm_cm1, cfg.max_fwhm_cm1))
+
+        centers = [target]+cofits
+
+        model, uses_eta = _build_sum_model(len(centers), cfg.peak_shape)
+        p0, lb, ub = [], [], [] # Initial guesses, lower and upper bounds for curve parameters
+        for i, c in enumerate(centers):
+            amp_guess = max(float(y[int(np.argmin(abs(x-c)))]), float(np.max(y))*(0.7 if i==0 else 0.35), 1e-9)
+            fwhm_guess = _initial_fwhm_guess(x_local, y_local, c, cfg)
+            local_tol = tolerance if i == 0 else cfg.cofit_tolerance_cm1
+            p0.extend([amp_guess, c, fwhm_guess])
+            lb.extend([0.0, c-local_tol, cfg.min_fwhm_cm1])
+            ub.extend([np.inf, c+local_tol, cfg.max_fwhm_cm1])
+            if uses_eta:
+                p0.append(cfg.pseudovoigt_eta_default)
+                lb.append(cfg.pseudovoigt_eta_min)
+                ub.append(cfg.pseudovoigt_eta_max)
+        # Use `scipy.optimize.curve_fit` to optimize curve parameters
+        popt, _ = curve_fit(model, x_local, y_local, p0=np.asarray(p0), bounds=(np.asarray(lb), np.asarray(ub)), maxfev=50000)
+
+        # Organize results
+        local_comps = []
+        k = 0
+        for i, seed in enumerate(centers):
+            amp, cen, fwhm = float(popt[k]), float(popt[k+1]), float(popt[k+2])
+            k += 3
+            eta = np.nan
+            if uses_eta:
+                eta = float(popt[k])
+                k += 1
+            curve = _component_curve(x, amp, cen, fwhm, cfg.peak_shape, eta)
+            local_comps.append({"seed_center": seed, "fitted_center": cen, "amplitude": amp, "fwhm": fwhm, "eta": eta, "curve": curve, "area": _component_area(amp, fwhm, cfg.peak_shape, eta), "max_height": float(np.max(curve)), "is_target": i == 0})
+        
+        return local_comps
+
+    centers, comps = [], []
+    for iter in range(num_peaks):
+        idx, props = find_peaks(np.maximum(residual, 0.0), prominence=0, width=0)
+
+        def collides_with_known_peak(cand):
+            for c in centers:
+                if np.abs(c - cand) < cfg.min_peak_distance:
+                    return True
+            return False
+
+        # Isolate the peak with the greatest prominence.
+        order = np.argsort(props['prominences'])
+        n = len(idx)
+        target = float(x[idx[order][n-1]])
+        i = 0
+        while collides_with_known_peak(target) and i+1 < n:
+            i += 1
+            target = float(x[idx[order][n-1-i]])
+        if i+1 >= n:
+            print("Exhausted all peaks. Try relaxing the minimum distance between peaks.")
+            break
+        width = props['widths'][order][n-1-i]
+
+        # Determine the appropriate window to use.
+        half_window_width = max(cofit_range_multiplier * width, 0.5*cfg.min_window_width)
+        window_min, window_max = target - half_window_width, target + half_window_width
+        # Extend the window to include neighboring peaks
+        loop = True
+        while loop:
+            loop = False
+            for comp in comps:
+                # For each known peak, determine whether it intersects with the window range
+                fitted_center, half_subwindow_width = comp['fitted_center'], cofit_range_multiplier * 2 * comp['fwhm']
+                lower_bound, upper_bound = fitted_center - half_subwindow_width, fitted_center + half_subwindow_width
+                if lower_bound < window_min and upper_bound > window_min:
+                    window_min = lower_bound
+                    loop = True
+                if upper_bound > window_max and lower_bound < window_max:
+                    window_max = upper_bound
+                    loop = True
+
+        start = int(np.searchsorted(x, window_min, side="left"))
+        stop = int(np.searchsorted(x, window_max, side="right"))
+        x_local, y_local = x[start:stop], y[start:stop]
+
+        # Determine cofits
+        cofit_idcs = [j for j in range(len(centers)) if (centers[j] > window_min and centers[j] < window_max)]
+        cofits = [centers[j] for j in cofit_idcs]
+        print(f"Iteration {iter+1}/{num_peaks} ({np.around(100*(iter+1)/num_peaks,2)}%) ...", [target] + cofits)
+
+        # Perform subfit
+        local_comps = fit_local(x_local, y_local, target, cofits)
+
+        # Update centers and components
+        for k, l in enumerate(local_comps):
+            if k == 0:
+                comps.append(l)
+                centers.append(l['fitted_center'])
+            else:
+                comps[cofit_idcs[k-1]] = l
+                centers[cofit_idcs[k-1]] = l['fitted_center']
+            
+        # Update residual based on new components
+        total = np.zeros_like(y)
+        for comp in comps:
+            total += comp['curve']
+        residual = y - total
+    
+    rmse = float(np.sqrt(np.mean(residual**2)))
+
+    return {"total_fit": total, "residual": residual, "components": comps, "rmse": rmse}

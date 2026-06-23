@@ -2657,7 +2657,17 @@ def als_baseline_removal(spectra, lam=1e7, p=0.001, d=2, max_iter=50, return_bas
 # To further optimize performance, only peaks which are nearby to the target peak are calculated each iteration. The range of
 # this window can be controlled by `cofit_range_multiplier`. It is recommended that this value stay between 0.5 and 1.0; higher values
 # result in better fit quality, while lower values result in better performance.
-def fit_full_spectrum_v2(x, y, tolerance, num_peaks, cofit_range_multiplier, cfg: FullSpectrumFitConfig):
+def fit_full_spectrum_v2(x, y, tolerance, num_peaks, 
+                         cofit_range_multiplier, 
+                         peak_shape="gaussian",
+                         default_fwhm_cm1=12.0,
+                         min_fwhm_cm1=4.0,
+                         max_fwhm_cm1=40.0,
+                         pseudovoigt_eta_default=0.5,
+                         pseudovoigt_eta_min=0.0,
+                         pseudovoigt_eta_max=1.0,
+                         min_peak_distance=1.0,
+                         min_window_width=10.0):
     import numpy as np
     from scipy.signal import curve_fit, find_peaks
 
@@ -2711,12 +2721,12 @@ def fit_full_spectrum_v2(x, y, tolerance, num_peaks, cofit_range_multiplier, cfg
             return model, uses_eta
 
         # Formulates a guess at the full width at half maximum (FWHM) of a peak in data at `center`.
-        def _initial_fwhm_guess(x, y, center, cfg: MultiTargetConfig):
+        def _initial_fwhm_guess(x, y, center, default_fwhm_cm1, min_fwhm_cm1, max_fwhm_cm1):
             ii = int(np.argmin(abs(x-center)))
             left, right = max(0, ii-6), min(len(x), ii+7)
             yw, xw = y[left:right], x[left:right]
             if len(yw) < 5:
-                return float(np.clip(cfg.default_fwhm_cm1, cfg.min_fwhm_cm1, cfg.max_fwhm_cm1))
+                return float(np.clip(default_fwhm_cm1, min_fwhm_cm1, max_fwhm_cm1))
             peak_idx = int(np.argmax(yw))
             half = 0.5 * float(np.max(yw))
             li = peak_idx
@@ -2726,24 +2736,24 @@ def fit_full_spectrum_v2(x, y, tolerance, num_peaks, cofit_range_multiplier, cfg
             while ri < len(yw)-1 and yw[ri] > half:
                 ri += 1
             if li == peak_idx or ri == peak_idx:
-                return float(np.clip(cfg.default_fwhm_cm1, cfg.min_fwhm_cm1, cfg.max_fwhm_cm1))
-            return float(np.clip(abs(xw[ri]-xw[li]), cfg.min_fwhm_cm1, cfg.max_fwhm_cm1))
+                return float(np.clip(default_fwhm_cm1, min_fwhm_cm1, max_fwhm_cm1))
+            return float(np.clip(abs(xw[ri]-xw[li]), min_fwhm_cm1, max_fwhm_cm1))
 
         centers = [target]+cofits
 
-        model, uses_eta = _build_sum_model(len(centers), cfg.peak_shape)
+        model, uses_eta = _build_sum_model(len(centers), peak_shape)
         p0, lb, ub = [], [], [] # Initial guesses, lower and upper bounds for curve parameters
         for i, c in enumerate(centers):
             amp_guess = max(float(y[int(np.argmin(abs(x-c)))]), float(np.max(y))*(0.7 if i==0 else 0.35), 1e-9)
-            fwhm_guess = _initial_fwhm_guess(x_local, y_local, c, cfg)
-            local_tol = tolerance if i == 0 else cfg.cofit_tolerance_cm1
+            fwhm_guess = _initial_fwhm_guess(x_local, y_local, c, default_fwhm_cm1, min_fwhm_cm1, max_fwhm_cm1)
+            local_tol = tolerance
             p0.extend([amp_guess, c, fwhm_guess])
-            lb.extend([0.0, c-local_tol, cfg.min_fwhm_cm1])
-            ub.extend([np.inf, c+local_tol, cfg.max_fwhm_cm1])
+            lb.extend([0.0, c-local_tol, min_fwhm_cm1])
+            ub.extend([np.inf, c+local_tol, max_fwhm_cm1])
             if uses_eta:
-                p0.append(cfg.pseudovoigt_eta_default)
-                lb.append(cfg.pseudovoigt_eta_min)
-                ub.append(cfg.pseudovoigt_eta_max)
+                p0.append(pseudovoigt_eta_default)
+                lb.append(pseudovoigt_eta_min)
+                ub.append(pseudovoigt_eta_max)
         # Use `scipy.optimize.curve_fit` to optimize curve parameters
         popt, _ = curve_fit(model, x_local, y_local, p0=np.asarray(p0), bounds=(np.asarray(lb), np.asarray(ub)), maxfev=50000)
 
@@ -2757,8 +2767,8 @@ def fit_full_spectrum_v2(x, y, tolerance, num_peaks, cofit_range_multiplier, cfg
             if uses_eta:
                 eta = float(popt[k])
                 k += 1
-            curve = _component_curve(x, amp, cen, fwhm, cfg.peak_shape, eta)
-            local_comps.append({"seed_center": seed, "fitted_center": cen, "amplitude": amp, "fwhm": fwhm, "eta": eta, "curve": curve, "area": _component_area(amp, fwhm, cfg.peak_shape, eta), "max_height": float(np.max(curve)), "is_target": i == 0})
+            curve = _component_curve(x, amp, cen, fwhm, peak_shape, eta)
+            local_comps.append({"seed_center": seed, "fitted_center": cen, "amplitude": amp, "fwhm": fwhm, "eta": eta, "curve": curve, "max_height": float(np.max(curve)), "is_target": i == 0})
         
         return local_comps
 
@@ -2768,7 +2778,7 @@ def fit_full_spectrum_v2(x, y, tolerance, num_peaks, cofit_range_multiplier, cfg
 
         def collides_with_known_peak(cand):
             for c in centers:
-                if np.abs(c - cand) < cfg.min_peak_distance:
+                if np.abs(c - cand) < min_peak_distance:
                     return True
             return False
 
@@ -2786,7 +2796,7 @@ def fit_full_spectrum_v2(x, y, tolerance, num_peaks, cofit_range_multiplier, cfg
         width = props['widths'][order][n-1-i]
 
         # Determine the appropriate window to use.
-        half_window_width = max(cofit_range_multiplier * width, 0.5*cfg.min_window_width)
+        half_window_width = max(cofit_range_multiplier * width, 0.5*min_window_width)
         window_min, window_max = target - half_window_width, target + half_window_width
         # Extend the window to include neighboring peaks
         loop = True
@@ -2810,7 +2820,7 @@ def fit_full_spectrum_v2(x, y, tolerance, num_peaks, cofit_range_multiplier, cfg
         # Determine cofits
         cofit_idcs = [j for j in range(len(centers)) if (centers[j] > window_min and centers[j] < window_max)]
         cofits = [centers[j] for j in cofit_idcs]
-        print(f"Iteration {iter+1}/{num_peaks} ({np.around(100*(iter+1)/num_peaks,2)}%) ...", [target] + cofits)
+        #print(f"Iteration {iter+1}/{num_peaks} ({np.around(100*(iter+1)/num_peaks,2)}%) ...", [target] + cofits)
 
         # Perform subfit
         local_comps = fit_local(x_local, y_local, target, cofits)

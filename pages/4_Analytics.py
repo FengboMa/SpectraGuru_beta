@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import altair as alt
 # from streamlit_extras.chart_container import chart_container
 from streamlit_extras.row import row
+import threading
 from datetime import datetime
 import pandas as pd
 import function
@@ -1581,7 +1582,8 @@ else:
                         "Gaussian",
                         "Lorentzian",
                         "Pseudovoigt",
-                    )
+                    ),
+                    help="The mathematical definition of the component curves."
                 )
 
                 cofit_range_multiplier = st.number_input(
@@ -1590,11 +1592,27 @@ else:
                     min_value=0.5,
                     max_value=1.0,
                     step=0.01,
+                    format="%0.2f",
                     help="The distance, relative to the width of any given peak, at which other peaks must be cofit together with this peak. Higher values may improve fit quality with a sacrifice in performance."
                 )
 
-                
+            if 'fsf_processing' not in st.session_state:
+                st.session_state.fsf_processing = False
+            if 'fsf_cancel' not in st.session_state:
+                st.session_state.fsf_cancel = False
 
+            if not st.session_state.fsf_processing:
+                if st.sidebar.button(label="Perform Fit", type="primary"):
+                    def perform_fit():
+                        #TODO: Determine x and y
+                        st.session_state.fsf_results = function.fit_full_spectrum_v2(x, y, num_peaks, cofit_range_multiplier, peak_shape=peak_shape)
+
+
+                    working_thread = threading.Thread(target=perform_fit, daemon=True)
+                    working_thread.start()
+            else:
+                if st.sidebar.button(label="Cancel Fit", type="secondary"):
+                    st.session_state.fsf_cancel = True
 
 
 

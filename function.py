@@ -2660,7 +2660,7 @@ def als_baseline_removal(spectra, lam=1e7, p=0.001, d=2, max_iter=50, return_bas
 def fit_full_spectrum_v2(x, y, num_peaks, 
                          cofit_range_multiplier=0.65,
                          tolerance=12.0,
-                         peak_shape="gaussian",
+                         peak_shape="Gaussian",
                          default_fwhm_cm1=12.0,
                          min_fwhm_cm1=4.0,
                          max_fwhm_cm1=40.0,
@@ -2670,7 +2670,8 @@ def fit_full_spectrum_v2(x, y, num_peaks,
                          min_peak_distance=2.0,
                          min_window_width=10.0):
     import numpy as np
-    from scipy.signal import curve_fit, find_peaks
+    from scipy.signal import find_peaks
+    from scipy.optimize import curve_fit
 
     total = np.zeros_like(y)
     residual = y
@@ -2696,11 +2697,14 @@ def fit_full_spectrum_v2(x, y, num_peaks,
 
         # Wrapper for mathematical curve definitions. For pseudovoigt curves, `eta` must be specified.
         def _component_curve(x, amp, cen, fwhm, shape, eta=None):
-            if shape == "gaussian":
+            if shape == "Gaussian":
                 return _gaussian(x, amp, cen, fwhm)
-            if shape == "lorentzian":
+            if shape == "Lorentzian":
                 return _lorentzian(x, amp, cen, fwhm)
-            return _pseudovoigt(x, amp, cen, fwhm, 0.5 if eta is None or np.isnan(eta) else eta)
+            if shape == "Pseudovoigt":
+                return _pseudovoigt(x, amp, cen, fwhm, 0.5 if eta is None or np.isnan(eta) else eta)
+            else:
+                raise ValueError(f"Peak shape '{shape}' not recognized.")
         
         # Constructs a function `model` which returns the sum of `ncomp` curves of a given `shape` provided a set of parameters.
         # Parameters passed to `model` should cycle: [amplitude, center, FWHM, ...] for Gaussian and Lorentzian curves; [amplitude, center, FWHM, eta, ...]
@@ -2843,4 +2847,4 @@ def fit_full_spectrum_v2(x, y, num_peaks,
     
     rmse = float(np.sqrt(np.mean(residual**2)))
 
-    return {"total_fit": total, "residual": residual, "components": comps, "rmse": rmse}
+    return total, residual, comps, rmse

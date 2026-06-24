@@ -336,7 +336,7 @@ if 'df' in st.session_state:
             )
             svm_run = st.form_submit_button("Run SVM")
     
-    elif st.stats_plot_select == "Full Spectrum Fitting":
+    elif st.session_state.stats_plot_select == "Full Spectrum Fitting":
         with st.sidebar.form("fsf_form"):
             st.number_input(
                 label="Number of Peaks (Components) to Fit",
@@ -370,15 +370,8 @@ if 'df' in st.session_state:
                 key="fsf_cofit_range_multiplier"
             )
 
-            if 'fsf_processing' not in st.session_state:
-                st.session_state.fsf_processing = False
-            if 'fsf_cancel' not in st.session_state:
-                st.session_state.fsf_cancel = False
+            fsf_run = st.form_submit_button("Run Fit")
 
-            if not st.session_state.fsf_processing:
-                fsf_run = st.form_submit_button("Run Fit")
-            else:
-                fsf_cancel = st.button("Cancel Fit")
 
 # Stats section layout
 """"""""""""
@@ -1608,26 +1601,38 @@ else:
                     st.error(f"Error running SVM classification: {e}")
 
         elif st.session_state.stats_plot_select == "Full Spectrum Fitting":
+            import numpy as np
             st.write("**Full Spectrum Fitting**")
-            if not fsf_run:
+            if not fsf_run and 'fsf_results_df_melted' not in st.session_state:
                 st.info("Set up fit parameters, then click 'Run Fit.'")
             else:
+                if fsf_run:
+                    selected_fsf_spectrum = "Average" #Temporary
+                    filtered_fsf_df = stats_data_melted[stats_data_melted['Sample ID'] == selected_fsf_spectrum]
+                    x, y = filtered_fsf_df['Ramanshift'].to_numpy(), filtered_fsf_df['Intensity'].to_numpy()
 
-                if not st.session_state.fsf_processing:
-                    def perform_fit():
-                        #TODO: Determine x and y
-                        selected_fsf_spectrum = "Average" #Temporary
-                        filtered_fsf_df = stats_data_melted[stats_data_melted['Sample ID'] == selected_fsf_spectrum]
-                        x = filtered_fsf_df['Ramanshift'].to_numpy()
-                        y = filtered_fsf_df['Intensity'].to_numpy()
-                        st.session_state.fsf_results = function.fit_full_spectrum_v2(x, y, num_peaks=10)
+                    fit, residual, components, rmse = function.fit_full_spectrum_v2(x, y, 
+                                                                    num_peaks=st.session_state.fsf_num_peaks,
+                                                                    cofit_range_multiplier=st.session_state.fsf_cofit_range_multiplier,
+                                                                    peak_shape=st.session_state.fsf_peak_shape
+                                                                )
+                    #TODO: log function call; potentially implement threading for a progress bar...
 
+                    st.session_state.fsf_results_df_melted = pd.DataFrame(np.array([x, y, fit]).T, columns=['Ramanshift', 'Original Spectrum', 'Fit']).melt(id_vars=['Ramanshift'], var_name='Sample ID', value_name='Intensity')
 
-                    working_thread = threading.Thread(target=perform_fit, daemon=True)
-                    working_thread.start()
-                    st.session_state.fsf_processing = True
-                elif fsf_cancel:
-                    st.session_state.fsf_cancel = True
+                fsf_plot = (alt.Chart(st.session_state.fsf_results_df_melted)
+                    .mark_line()
+                    .encode(
+                        x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
+                        y=alt.Y('Intensity', title=analytics_y_axis_title, type='quantitative'),
+                        tooltip=alt.value(None),
+                        color=alt.Color("Sample ID:N", title="Sample"),
+                        size=alt.value(3)
+                    ).properties(width=1300, height=400, title="Fit Spectrum - Total Fit")
+                )
+                st.altair_chart(fsf_plot)
+
+                #TODO: log plot generated
 
 
 

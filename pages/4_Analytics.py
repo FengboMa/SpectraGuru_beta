@@ -335,6 +335,50 @@ if 'df' in st.session_state:
                 help="Percentage of spectra held out for evaluation. Default: 0%, which fits and evaluates on the full selected dataset.",
             )
             svm_run = st.form_submit_button("Run SVM")
+    
+    elif st.stats_plot_select == "Full Spectrum Fitting":
+        with st.sidebar.form("fsf_form"):
+            st.number_input(
+                label="Number of Peaks (Components) to Fit",
+                value=30,
+                min_value=1,
+                max_value=100,
+                step=1,
+                help="The number of peaks (components) to fit to your data. Note that some data peaks may be composed of multiple components.",
+                key="fsf_num_peaks"
+            )
+            
+            st.selectbox(
+                label="Peak Shape",
+                options=(
+                    "Gaussian",
+                    "Lorentzian",
+                    "Pseudovoigt",
+                ),
+                help="The mathematical definition of the component curves.",
+                key="fsf_peak_shape"
+            )
+
+            st.number_input(
+                label="Cofit Range Multiplier",
+                value=0.65,
+                min_value=0.5,
+                max_value=1.0,
+                step=0.01,
+                format="%0.2f",
+                help="The distance, relative to the width of any given peak, at which other peaks must be cofit together with this peak. Higher values may improve fit quality with a sacrifice in performance.",
+                key="fsf_cofit_range_multiplier"
+            )
+
+            if 'fsf_processing' not in st.session_state:
+                st.session_state.fsf_processing = False
+            if 'fsf_cancel' not in st.session_state:
+                st.session_state.fsf_cancel = False
+
+            if not st.session_state.fsf_processing:
+                fsf_run = st.form_submit_button("Run Fit")
+            else:
+                fsf_cancel = st.button("Cancel Fit")
 
 # Stats section layout
 """"""""""""
@@ -1565,53 +1609,24 @@ else:
 
         elif st.session_state.stats_plot_select == "Full Spectrum Fitting":
             st.write("**Full Spectrum Fitting**")
-            with st.sidebar:
+            if not fsf_run:
+                st.info("Set up fit parameters, then click 'Run Fit.'")
+            else:
 
-                num_peaks = st.number_input(
-                    label="Number of Peaks (Components) to Fit",
-                    value=30,
-                    min_value=1,
-                    max_value=100,
-                    step=1,
-                    help="The number of peaks (components) to fit to your data. Note that some data peaks may be composed of multiple components."
-                )
-                
-                peak_shape = st.selectbox(
-                    label="Peak Shape",
-                    options=(
-                        "Gaussian",
-                        "Lorentzian",
-                        "Pseudovoigt",
-                    ),
-                    help="The mathematical definition of the component curves."
-                )
-
-                cofit_range_multiplier = st.number_input(
-                    label="Cofit Range Multiplier",
-                    value=0.65,
-                    min_value=0.5,
-                    max_value=1.0,
-                    step=0.01,
-                    format="%0.2f",
-                    help="The distance, relative to the width of any given peak, at which other peaks must be cofit together with this peak. Higher values may improve fit quality with a sacrifice in performance."
-                )
-
-            if 'fsf_processing' not in st.session_state:
-                st.session_state.fsf_processing = False
-            if 'fsf_cancel' not in st.session_state:
-                st.session_state.fsf_cancel = False
-
-            if not st.session_state.fsf_processing:
-                if st.sidebar.button(label="Perform Fit", type="primary"):
+                if not st.session_state.fsf_processing:
                     def perform_fit():
                         #TODO: Determine x and y
-                        st.session_state.fsf_results = function.fit_full_spectrum_v2(x, y, num_peaks, cofit_range_multiplier, peak_shape=peak_shape)
+                        selected_fsf_spectrum = "Average" #Temporary
+                        filtered_fsf_df = stats_data_melted[stats_data_melted['Sample ID'] == selected_fsf_spectrum]
+                        x = filtered_fsf_df['Ramanshift'].to_numpy()
+                        y = filtered_fsf_df['Intensity'].to_numpy()
+                        st.session_state.fsf_results = function.fit_full_spectrum_v2(x, y, num_peaks=10)
 
 
                     working_thread = threading.Thread(target=perform_fit, daemon=True)
                     working_thread.start()
-            else:
-                if st.sidebar.button(label="Cancel Fit", type="secondary"):
+                    st.session_state.fsf_processing = True
+                elif fsf_cancel:
                     st.session_state.fsf_cancel = True
 
 

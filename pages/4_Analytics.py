@@ -40,7 +40,8 @@ if 'df' in st.session_state:
                                 "T-SNE Dimensionality Reduction",
                                 "Random Forest(RF) Classification",
                                 "K-Nearest Neighbors(KNN) Classification",
-                                "Support Vector Machine(SVM) Classification"),
+                                "Support Vector Machine(SVM) Classification",
+                                "Full Spectrum Fitting"),
                         key="stats_plot_select")
 
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
@@ -1560,3 +1561,40 @@ else:
                     )
                 except Exception as e:
                     st.error(f"Error running SVM classification: {e}")
+
+        elif st.session_state.stats_plot_select == "Full Spectrum Fitting":
+            st.write("**Full Spectrum Fitting**")
+            with st.sidebar:
+
+                num_peaks = st.number_input(
+                    label="Number of Peaks (Components) to Fit",
+                    value=30,
+                    min_value=1,
+                    max_value=100,
+                    step=1,
+                    help="The number of peaks (components) to fit to your data. Note that some data peaks may be composed of multiple components."
+                )
+                
+                peak_shape = st.selectbox(
+                    label="Peak Shape",
+                    options=(
+                        "Gaussian",
+                        "Lorentzian",
+                        "Pseudovoigt",
+                    )
+                )
+
+                cofit_range_multiplier = st.number_input(
+                    label="Cofit Range Multiplier",
+                    value=0.65,
+                    min_value=0.5,
+                    max_value=1.0,
+                    step=0.01,
+                    help="The distance, relative to the width of any given peak, at which other peaks must be cofit together with this peak. Higher values may improve fit quality with a sacrifice in performance."
+                )
+
+                
+
+
+
+

@@ -2657,8 +2657,9 @@ def als_baseline_removal(spectra, lam=1e7, p=0.001, d=2, max_iter=50, return_bas
 # To further optimize performance, only peaks which are nearby to the target peak are calculated each iteration. The range of
 # this window can be controlled by `cofit_range_multiplier`. It is recommended that this value stay between 0.5 and 1.0; higher values
 # result in better fit quality, while lower values result in better performance.
-def fit_full_spectrum_v2(x, y, tolerance, num_peaks, 
-                         cofit_range_multiplier, 
+def fit_full_spectrum_v2(x, y, num_peaks, 
+                         cofit_range_multiplier=0.65,
+                         tolerance=12.0,
                          peak_shape="gaussian",
                          default_fwhm_cm1=12.0,
                          min_fwhm_cm1=4.0,
@@ -2666,7 +2667,7 @@ def fit_full_spectrum_v2(x, y, tolerance, num_peaks,
                          pseudovoigt_eta_default=0.5,
                          pseudovoigt_eta_min=0.0,
                          pseudovoigt_eta_max=1.0,
-                         min_peak_distance=1.0,
+                         min_peak_distance=2.0,
                          min_window_width=10.0):
     import numpy as np
     from scipy.signal import curve_fit, find_peaks

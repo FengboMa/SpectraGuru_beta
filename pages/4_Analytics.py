@@ -400,6 +400,10 @@ if 'df' in st.session_state:
                           value=False, 
                           help="Choose whether to plot each component along with the total fit. Readability may be greatly reduced if the number of components is too high.",
                           key="fsf_plot_components")
+        st.sidebar.toggle("Use Interactive Plot",
+                          value=False,
+                          help="Choose whether the total fit plot should be interactive.",
+                          key="fsf_interactive")
 
 
 # Stats section layout
@@ -1669,12 +1673,14 @@ else:
                     st.session_state.fsf_results_df = pd.DataFrame(np.array([x, y, fit]).T, columns=['Ramanshift', st.session_state.fsf_spectrum_select, 'Total Fit'])
 
                 results_df = st.session_state.fsf_results_df_with_components if st.session_state.fsf_plot_components else st.session_state.fsf_results_df
-                results_df_melted = results_df.melt(id_vars=['Ramanshift'], var_name='Sample ID', value_name='Intensity')
+                results_df_melted = results_df.melt(id_vars=['Ramanshift'], var_name='Sample ID', value_name='Intensity').round(4)
 
                 st.success(f"Fit completed in {st.session_state.fsf_time:.3f} seconds.")
 
                 # Plot results
+
                 fsf_plot = (alt.Chart(results_df_melted)
+                    .transform_filter((alt.datum['Intensity'] >= 0.1) | (alt.datum['Sample ID'] == st.session_state.fsf_spectrum_select) | (alt.datum['Sample ID'] == "Total Fit"))
                     .mark_line()
                     .encode(
                         x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
@@ -1684,6 +1690,9 @@ else:
                         size=alt.value(3)
                     ).properties(width=1300, height=400, title="Fit Spectrum - Total Fit")
                 )
+                if st.session_state.fsf_interactive:
+                    fsf_plot = fsf_plot.interactive()
+
                 residual_plot = (alt.Chart(st.session_state.fsf_residual_df)
                     .mark_line()
                     .encode(

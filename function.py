@@ -2773,7 +2773,7 @@ def fit_full_spectrum_v2(x, y, num_peaks,
                 eta = float(popt[k])
                 k += 1
             curve = _component_curve(x, amp, cen, fwhm, peak_shape, eta)
-            local_comps.append({"seed_center": seed, "fitted_center": cen, "amplitude": amp, "fwhm": fwhm, "eta": eta, "curve": curve, "max_height": float(np.max(curve)), "is_target": i == 0})
+            local_comps.append({"parameters":{"seed_center": seed, "fitted_center": cen, "amplitude": amp, "fwhm": fwhm, "eta": eta}, "curve": curve})
         
         return local_comps
 
@@ -2809,7 +2809,7 @@ def fit_full_spectrum_v2(x, y, num_peaks,
             loop = False
             for comp in comps:
                 # For each known peak, determine whether it intersects with the window range
-                fitted_center, half_subwindow_width = comp['fitted_center'], cofit_range_multiplier * 2 * comp['fwhm']
+                fitted_center, half_subwindow_width = comp['parameters']['fitted_center'], cofit_range_multiplier * 2 * comp['parameters']['fwhm']
                 lower_bound, upper_bound = fitted_center - half_subwindow_width, fitted_center + half_subwindow_width
                 if lower_bound < window_min and upper_bound > window_min:
                     window_min = lower_bound
@@ -2834,10 +2834,10 @@ def fit_full_spectrum_v2(x, y, num_peaks,
         for k, l in enumerate(local_comps):
             if k == 0:
                 comps.append(l)
-                centers.append(l['fitted_center'])
+                centers.append(l['parameters']['fitted_center'])
             else:
                 comps[cofit_idcs[k-1]] = l
-                centers[cofit_idcs[k-1]] = l['fitted_center']
+                centers[cofit_idcs[k-1]] = l['parameters']['fitted_center']
             
         # Update residual based on new components
         total = np.zeros_like(y)

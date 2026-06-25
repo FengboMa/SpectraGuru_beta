@@ -1621,7 +1621,10 @@ else:
                     st.session_state.fsf_results_df_melted = pd.DataFrame(np.array([x, y, fit]).T, columns=['Ramanshift', 'Original Spectrum', 'Fit']).melt(id_vars=['Ramanshift'], var_name='Sample ID', value_name='Intensity')
                     st.session_state.fsf_residual_df = pd.DataFrame(np.array([x, residual]).T, columns=['Ramanshift', 'Residual'])
                     st.session_state.fsf_rmse = rmse
+                    st.session_state.fsf_component_params_df = pd.DataFrame([c['parameters'] for c in components])
+                    st.session_state.fsf_components_df = pd.DataFrame(np.around(np.array([x]+[c['curve'] for c in components]), 4).T, columns=['Ramanshift']+[f"Component {i}" for i in range(len(components))])
 
+                # Plot results
                 fsf_plot = (alt.Chart(st.session_state.fsf_results_df_melted)
                     .mark_line()
                     .encode(
@@ -1644,6 +1647,12 @@ else:
                 )
                 st.altair_chart(fsf_plot)
                 st.altair_chart(residual_plot)
+
+                st.write("Component Parameters")
+                st.dataframe(st.session_state.fsf_component_params_df)
+
+                st.write("Component Curves")
+                st.dataframe(st.session_state.fsf_components_df)
 
                 #TODO: log plot generated
 

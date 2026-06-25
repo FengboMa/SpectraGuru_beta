@@ -338,6 +338,16 @@ if 'df' in st.session_state:
     
     elif st.session_state.stats_plot_select == "Full Spectrum Fitting":
         with st.sidebar.form("fsf_form"):
+            spectrum_select_options = ["Average"] + [
+                column for column in st.session_state.temp.columns
+                if column not in ["Ramanshift", "Average", "Standard Deviation"]
+            ]
+            st.selectbox(
+                label="Select Spectrum for Fit",
+                options=spectrum_select_options,
+                key="fsf_spectrum_select"
+            )
+
             st.number_input(
                 label="Number of Peaks (Components) to Fit",
                 value=30,
@@ -1608,12 +1618,11 @@ else:
         elif st.session_state.stats_plot_select == "Full Spectrum Fitting":
             import numpy as np
             st.write("**Full Spectrum Fitting**")
-            if not fsf_run and 'fsf_results_df_melted' not in st.session_state:
+            if not fsf_run and 'fsf_results_df' not in st.session_state:
                 st.info("Set up fit parameters, then click 'Run Fit.'")
             else:
                 if fsf_run:
-                    selected_fsf_spectrum = "Average" #Temporary
-                    filtered_fsf_df = stats_data_melted[stats_data_melted['Sample ID'] == selected_fsf_spectrum]
+                    filtered_fsf_df = stats_data_melted[stats_data_melted['Sample ID'] == st.session_state.fsf_spectrum_select]
                     x, y = filtered_fsf_df['Ramanshift'].to_numpy(), filtered_fsf_df['Intensity'].to_numpy()
 
                     fit, residual, components, rmse = function.fit_full_spectrum_v2(x, y, 
@@ -1655,8 +1664,8 @@ else:
                         size=alt.value(3)
                     ).properties(width=1300, height=300, title=f"Fit Spectrum - Residual / (RMSE = {st.session_state.fsf_rmse:.3f})")
                 )
-                st.altair_chart(fsf_plot)
-                st.altair_chart(residual_plot)
+                st.altair_chart(function.style_altair_chart(fsf_plot), use_container_width=False)
+                st.altair_chart(function.style_altair_chart(residual_plot), use_container_width=False)
 
                 st.write("Component Parameters")
                 st.dataframe(st.session_state.fsf_component_params_df)

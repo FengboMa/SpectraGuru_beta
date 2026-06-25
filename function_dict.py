@@ -36,6 +36,7 @@ names = {
     'Analytics_ML_Classification_Random_Forest':("ML classification", "Random Forest (RF)"),
     'Analytics_ML_Classification_KNN':("ML classification", "K-nearest neighbors (KNN)"),
     'Analytics_ML_Classification_SVM':("ML classification", "Support vector machine (SVM)"),
+    'Analytics_Peak_Fitting_Full_Spectrum':("Peak Fitting", "Full Spectrum Fitting"),
     'Toolbox_Spectrum_Simulation':("Spectrum simulation", "Spectrum simulation"),
     'Toolbox_Peak_Assignment_Table':("Peak assignment table", "Peak assignment table"),
 

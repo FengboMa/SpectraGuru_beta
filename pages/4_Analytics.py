@@ -1661,7 +1661,14 @@ else:
                     end = time.perf_counter()
                     st.session_state.fsf_time = end - start # fit runtime
 
-                    #TODO: log function call; potentially implement threading for a progress bar...
+                    log.log_function_call("Analytics_Peak_Fitting_Full_Spectrum",
+                                          f_params={
+                                              "num_peaks":st.session_state.fsf_num_peaks,
+                                              "peak_shape":st.session_state.fsf_peak_shape,
+                                              "cofit_range_multiplier":st.session_state.fsf_cofit_range_multiplier,
+                                              "runtime":st.session_state.fsf_time,
+                                              "runtime_option":st.session_state.fsf_runtime_control,
+                                          })
 
                     st.session_state.fsf_residual_df = pd.DataFrame(np.array([x, residual]).T, columns=['Ramanshift', 'Residual'])
                     st.session_state.fsf_rmse = rmse
@@ -1704,15 +1711,12 @@ else:
                     ).properties(width=1300, height=300, title=f"Fit Spectrum - Residual / (RMSE = {st.session_state.fsf_rmse:.3f})")
                 )
                 st.altair_chart(function.style_altair_chart(fsf_plot), use_container_width=False)
+                log.log_plot_generated_count()
                 st.altair_chart(function.style_altair_chart(residual_plot), use_container_width=False)
+                log.log_plot_generated_count()
 
                 st.write("Component Parameters")
                 st.dataframe(st.session_state.fsf_component_params_df.round(4))
 
                 st.write("Component Curves")
                 st.dataframe(st.session_state.fsf_results_df_with_components.round(4)[['Ramanshift', st.session_state.fsf_spectrum_select, 'Total Fit']+[f"Component {i}" for i in range(st.session_state.fsf_num_components)]])
-
-                #TODO: log plot generated
-
-
-

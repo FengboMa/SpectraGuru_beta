@@ -380,6 +380,19 @@ if 'df' in st.session_state:
                 key="fsf_cofit_range_multiplier"
             )
 
+            st.selectbox(
+                label="Runtime Control Option",
+                options=(
+                    "Quick (m=8)",
+                    "Standard (m=11)",
+                    "Slow (m=14)",
+                    "Thorough (m=17)"
+                ),
+                index=1,
+                help="Controls the worst case runtime by limiting the number of peaks `m` which may be cofit together. Quicker runtimes may result in reduced fit quiality.",
+                key="fsf_runtime_control"
+            )
+
             fsf_run = st.form_submit_button("Run Fit")
         
         st.sidebar.toggle("Show Components", 
@@ -1617,6 +1630,7 @@ else:
 
         elif st.session_state.stats_plot_select == "Full Spectrum Fitting":
             import numpy as np
+            import time
             st.write("**Full Spectrum Fitting**")
             if not fsf_run and 'fsf_results_df' not in st.session_state:
                 st.info("Set up fit parameters, then click 'Run Fit.'")
@@ -1625,32 +1639,47 @@ else:
                     filtered_fsf_df = stats_data_melted[stats_data_melted['Sample ID'] == st.session_state.fsf_spectrum_select]
                     x, y = filtered_fsf_df['Ramanshift'].to_numpy(), filtered_fsf_df['Intensity'].to_numpy()
 
+                    max_cofits = {
+                        "Quick (m=8)": 8,
+                        "Standard (m=11)": 11,
+                        "Slow (m=14)": 14,
+                        "Thorough (m=17)": 17
+                    }[st.session_state.fsf_runtime_control]
+
+                    start = time.perf_counter()
                     fit, residual, components, rmse = function.fit_full_spectrum_v2(x, y, 
                                                                     num_peaks=st.session_state.fsf_num_peaks,
                                                                     cofit_range_multiplier=st.session_state.fsf_cofit_range_multiplier,
-                                                                    peak_shape=st.session_state.fsf_peak_shape
+                                                                    peak_shape=st.session_state.fsf_peak_shape,
+                                                                    max_cofits=max_cofits
                                                                 )
-                    #TODO: log function call; potentially implement threading for a progress bar...
+                    end = time.perf_counter()
+                    st.session_state.fsf_time = end - start # fit runtime
 
-                    st.session_state.fsf_component_params_df = pd.DataFrame([c['parameters'] for c in components])
-                    st.session_state.fsf_components_df = pd.DataFrame(np.around(np.array([x]+[c['curve'] for c in components]), 4).T, columns=['Ramanshift']+[f"Component {i}" for i in range(len(components))])
+                    #TODO: log function call; potentially implement threading for a progress bar...
 
                     st.session_state.fsf_residual_df = pd.DataFrame(np.array([x, residual]).T, columns=['Ramanshift', 'Residual'])
                     st.session_state.fsf_rmse = rmse
 
-                    st.session_state.fsf_results_df_with_components = pd.DataFrame(np.array([x, y]+[c['curve'] for c in components]+[fit]).T, columns=['Ramanshift', 'Original Spectrum']+[f"Component {i}" for i in range(len(components))]+['Total Fit']).melt(id_vars=['Ramanshift'], var_name='Sample ID', value_name='Intensity')
-                    st.session_state.fsf_results_df = pd.DataFrame(np.array([x, y, fit]).T, columns=['Ramanshift', 'Original Spectrum', 'Total Fit']).melt(id_vars=['Ramanshift'], var_name='Sample ID', value_name='Intensity')
+                    st.session_state.fsf_component_params_df = pd.DataFrame([c['parameters'] for c in components])
+
+                    st.session_state.fsf_num_components = len(components)
+                    st.session_state.fsf_results_df_with_components = pd.DataFrame(np.array([x, y]+[c['curve'] for c in components]+[fit]).T, columns=['Ramanshift', st.session_state.fsf_spectrum_select]+[f"Component {i}" for i in range(st.session_state.fsf_num_components)]+['Total Fit'])
+                    st.session_state.fsf_results_df = pd.DataFrame(np.array([x, y, fit]).T, columns=['Ramanshift', st.session_state.fsf_spectrum_select, 'Total Fit'])
 
                 results_df = st.session_state.fsf_results_df_with_components if st.session_state.fsf_plot_components else st.session_state.fsf_results_df
+                results_df_melted = results_df.melt(id_vars=['Ramanshift'], var_name='Sample ID', value_name='Intensity')
+
+                st.success(f"Fit completed in {st.session_state.fsf_time:.3f} seconds.")
 
                 # Plot results
-                fsf_plot = (alt.Chart(results_df)
+                fsf_plot = (alt.Chart(results_df_melted)
                     .mark_line()
                     .encode(
                         x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
                         y=alt.Y('Intensity', title=analytics_y_axis_title, type='quantitative'),
                         tooltip=alt.value(None),
-                        color=alt.Color("Sample ID:N", title="Sample", sort=["Original Spectrum", "Total Fit"]),
+                        color=alt.Color("Sample ID:N", title="Sample", sort=[st.session_state.fsf_spectrum_select, "Total Fit"]),
                         size=alt.value(3)
                     ).properties(width=1300, height=400, title="Fit Spectrum - Total Fit")
                 )
@@ -1668,10 +1697,10 @@ else:
                 st.altair_chart(function.style_altair_chart(residual_plot), use_container_width=False)
 
                 st.write("Component Parameters")
-                st.dataframe(st.session_state.fsf_component_params_df)
+                st.dataframe(st.session_state.fsf_component_params_df.round(4))
 
                 st.write("Component Curves")
-                st.dataframe(st.session_state.fsf_components_df)
+                st.dataframe(st.session_state.fsf_results_df_with_components.round(4)[['Ramanshift', st.session_state.fsf_spectrum_select, 'Total Fit']+[f"Component {i}" for i in range(st.session_state.fsf_num_components)]])
 
                 #TODO: log plot generated
 

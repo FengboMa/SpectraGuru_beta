@@ -2668,7 +2668,8 @@ def fit_full_spectrum_v2(x, y, num_peaks,
                          pseudovoigt_eta_min=0.0,
                          pseudovoigt_eta_max=1.0,
                          min_peak_distance=2.0,
-                         min_window_width=10.0):
+                         min_window_width=10.0,
+                         max_cofits=11):
     import numpy as np
     from scipy.signal import find_peaks
     from scipy.optimize import curve_fit
@@ -2710,7 +2711,7 @@ def fit_full_spectrum_v2(x, y, num_peaks,
         # Parameters passed to `model` should cycle: [amplitude, center, FWHM, ...] for Gaussian and Lorentzian curves; [amplitude, center, FWHM, eta, ...]
         # for Pseudovoigt curves.
         def _build_sum_model(ncomp: int, shape: str):
-            uses_eta = shape == "pseudovoigt"
+            uses_eta = shape == "Pseudovoigt"
             def model(x, *params):
                 y = np.zeros_like(x, dtype=float)
                 k = 0
@@ -2801,30 +2802,40 @@ def fit_full_spectrum_v2(x, y, num_peaks,
         width = props['widths'][order][n-1-i]
 
         # Determine the appropriate window to use.
-        half_window_width = max(cofit_range_multiplier * width, 0.5*min_window_width)
-        window_min, window_max = target - half_window_width, target + half_window_width
-        # Extend the window to include neighboring peaks
-        loop = True
-        while loop:
-            loop = False
-            for comp in comps:
-                # For each known peak, determine whether it intersects with the window range
-                fitted_center, half_subwindow_width = comp['parameters']['fitted_center'], cofit_range_multiplier * 2 * comp['parameters']['fwhm']
-                lower_bound, upper_bound = fitted_center - half_subwindow_width, fitted_center + half_subwindow_width
-                if lower_bound < window_min and upper_bound > window_min:
-                    window_min = lower_bound
-                    loop = True
-                if upper_bound > window_max and lower_bound < window_max:
-                    window_max = upper_bound
-                    loop = True
+        local_crm = cofit_range_multiplier
+        cofit_idcs, cofits, window_min, window_max = [], [], 0, np.inf
+        try_runtime_reduction = True
+        while try_runtime_reduction:
+            half_window_width = max(local_crm * width, 0.5*min_window_width)
+            window_min, window_max = target - half_window_width, target + half_window_width
+            # Extend the window to include neighboring peaks
+            look_for_peaks = True
+            while look_for_peaks:
+                look_for_peaks = False
+                for comp in comps:
+                    # For each known peak, determine whether it intersects with the window range
+                    fitted_center, half_subwindow_width = comp['parameters']['fitted_center'], local_crm * 2 * comp['parameters']['fwhm']
+                    lower_bound, upper_bound = fitted_center - half_subwindow_width, fitted_center + half_subwindow_width
+                    if lower_bound < window_min and upper_bound > window_min:
+                        window_min = lower_bound
+                        look_for_peaks = True
+                    if upper_bound > window_max and lower_bound < window_max:
+                        window_max = upper_bound
+                        look_for_peaks = True
+            # Determine cofits
+            cofit_idcs = [j for j in range(len(centers)) if (centers[j] > window_min and centers[j] < window_max)]
+            try_runtime_reduction = False
+            if len(cofit_idcs) > max_cofits:
+                cofit_idcs = []
+                local_crm *= 0.9
+                try_runtime_reduction = True
+            else:
+                cofits = [centers[j] for j in cofit_idcs]
 
         start = int(np.searchsorted(x, window_min, side="left"))
         stop = int(np.searchsorted(x, window_max, side="right"))
         x_local, y_local = x[start:stop], y[start:stop]
 
-        # Determine cofits
-        cofit_idcs = [j for j in range(len(centers)) if (centers[j] > window_min and centers[j] < window_max)]
-        cofits = [centers[j] for j in cofit_idcs]
         #print(f"Iteration {iter+1}/{num_peaks} ({np.around(100*(iter+1)/num_peaks,2)}%) ...", [target] + cofits)
 
         # Perform subfit

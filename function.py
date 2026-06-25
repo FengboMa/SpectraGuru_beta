@@ -2823,7 +2823,7 @@ def fit_full_spectrum_v2(x, y, num_peaks,
                         window_max = upper_bound
                         look_for_peaks = True
             # Determine cofits
-            cofit_idcs = [j for j in range(len(centers)) if (centers[j] > window_min and centers[j] < window_max)]
+            cofit_idcs = [j for j, c in enumerate(centers) if (c > window_min and c < window_max)]
             try_runtime_reduction = False
             if len(cofit_idcs) > max_cofits:
                 cofit_idcs = []

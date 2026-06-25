@@ -337,6 +337,7 @@ if 'df' in st.session_state:
             svm_run = st.form_submit_button("Run SVM")
     
     elif st.session_state.stats_plot_select == "Full Spectrum Fitting":
+        st.sidebar.info("Note: Your data should be baseline-removed when performing peak fitting.")
         with st.sidebar.form("fsf_form"):
             spectrum_select_options = ["Average"] + [
                 column for column in st.session_state.temp.columns

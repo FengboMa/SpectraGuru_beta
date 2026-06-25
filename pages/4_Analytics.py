@@ -371,6 +371,11 @@ if 'df' in st.session_state:
             )
 
             fsf_run = st.form_submit_button("Run Fit")
+        
+        st.sidebar.toggle("Show Components", 
+                          value=False, 
+                          help="Choose whether to plot each component along with the total fit. Readability may be greatly reduced if the number of components is too high.",
+                          key="fsf_plot_components")
 
 
 # Stats section layout
@@ -1618,20 +1623,25 @@ else:
                                                                 )
                     #TODO: log function call; potentially implement threading for a progress bar...
 
-                    st.session_state.fsf_results_df_melted = pd.DataFrame(np.array([x, y, fit]).T, columns=['Ramanshift', 'Original Spectrum', 'Fit']).melt(id_vars=['Ramanshift'], var_name='Sample ID', value_name='Intensity')
-                    st.session_state.fsf_residual_df = pd.DataFrame(np.array([x, residual]).T, columns=['Ramanshift', 'Residual'])
-                    st.session_state.fsf_rmse = rmse
                     st.session_state.fsf_component_params_df = pd.DataFrame([c['parameters'] for c in components])
                     st.session_state.fsf_components_df = pd.DataFrame(np.around(np.array([x]+[c['curve'] for c in components]), 4).T, columns=['Ramanshift']+[f"Component {i}" for i in range(len(components))])
 
+                    st.session_state.fsf_residual_df = pd.DataFrame(np.array([x, residual]).T, columns=['Ramanshift', 'Residual'])
+                    st.session_state.fsf_rmse = rmse
+
+                    st.session_state.fsf_results_df_with_components = pd.DataFrame(np.array([x, y]+[c['curve'] for c in components]+[fit]).T, columns=['Ramanshift', 'Original Spectrum']+[f"Component {i}" for i in range(len(components))]+['Total Fit']).melt(id_vars=['Ramanshift'], var_name='Sample ID', value_name='Intensity')
+                    st.session_state.fsf_results_df = pd.DataFrame(np.array([x, y, fit]).T, columns=['Ramanshift', 'Original Spectrum', 'Total Fit']).melt(id_vars=['Ramanshift'], var_name='Sample ID', value_name='Intensity')
+
+                results_df = st.session_state.fsf_results_df_with_components if st.session_state.fsf_plot_components else st.session_state.fsf_results_df
+
                 # Plot results
-                fsf_plot = (alt.Chart(st.session_state.fsf_results_df_melted)
+                fsf_plot = (alt.Chart(results_df)
                     .mark_line()
                     .encode(
                         x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
                         y=alt.Y('Intensity', title=analytics_y_axis_title, type='quantitative'),
                         tooltip=alt.value(None),
-                        color=alt.Color("Sample ID:N", title="Sample"),
+                        color=alt.Color("Sample ID:N", title="Sample", sort=["Original Spectrum", "Total Fit"]),
                         size=alt.value(3)
                     ).properties(width=1300, height=400, title="Fit Spectrum - Total Fit")
                 )

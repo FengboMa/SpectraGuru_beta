@@ -362,7 +362,7 @@ if 'df' in st.session_state:
             st.number_input(
                 label="Cofit Range Multiplier",
                 value=0.65,
-                min_value=0.5,
+                min_value=0.4,
                 max_value=1.0,
                 step=0.01,
                 format="%0.2f",
@@ -1619,6 +1619,8 @@ else:
                     #TODO: log function call; potentially implement threading for a progress bar...
 
                     st.session_state.fsf_results_df_melted = pd.DataFrame(np.array([x, y, fit]).T, columns=['Ramanshift', 'Original Spectrum', 'Fit']).melt(id_vars=['Ramanshift'], var_name='Sample ID', value_name='Intensity')
+                    st.session_state.fsf_residual_df = pd.DataFrame(np.array([x, residual]).T, columns=['Ramanshift', 'Residual'])
+                    st.session_state.fsf_rmse = rmse
 
                 fsf_plot = (alt.Chart(st.session_state.fsf_results_df_melted)
                     .mark_line()
@@ -1630,7 +1632,18 @@ else:
                         size=alt.value(3)
                     ).properties(width=1300, height=400, title="Fit Spectrum - Total Fit")
                 )
+                residual_plot = (alt.Chart(st.session_state.fsf_residual_df)
+                    .mark_line()
+                    .encode(
+                        x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
+                        y=alt.Y('Residual', title=analytics_y_axis_title, type='quantitative'),
+                        tooltip=alt.value(None),
+                        color=alt.value('red'),
+                        size=alt.value(3)
+                    ).properties(width=1300, height=300, title=f"Fit Spectrum - Residual / (RMSE = {st.session_state.fsf_rmse:.3f})")
+                )
                 st.altair_chart(fsf_plot)
+                st.altair_chart(residual_plot)
 
                 #TODO: log plot generated
 

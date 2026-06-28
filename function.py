@@ -2828,7 +2828,7 @@ def fit_full_spectrum_v2(x, y, num_peaks,
             if len(cofit_idcs) > max_cofits:
                 cofit_idcs = []
                 local_crm *= 0.9
-                try_runtime_reduction = True
+                try_runtime_reduction = True # Triggers another peak search attempt
             else:
                 cofits = [centers[j] for j in cofit_idcs]
 

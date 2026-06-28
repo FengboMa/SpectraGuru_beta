@@ -353,9 +353,9 @@ if 'df' in st.session_state:
                 label="Number of Peaks (Components) to Fit",
                 value=30,
                 min_value=1,
-                max_value=100,
+                max_value=60,
                 step=1,
-                help="The number of peaks (components) to fit to your data. Note that some data peaks may be composed of multiple components.",
+                help="The number of peaks (components) to fit to your data. Expect slower runtimes with greater numbers.",
                 key="fsf_num_peaks"
             )
             
@@ -372,7 +372,7 @@ if 'df' in st.session_state:
 
             st.number_input(
                 label="Cofit Range Multiplier",
-                value=0.65,
+                value=0.7,
                 min_value=0.4,
                 max_value=1.0,
                 step=0.01,
@@ -384,26 +384,17 @@ if 'df' in st.session_state:
             st.selectbox(
                 label="Runtime Control Option",
                 options=(
-                    "Quick (m=8)",
-                    "Standard (m=11)",
-                    "Slow (m=14)",
-                    "Thorough (m=17)"
+                    "Quick (m=6)",
+                    "Standard (m=9)",
+                    "Slow (m=12)",
+                    "Thorough (m=15)"
                 ),
                 index=1,
-                help="Controls the worst case runtime by limiting the number of peaks `m` which may be cofit together. Quicker runtimes may result in reduced fit quiality.",
+                help="Controls the worst case runtime by limiting the number of peaks `m` which may be cofit together. Quicker runtimes may result in reduced fit quality.",
                 key="fsf_runtime_control"
             )
 
             fsf_run = st.form_submit_button("Run Fit")
-        
-        st.sidebar.toggle("Show Components", 
-                          value=False, 
-                          help="Choose whether to plot each component along with the total fit. Readability may be greatly reduced if the number of components is too high.",
-                          key="fsf_plot_components")
-        st.sidebar.toggle("Use Interactive Plot",
-                          value=False,
-                          help="Choose whether the total fit plot should be interactive.",
-                          key="fsf_interactive")
 
 
 # Stats section layout
@@ -1645,10 +1636,10 @@ else:
                     x, y = filtered_fsf_df['Ramanshift'].to_numpy(), filtered_fsf_df['Intensity'].to_numpy()
 
                     max_cofits = {
-                        "Quick (m=8)": 8,
-                        "Standard (m=11)": 11,
-                        "Slow (m=14)": 14,
-                        "Thorough (m=17)": 17
+                        "Quick (m=6)": 6,
+                        "Standard (m=9)": 9,
+                        "Slow (m=12)": 12,
+                        "Thorough (m=15)": 15
                     }[st.session_state.fsf_runtime_control]
 
                     start = time.perf_counter()
@@ -1679,7 +1670,7 @@ else:
                     st.session_state.fsf_results_df_with_components = pd.DataFrame(np.array([x, y]+[c['curve'] for c in components]+[fit]).T, columns=['Ramanshift', st.session_state.fsf_spectrum_select]+[f"Component {i}" for i in range(st.session_state.fsf_num_components)]+['Total Fit'])
                     st.session_state.fsf_results_df = pd.DataFrame(np.array([x, y, fit]).T, columns=['Ramanshift', st.session_state.fsf_spectrum_select, 'Total Fit'])
 
-                results_df = st.session_state.fsf_results_df_with_components if st.session_state.fsf_plot_components else st.session_state.fsf_results_df
+                results_df = st.session_state.fsf_results_df_with_components #if st.session_state.fsf_plot_components else st.session_state.fsf_results_df
                 results_df_melted = results_df.melt(id_vars=['Ramanshift'], var_name='Sample ID', value_name='Intensity').round(4)
 
                 st.success(f"Fit completed in {st.session_state.fsf_time:.3f} seconds.")
@@ -1696,9 +1687,8 @@ else:
                         color=alt.Color("Sample ID:N", title="Sample", sort=[st.session_state.fsf_spectrum_select, "Total Fit"]),
                         size=alt.value(3)
                     ).properties(width=1300, height=400, title="Fit Spectrum - Total Fit")
+                    .interactive()
                 )
-                if st.session_state.fsf_interactive:
-                    fsf_plot = fsf_plot.interactive()
 
                 residual_plot = (alt.Chart(st.session_state.fsf_residual_df)
                     .mark_line()

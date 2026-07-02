@@ -2650,6 +2650,119 @@ def als_baseline_removal(spectra, lam=1e7, p=0.001, d=2, max_iter=50, return_bas
         return baseline
     return y - baseline
 
+# Core local fitting method for full spectrum fitting
+def _fit_local(x_local, y_local, target, cofits,
+               tolerance=12.0,
+               peak_shape="Gaussian",
+               default_fwhm_cm1=12.0,
+               min_fwhm_cm1=4.0,
+               max_fwhm_cm1=40.0,
+               pseudovoigt_eta_default=0.5,
+               pseudovoigt_eta_min=0.0,
+               pseudovoigt_eta_max=1.0,
+              ):
+    import numpy as np
+    from scipy.optimize import curve_fit
+
+    def _fwhm_to_sigma(fwhm):
+        return float(fwhm) / 2.35482
+
+    # Mathematical definitions for each of the three supported curve shapes.
+
+    def _gaussian(x, amp, cen, fwhm):
+        sig = max(_fwhm_to_sigma(fwhm), 1e-12)
+        return amp * np.exp(-((x-cen)**2)/(2*sig**2))
+
+    def _lorentzian(x, amp, cen, fwhm):
+        half = 0.5 * max(float(fwhm), 1e-12)
+        return amp * (half**2) / ((x-cen)**2 + half**2)
+
+    def _pseudovoigt(x, amp, cen, fwhm, eta):
+        eta = float(np.clip(eta, 0, 1))
+        return (1-eta)*_gaussian(x, amp, cen, fwhm) + eta*_lorentzian(x, amp, cen, fwhm)
+
+    # Wrapper for mathematical curve definitions. For pseudovoigt curves, `eta` must be specified.
+    def _component_curve(x, amp, cen, fwhm, shape, eta=None):
+        if shape == "Gaussian":
+            return _gaussian(x, amp, cen, fwhm)
+        if shape == "Lorentzian":
+            return _lorentzian(x, amp, cen, fwhm)
+        if shape == "Pseudovoigt":
+            return _pseudovoigt(x, amp, cen, fwhm, 0.5 if eta is None or np.isnan(eta) else eta)
+        else:
+            raise ValueError(f"Peak shape '{shape}' not recognized.")
+    
+    # Constructs a function `model` which returns the sum of `ncomp` curves of a given `shape` provided a set of parameters.
+    # Parameters passed to `model` should cycle: [amplitude, center, FWHM, ...] for Gaussian and Lorentzian curves; [amplitude, center, FWHM, eta, ...]
+    # for Pseudovoigt curves.
+    def _build_sum_model(ncomp: int, shape: str):
+        uses_eta = shape == "Pseudovoigt"
+        def model(x, *params):
+            y = np.zeros_like(x, dtype=float)
+            k = 0
+            for _ in range(ncomp):
+                amp, cen, fwhm = params[k], params[k+1], params[k+2]
+                k += 3
+                eta = None
+                if uses_eta:
+                    eta = params[k]
+                    k += 1
+                y += _component_curve(x, amp, cen, fwhm, shape, eta)
+            return y
+        return model, uses_eta
+
+    # Formulates a guess at the full width at half maximum (FWHM) of a peak in data at `center`.
+    def _initial_fwhm_guess(x, y, center, default_fwhm_cm1, min_fwhm_cm1, max_fwhm_cm1):
+        ii = int(np.argmin(abs(x-center)))
+        left, right = max(0, ii-6), min(len(x), ii+7)
+        yw, xw = y[left:right], x[left:right]
+        if len(yw) < 5:
+            return float(np.clip(default_fwhm_cm1, min_fwhm_cm1, max_fwhm_cm1))
+        peak_idx = int(np.argmax(yw))
+        half = 0.5 * float(np.max(yw))
+        li = peak_idx
+        ri = peak_idx
+        while li > 0 and yw[li] > half:
+            li -= 1
+        while ri < len(yw)-1 and yw[ri] > half:
+            ri += 1
+        if li == peak_idx or ri == peak_idx:
+            return float(np.clip(default_fwhm_cm1, min_fwhm_cm1, max_fwhm_cm1))
+        return float(np.clip(abs(xw[ri]-xw[li]), min_fwhm_cm1, max_fwhm_cm1))
+
+    centers = [target]+cofits
+
+    model, uses_eta = _build_sum_model(len(centers), peak_shape)
+    p0, lb, ub = [], [], [] # Initial guesses, lower and upper bounds for curve parameters
+    for i, c in enumerate(centers):
+        amp_guess = max(float(y[int(np.argmin(abs(x-c)))]), float(np.max(y))*(0.7 if i==0 else 0.35), 1e-9)
+        fwhm_guess = _initial_fwhm_guess(x_local, y_local, c, default_fwhm_cm1, min_fwhm_cm1, max_fwhm_cm1)
+        local_tol = tolerance
+        p0.extend([amp_guess, c, fwhm_guess])
+        lb.extend([0.0, c-local_tol, min_fwhm_cm1])
+        ub.extend([np.inf, c+local_tol, max_fwhm_cm1])
+        if uses_eta:
+            p0.append(pseudovoigt_eta_default)
+            lb.append(pseudovoigt_eta_min)
+            ub.append(pseudovoigt_eta_max)
+    # Use `scipy.optimize.curve_fit` to optimize curve parameters
+    popt, _ = curve_fit(model, x_local, y_local, p0=np.asarray(p0), bounds=(np.asarray(lb), np.asarray(ub)), maxfev=50000)
+
+    # Organize results
+    local_comps = []
+    k = 0
+    for i, seed in enumerate(centers):
+        amp, cen, fwhm = float(popt[k]), float(popt[k+1]), float(popt[k+2])
+        k += 3
+        eta = np.nan
+        if uses_eta:
+            eta = float(popt[k])
+            k += 1
+        curve = _component_curve(x, amp, cen, fwhm, peak_shape, eta)
+        local_comps.append({"parameters":{"seed_center": seed, "fitted_center": cen, "amplitude": amp, "fwhm": fwhm, "eta": eta}, "curve": curve})
+    
+    return local_comps
+
 # Fits a set of curves to a spectrum by repeatedly checking the residual and locating its most prominent peak. The next peak
 # in the iteration is placed there. In this sense, this function behaves like a greedy algorithm to find the most efficient
 # distribution of curves.
@@ -2658,7 +2771,7 @@ def als_baseline_removal(spectra, lam=1e7, p=0.001, d=2, max_iter=50, return_bas
 # this window can be controlled by `cofit_range_multiplier`. It is recommended that this value stay between 0.5 and 1.0; higher values
 # result in better fit quality, while lower values result in better performance.
 def fit_full_spectrum_v2(x, y, num_peaks, 
-                         cofit_range_multiplier=0.65,
+                         cofit_range_multiplier=0.7,
                          tolerance=12.0,
                          peak_shape="Gaussian",
                          default_fwhm_cm1=12.0,
@@ -2669,114 +2782,12 @@ def fit_full_spectrum_v2(x, y, num_peaks,
                          pseudovoigt_eta_max=1.0,
                          min_peak_distance=2.0,
                          min_window_width=10.0,
-                         max_cofits=11):
+                         max_cofits=9):
     import numpy as np
     from scipy.signal import find_peaks
-    from scipy.optimize import curve_fit
 
     total = np.zeros_like(y)
     residual = y
-
-    def fit_local(x_local, y_local, target, cofits):
-
-        def _fwhm_to_sigma(fwhm):
-            return float(fwhm) / 2.35482
-
-        # Mathematical definitions for each of the three supported curve shapes.
-
-        def _gaussian(x, amp, cen, fwhm):
-            sig = max(_fwhm_to_sigma(fwhm), 1e-12)
-            return amp * np.exp(-((x-cen)**2)/(2*sig**2))
-
-        def _lorentzian(x, amp, cen, fwhm):
-            half = 0.5 * max(float(fwhm), 1e-12)
-            return amp * (half**2) / ((x-cen)**2 + half**2)
-
-        def _pseudovoigt(x, amp, cen, fwhm, eta):
-            eta = float(np.clip(eta, 0, 1))
-            return (1-eta)*_gaussian(x, amp, cen, fwhm) + eta*_lorentzian(x, amp, cen, fwhm)
-
-        # Wrapper for mathematical curve definitions. For pseudovoigt curves, `eta` must be specified.
-        def _component_curve(x, amp, cen, fwhm, shape, eta=None):
-            if shape == "Gaussian":
-                return _gaussian(x, amp, cen, fwhm)
-            if shape == "Lorentzian":
-                return _lorentzian(x, amp, cen, fwhm)
-            if shape == "Pseudovoigt":
-                return _pseudovoigt(x, amp, cen, fwhm, 0.5 if eta is None or np.isnan(eta) else eta)
-            else:
-                raise ValueError(f"Peak shape '{shape}' not recognized.")
-        
-        # Constructs a function `model` which returns the sum of `ncomp` curves of a given `shape` provided a set of parameters.
-        # Parameters passed to `model` should cycle: [amplitude, center, FWHM, ...] for Gaussian and Lorentzian curves; [amplitude, center, FWHM, eta, ...]
-        # for Pseudovoigt curves.
-        def _build_sum_model(ncomp: int, shape: str):
-            uses_eta = shape == "Pseudovoigt"
-            def model(x, *params):
-                y = np.zeros_like(x, dtype=float)
-                k = 0
-                for _ in range(ncomp):
-                    amp, cen, fwhm = params[k], params[k+1], params[k+2]
-                    k += 3
-                    eta = None
-                    if uses_eta:
-                        eta = params[k]
-                        k += 1
-                    y += _component_curve(x, amp, cen, fwhm, shape, eta)
-                return y
-            return model, uses_eta
-
-        # Formulates a guess at the full width at half maximum (FWHM) of a peak in data at `center`.
-        def _initial_fwhm_guess(x, y, center, default_fwhm_cm1, min_fwhm_cm1, max_fwhm_cm1):
-            ii = int(np.argmin(abs(x-center)))
-            left, right = max(0, ii-6), min(len(x), ii+7)
-            yw, xw = y[left:right], x[left:right]
-            if len(yw) < 5:
-                return float(np.clip(default_fwhm_cm1, min_fwhm_cm1, max_fwhm_cm1))
-            peak_idx = int(np.argmax(yw))
-            half = 0.5 * float(np.max(yw))
-            li = peak_idx
-            ri = peak_idx
-            while li > 0 and yw[li] > half:
-                li -= 1
-            while ri < len(yw)-1 and yw[ri] > half:
-                ri += 1
-            if li == peak_idx or ri == peak_idx:
-                return float(np.clip(default_fwhm_cm1, min_fwhm_cm1, max_fwhm_cm1))
-            return float(np.clip(abs(xw[ri]-xw[li]), min_fwhm_cm1, max_fwhm_cm1))
-
-        centers = [target]+cofits
-
-        model, uses_eta = _build_sum_model(len(centers), peak_shape)
-        p0, lb, ub = [], [], [] # Initial guesses, lower and upper bounds for curve parameters
-        for i, c in enumerate(centers):
-            amp_guess = max(float(y[int(np.argmin(abs(x-c)))]), float(np.max(y))*(0.7 if i==0 else 0.35), 1e-9)
-            fwhm_guess = _initial_fwhm_guess(x_local, y_local, c, default_fwhm_cm1, min_fwhm_cm1, max_fwhm_cm1)
-            local_tol = tolerance
-            p0.extend([amp_guess, c, fwhm_guess])
-            lb.extend([0.0, c-local_tol, min_fwhm_cm1])
-            ub.extend([np.inf, c+local_tol, max_fwhm_cm1])
-            if uses_eta:
-                p0.append(pseudovoigt_eta_default)
-                lb.append(pseudovoigt_eta_min)
-                ub.append(pseudovoigt_eta_max)
-        # Use `scipy.optimize.curve_fit` to optimize curve parameters
-        popt, _ = curve_fit(model, x_local, y_local, p0=np.asarray(p0), bounds=(np.asarray(lb), np.asarray(ub)), maxfev=50000)
-
-        # Organize results
-        local_comps = []
-        k = 0
-        for i, seed in enumerate(centers):
-            amp, cen, fwhm = float(popt[k]), float(popt[k+1]), float(popt[k+2])
-            k += 3
-            eta = np.nan
-            if uses_eta:
-                eta = float(popt[k])
-                k += 1
-            curve = _component_curve(x, amp, cen, fwhm, peak_shape, eta)
-            local_comps.append({"parameters":{"seed_center": seed, "fitted_center": cen, "amplitude": amp, "fwhm": fwhm, "eta": eta}, "curve": curve})
-        
-        return local_comps
 
     centers, comps = [], []
     for iter in range(num_peaks):
@@ -2839,7 +2850,15 @@ def fit_full_spectrum_v2(x, y, num_peaks,
         #print(f"Iteration {iter+1}/{num_peaks} ({np.around(100*(iter+1)/num_peaks,2)}%) ...", [target] + cofits)
 
         # Perform subfit
-        local_comps = fit_local(x_local, y_local, target, cofits)
+        local_comps = _fit_local(x_local, y_local, target, cofits,
+                                 tolerance=tolerance,
+                                 peak_shape=peak_shape,
+                                 default_fwhm_cm1=default_fwhm_cm1,
+                                 min_fwhm_cm1=min_fwhm_cm1,
+                                 max_fwhm_cm1=max_fwhm_cm1,
+                                 pseudovoigt_eta_default=pseudovoigt_eta_default,
+                                 pseudovoigt_eta_min=pseudovoigt_eta_min,
+                                 pseudovoigt_eta_max=pseudovoigt_eta_max)
 
         # Update centers and components
         for k, l in enumerate(local_comps):
@@ -2859,3 +2878,27 @@ def fit_full_spectrum_v2(x, y, num_peaks,
     rmse = float(np.sqrt(np.mean(residual**2)))
 
     return total, residual, comps, rmse
+
+# Fits a set of curves to a spectrum based on the locations of the `num_peaks` most prominent peaks. For performance, not
+# all peaks are calculated at once; only nearby cofits are calculated each iteration.
+def fit_full_spectrum_v3(x, y, num_peaks, 
+                         cofit_range_multiplier=0.7,
+                         tolerance=12.0,
+                         peak_shape="Gaussian",
+                         default_fwhm_cm1=12.0,
+                         min_fwhm_cm1=4.0,
+                         max_fwhm_cm1=40.0,
+                         pseudovoigt_eta_default=0.5,
+                         pseudovoigt_eta_min=0.0,
+                         pseudovoigt_eta_max=1.0,
+                         min_peak_distance=2.0,
+                         min_window_width=10.0,
+                         max_cofits=9):
+    import numpy as np
+    from scipy.signal import find_peaks
+
+    # Generate peak list
+    idx, props = find_peaks(y, prominence=0, width=0, rel_height=0.5)
+
+    # Iterate until there are no unfitted peaks
+

@@ -2793,7 +2793,7 @@ def fit_full_spectrum_v2(x, y, num_peaks,
     for iter in range(num_peaks):
         idx, props = find_peaks(np.maximum(residual, 0.0), prominence=0, width=0)
 
-        def collides_with_known_peak(cand):
+        def _collides_with_known_peak(cand):
             for c in centers:
                 if np.abs(c - cand) < min_peak_distance:
                     return True
@@ -2804,7 +2804,7 @@ def fit_full_spectrum_v2(x, y, num_peaks,
         n = len(idx)
         target = float(x[idx[order][n-1]])
         i = 0
-        while collides_with_known_peak(target) and i+1 < n:
+        while _collides_with_known_peak(target) and i+1 < n:
             i += 1
             target = float(x[idx[order][n-1-i]])
         if i+1 >= n:
@@ -2899,6 +2899,21 @@ def fit_full_spectrum_v3(x, y, num_peaks,
 
     # Generate peak list
     idx, props = find_peaks(y, prominence=0, width=0, rel_height=0.5)
+
+    order = np.argsort(props['prominences'])
+    centers, widths = [], []
+
+    def _collides_with_known_peak(centers, target):
+        pass
+
+    i, iter = 0
+    while iter < num_peaks and i < len(idx):
+        cen, w = x[idx[order][i]], props['widths'][order][i]
+        if not _collides_with_known_peak(centers, cen):
+            centers.append(cen)
+            widths.append(w)
+            iter += 1
+        i += 1
 
     # Iterate until there are no unfitted peaks
 

@@ -2879,9 +2879,12 @@ def fit_full_spectrum_v2(x, y, num_peaks,
 
     return total, residual, comps, rmse
 
-# Fits a set of curves to a spectrum based on the locations of the `num_peaks` most prominent peaks. For performance, not
-# all peaks are calculated at once; only nearby cofits are calculated each iteration.
-def fit_full_spectrum_v3(x, y, num_peaks, 
+# Fits a set of curves to a spectrum based on the locations of the most prominent peaks. Improves on the performance of version 2 by
+# processing multiple unfitted peaks at once, based on the results of `find_peaks`.
+#
+# The user will specify a `min_prominence`. The algorithm ends once all valid peaks more prominent than `min_prominence` are fitted. This includes
+# prominent peaks in the residual after each iteration.
+def fit_full_spectrum_v3(x, y, min_prominence, 
                          cofit_range_multiplier=0.7,
                          tolerance=12.0,
                          peak_shape="Gaussian",
@@ -2892,28 +2895,91 @@ def fit_full_spectrum_v3(x, y, num_peaks,
                          pseudovoigt_eta_min=0.0,
                          pseudovoigt_eta_max=1.0,
                          min_peak_distance=2.0,
+                         max_iterations=100,
                          min_window_width=10.0,
                          max_cofits=9):
     import numpy as np
     from scipy.signal import find_peaks
 
-    # Generate peak list
-    idx, props = find_peaks(y, prominence=0, width=0, rel_height=0.5)
+    total = np.zeros_like(y)
+    residual = y
 
-    order = np.argsort(props['prominences'])
-    centers, widths = [], []
+    comps = []
+    prominent_peaks_exist = True
+    while prominent_peaks_exist:
+        idx, props = find_peaks(residual, prominence=min_prominence, width=0, distance=min_peak_distance, rel_height=0.5)
+        n = len(idx)
+        if n > 0:
+            order = np.argsort(props['prominences'])
+            centers = x[idx]
+            widths = props['widths']
+            target = x[idx[order][n-1]]
+            target_width = props['widths'][order][n-1]
+            
+            # Append fitted centers to the list of known centers
+            for comp in comps:
+                centers.append(comp['parameters']['fitted_center'])
+                widths.append(comp['parameters']['fwhm'])
+            
+            
+            # Determine the appropriate window to use.
+            local_crm = cofit_range_multiplier
+            cofit_idcs, cofits, window_min, window_max = [], [], 0, np.inf
+            try_runtime_reduction = True
+            while try_runtime_reduction:
+                half_window_width = max(local_crm * target_width, 0.5*min_window_width)
+                window_min, window_max = target - half_window_width, target + half_window_width
+                # Extend the window to include neighboring peaks
+                look_for_peaks = True
+                while look_for_peaks:
+                    look_for_peaks = False
+                    for k, comp_or_peak_center in enumerate(centers):
+                        # For each known peak, determine whether it intersects with the window range
+                        fitted_center, half_subwindow_width = comp_or_peak_center, local_crm * 2 * widths[k]
+                        lower_bound, upper_bound = fitted_center - half_subwindow_width, fitted_center + half_subwindow_width
+                        if lower_bound < window_min and upper_bound > window_min:
+                            window_min = lower_bound
+                            look_for_peaks = True
+                        if upper_bound > window_max and lower_bound < window_max:
+                            window_max = upper_bound
+                            look_for_peaks = True
+                # Determine cofits
+                cofit_idcs = [j for j, c in enumerate(centers) if (c > window_min and c < window_max)]
+                try_runtime_reduction = False
+                if len(cofit_idcs) > max_cofits:
+                    cofit_idcs = []
+                    local_crm *= 0.9
+                    try_runtime_reduction = True # Triggers another peak search attempt
+                else:
+                    cofits = [centers[j] for j in cofit_idcs]
 
-    def _collides_with_known_peak(centers, target):
-        pass
+            start = int(np.searchsorted(x, window_min, side="left"))
+            stop = int(np.searchsorted(x, window_max, side="right"))
+            x_local, y_local = x[start:stop], y[start:stop]
 
-    i, iter = 0
-    while iter < num_peaks and i < len(idx):
-        cen, w = x[idx[order][i]], props['widths'][order][i]
-        if not _collides_with_known_peak(centers, cen):
-            centers.append(cen)
-            widths.append(w)
-            iter += 1
-        i += 1
+            # Perform subfit
+            local_comps = _fit_local(x_local, y_local, target, cofits,
+                                 tolerance=tolerance,
+                                 peak_shape=peak_shape,
+                                 default_fwhm_cm1=default_fwhm_cm1,
+                                 min_fwhm_cm1=min_fwhm_cm1,
+                                 max_fwhm_cm1=max_fwhm_cm1,
+                                 pseudovoigt_eta_default=pseudovoigt_eta_default,
+                                 pseudovoigt_eta_min=pseudovoigt_eta_min,
+                                 pseudovoigt_eta_max=pseudovoigt_eta_max)
 
-    # Iterate until there are no unfitted peaks
+            # TODO: Update centers and components
+            for k, l in enumerate(local_comps):
+                if k == 0:
+                    comps.append(l)
+                else:
+                    comps[cofit_idcs[k-1]] = l
+                
+            # Update residual based on new components
+            total = np.zeros_like(y)
+            for comp in comps:
+                total += comp['curve']
+            residual = y - total
+        else:
+            prominent_peaks_exist = False # end loop
 

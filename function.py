@@ -2905,14 +2905,14 @@ def fit_full_spectrum_v3(x, y, min_prominence,
     residual = y
 
     comps = []
-    prominent_peaks_exist = True
-    while prominent_peaks_exist:
+    prominent_peaks_exist, iter = True, 0
+    while prominent_peaks_exist and iter < max_iterations:
         idx, props = find_peaks(residual, prominence=min_prominence, width=0, distance=min_peak_distance, rel_height=0.5)
         n = len(idx)
         if n > 0:
             order = np.argsort(props['prominences'])
-            centers = x[idx]
-            widths = props['widths']
+            centers = x[idx[order][:n-1]]
+            widths = props['widths'][order][:n-1]
             target = x[idx[order][n-1]]
             target_width = props['widths'][order][n-1]
             
@@ -2967,10 +2967,9 @@ def fit_full_spectrum_v3(x, y, min_prominence,
                                  pseudovoigt_eta_default=pseudovoigt_eta_default,
                                  pseudovoigt_eta_min=pseudovoigt_eta_min,
                                  pseudovoigt_eta_max=pseudovoigt_eta_max)
-
-            # TODO: Update centers and components
+            
             for k, l in enumerate(local_comps):
-                if k == 0:
+                if k == 0 or cofit_idcs[k-1] < n-1:
                     comps.append(l)
                 else:
                     comps[cofit_idcs[k-1]] = l
@@ -2980,6 +2979,11 @@ def fit_full_spectrum_v3(x, y, min_prominence,
             for comp in comps:
                 total += comp['curve']
             residual = y - total
+            iter += 1
         else:
             prominent_peaks_exist = False # end loop
+        
+    rmse = float(np.sqrt(np.mean(residual**2)))
+
+    return total, residual, comps, rmse
 

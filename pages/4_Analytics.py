@@ -359,15 +359,15 @@ if 'df' in st.session_state:
                 key="fsf_num_peaks"
             )
 
-            #st.number_input(
-            #    label="Peak Prominence Threshold",
-            #    value=30.0,
-            #    min_value=2.0,
-            #    max_value=1000.0,
-            #    step=1.0,
-            #    help="The minimum prominence required for peaks included in the fit.",
-            #    key="fsf_prominence_threshold"
-            #)
+            st.number_input(
+                label="Peak Prominence Threshold",
+                value=30.0,
+                min_value=2.0,
+                max_value=1000.0,
+                step=1.0,
+                help="The minimum prominence required for peaks included in the fit.",
+                key="fsf_prominence_threshold"
+            )
             
             st.selectbox(
                 label="Peak Shape",
@@ -1660,7 +1660,16 @@ else:
                                                                     max_cofits=max_cofits
                                                                 )
                     end = time.perf_counter()
+                    v3_start = time.perf_counter()
+                    fit, residual, components, rmse = function.fit_full_spectrum_v3(x, y, 
+                                                                    min_prominence=st.session_state.fsf_prominence_threshold,
+                                                                    cofit_range_multiplier=st.session_state.fsf_cofit_range_multiplier,
+                                                                    peak_shape=st.session_state.fsf_peak_shape,
+                                                                    max_cofits=max_cofits
+                                                                )
+                    v3_end = time.perf_counter()
                     st.session_state.fsf_time = end - start # fit runtime
+                    st.session_state.fsf_time_v3 = v3_end - v3_start
 
                     log.log_function_call("Analytics_Peak_Fitting_Full_Spectrum",
                                           f_params={
@@ -1684,6 +1693,7 @@ else:
                 results_df_melted = results_df.melt(id_vars=['Ramanshift'], var_name='Sample ID', value_name='Intensity').round(4)
 
                 st.success(f"Fit completed in {st.session_state.fsf_time:.3f} seconds.")
+                st.success(f"V3 Fit completed in {st.session_state.fsf_time_v3:.3f} seconds.")
 
                 # Plot results
 

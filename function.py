@@ -2772,7 +2772,7 @@ def _fit_local(x, y, x_local, y_local, target, cofits,
 # result in better fit quality, while lower values result in better performance.
 def fit_full_spectrum_v2(x, y, num_peaks, 
                          cofit_range_multiplier=0.7,
-                         tolerance=12.0,
+                         tolerance=5.0,
                          peak_shape="Gaussian",
                          default_fwhm_cm1=12.0,
                          min_fwhm_cm1=4.0,
@@ -2888,7 +2888,7 @@ def fit_full_spectrum_v2(x, y, num_peaks,
 # This algorithm does not perform better than `fit_full_spectrum_v2` unless the user intends to fit a very high number of peaks (approaching 100 or more).
 def fit_full_spectrum_v3(x, y, min_prominence, 
                          cofit_range_multiplier=0.7,
-                         tolerance=12.0,
+                         tolerance=5.0,
                          peak_shape="Gaussian",
                          default_fwhm_cm1=12.0,
                          min_fwhm_cm1=4.0,
@@ -2902,12 +2902,13 @@ def fit_full_spectrum_v3(x, y, min_prominence,
                          max_cofits=9):
     import numpy as np
     from scipy.signal import find_peaks
+    import time
 
     total = np.zeros_like(y)
     residual = y
 
     comps = []
-    num_cofits = []
+    win_sizes, num_cofits, times, cofits_debug = [], [], [], [] #DEBUG
     prominent_peaks_exist, iter = True, 0
     while prominent_peaks_exist and iter < max_iterations:
         idx, props = find_peaks(np.maximum(residual, 0.0), prominence=min_prominence, width=0, distance=min_peak_distance, rel_height=0.5)
@@ -2960,14 +2961,18 @@ def fit_full_spectrum_v3(x, y, min_prominence,
                     local_crm *= 0.9
                     try_runtime_reduction = True # Triggers another peak search attempt
                 else:
-                    num_cofits.append(len(cofit_idcs))
+                    win_sizes.append(float(np.round(window_max - window_min, 3))) #DEBUG
+                    num_cofits.append(len(cofit_idcs)) #DEBUG
                     cofits = [all_centers[j] for j in cofit_idcs]
+                    if len(cofit_idcs) > 8: #DEBUG
+                        cofits_debug = cofits #DEBUG
 
             start = int(np.searchsorted(x, window_min, side="left"))
             stop = int(np.searchsorted(x, window_max, side="right"))
             x_local, y_local = x[start:stop], y[start:stop]
 
             # Perform subfit
+            start = time.perf_counter() #DEBUG
             local_comps = _fit_local(x, y, x_local, y_local, target, cofits,
                                  tolerance=tolerance,
                                  peak_shape=peak_shape,
@@ -2977,6 +2982,8 @@ def fit_full_spectrum_v3(x, y, min_prominence,
                                  pseudovoigt_eta_default=pseudovoigt_eta_default,
                                  pseudovoigt_eta_min=pseudovoigt_eta_min,
                                  pseudovoigt_eta_max=pseudovoigt_eta_max)
+            end = time.perf_counter() #DEBUG
+            times.append(float(np.round(end-start,3)))
             
             for k, l in enumerate(local_comps):
                 if k == 0 or cofit_idcs[k-1] < n-1:
@@ -2992,7 +2999,7 @@ def fit_full_spectrum_v3(x, y, min_prominence,
             iter += 1
         else:
             prominent_peaks_exist = False # end loop
-    print(iter, num_cofits)    
+    print(iter, num_cofits, win_sizes, times, cofits_debug) #DEBUG
     rmse = float(np.sqrt(np.mean(residual**2)))
 
     return total, residual, comps, rmse

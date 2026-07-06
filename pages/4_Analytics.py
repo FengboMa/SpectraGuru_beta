@@ -358,6 +358,16 @@ if 'df' in st.session_state:
                 help="The number of peaks (components) to fit to your data. Expect slower runtimes with greater numbers.",
                 key="fsf_num_peaks"
             )
+
+            #st.number_input(
+            #    label="Peak Prominence Threshold",
+            #    value=30.0,
+            #    min_value=2.0,
+            #    max_value=1000.0,
+            #    step=1.0,
+            #    help="The minimum prominence required for peaks included in the fit.",
+            #    key="fsf_prominence_threshold"
+            #)
             
             st.selectbox(
                 label="Peak Shape",

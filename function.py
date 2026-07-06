@@ -2651,7 +2651,7 @@ def als_baseline_removal(spectra, lam=1e7, p=0.001, d=2, max_iter=50, return_bas
     return y - baseline
 
 # Core local fitting method for full spectrum fitting
-def _fit_local(x_local, y_local, target, cofits,
+def _fit_local(x, y, x_local, y_local, target, cofits,
                tolerance=12.0,
                peak_shape="Gaussian",
                default_fwhm_cm1=12.0,
@@ -2791,7 +2791,7 @@ def fit_full_spectrum_v2(x, y, num_peaks,
 
     centers, comps = [], []
     for iter in range(num_peaks):
-        idx, props = find_peaks(np.maximum(residual, 0.0), prominence=0, width=0)
+        idx, props = find_peaks(np.maximum(residual, 0.0), prominence=0, width=0, rel_height=0.5)
 
         def _collides_with_known_peak(cand):
             for c in centers:
@@ -2850,7 +2850,7 @@ def fit_full_spectrum_v2(x, y, num_peaks,
         #print(f"Iteration {iter+1}/{num_peaks} ({np.around(100*(iter+1)/num_peaks,2)}%) ...", [target] + cofits)
 
         # Perform subfit
-        local_comps = _fit_local(x_local, y_local, target, cofits,
+        local_comps = _fit_local(x, y, x_local, y_local, target, cofits,
                                  tolerance=tolerance,
                                  peak_shape=peak_shape,
                                  default_fwhm_cm1=default_fwhm_cm1,
@@ -2884,6 +2884,8 @@ def fit_full_spectrum_v2(x, y, num_peaks,
 #
 # The user will specify a `min_prominence`. The algorithm ends once all valid peaks more prominent than `min_prominence` are fitted. This includes
 # prominent peaks in the residual after each iteration.
+#
+# This algorithm does not perform better than `fit_full_spectrum_v2` unless the user intends to fit a very high number of peaks (approaching 100 or more).
 def fit_full_spectrum_v3(x, y, min_prominence, 
                          cofit_range_multiplier=0.7,
                          tolerance=12.0,
@@ -2905,9 +2907,10 @@ def fit_full_spectrum_v3(x, y, min_prominence,
     residual = y
 
     comps = []
+    num_cofits = []
     prominent_peaks_exist, iter = True, 0
     while prominent_peaks_exist and iter < max_iterations:
-        idx, props = find_peaks(residual, prominence=min_prominence, width=0, distance=min_peak_distance, rel_height=0.5)
+        idx, props = find_peaks(np.maximum(residual, 0.0), prominence=min_prominence, width=0, distance=min_peak_distance, rel_height=0.5)
         n = len(idx)
         if n > 0:
             order = np.argsort(props['prominences'])
@@ -2917,9 +2920,15 @@ def fit_full_spectrum_v3(x, y, min_prominence,
             target_width = props['widths'][order][n-1]
             
             # Append fitted centers to the list of known centers
+            all_centers, all_widths = [], []
+            for c in centers:
+                all_centers.append(c)
+            for w in widths:
+                all_widths.append(w)
+            #print(all_centers, all_widths)
             for comp in comps:
-                centers.append(comp['parameters']['fitted_center'])
-                widths.append(comp['parameters']['fwhm'])
+                all_centers.append(comp['parameters']['fitted_center'])
+                all_widths.append(comp['parameters']['fwhm'])
             
             
             # Determine the appropriate window to use.
@@ -2933,9 +2942,9 @@ def fit_full_spectrum_v3(x, y, min_prominence,
                 look_for_peaks = True
                 while look_for_peaks:
                     look_for_peaks = False
-                    for k, comp_or_peak_center in enumerate(centers):
+                    for k, comp_or_peak_center in enumerate(all_centers):
                         # For each known peak, determine whether it intersects with the window range
-                        fitted_center, half_subwindow_width = comp_or_peak_center, local_crm * 2 * widths[k]
+                        fitted_center, half_subwindow_width = comp_or_peak_center, local_crm * 2 * all_widths[k]
                         lower_bound, upper_bound = fitted_center - half_subwindow_width, fitted_center + half_subwindow_width
                         if lower_bound < window_min and upper_bound > window_min:
                             window_min = lower_bound
@@ -2944,21 +2953,22 @@ def fit_full_spectrum_v3(x, y, min_prominence,
                             window_max = upper_bound
                             look_for_peaks = True
                 # Determine cofits
-                cofit_idcs = [j for j, c in enumerate(centers) if (c > window_min and c < window_max)]
+                cofit_idcs = [j for j, c in enumerate(all_centers) if (c > window_min and c < window_max)]
                 try_runtime_reduction = False
                 if len(cofit_idcs) > max_cofits:
                     cofit_idcs = []
                     local_crm *= 0.9
                     try_runtime_reduction = True # Triggers another peak search attempt
                 else:
-                    cofits = [centers[j] for j in cofit_idcs]
+                    num_cofits.append(len(cofit_idcs))
+                    cofits = [all_centers[j] for j in cofit_idcs]
 
             start = int(np.searchsorted(x, window_min, side="left"))
             stop = int(np.searchsorted(x, window_max, side="right"))
             x_local, y_local = x[start:stop], y[start:stop]
 
             # Perform subfit
-            local_comps = _fit_local(x_local, y_local, target, cofits,
+            local_comps = _fit_local(x, y, x_local, y_local, target, cofits,
                                  tolerance=tolerance,
                                  peak_shape=peak_shape,
                                  default_fwhm_cm1=default_fwhm_cm1,
@@ -2972,7 +2982,7 @@ def fit_full_spectrum_v3(x, y, min_prominence,
                 if k == 0 or cofit_idcs[k-1] < n-1:
                     comps.append(l)
                 else:
-                    comps[cofit_idcs[k-1]] = l
+                    comps[cofit_idcs[k-1]-n+1] = l
                 
             # Update residual based on new components
             total = np.zeros_like(y)
@@ -2982,7 +2992,7 @@ def fit_full_spectrum_v3(x, y, min_prominence,
             iter += 1
         else:
             prominent_peaks_exist = False # end loop
-        
+    print(iter, num_cofits)    
     rmse = float(np.sqrt(np.mean(residual**2)))
 
     return total, residual, comps, rmse

@@ -338,7 +338,17 @@ if 'df' in st.session_state:
     
     elif st.session_state.stats_plot_select == "Full Spectrum Fitting":
         st.sidebar.info("Note: Your data should be baseline-removed when performing peak fitting.")
+        st.sidebar.selectbox(
+            label="Algorithm Version",
+            options=(
+                "V2 (Number of Components)",
+                "V3 (Prominence Threshold)"
+            ),
+            help="Select the fitting algorithm version you would like to use. Version 2 allows you to specify an exact number of components, while Version 3 uses a peak prominence threshold to determine which peaks to include in the fit.",
+            key="fsf_algorithm_version"
+        )
         with st.sidebar.form("fsf_form"):
+
             spectrum_select_options = ["Average"] + [
                 column for column in st.session_state.temp.columns
                 if column not in ["Ramanshift", "Average", "Standard Deviation"]
@@ -349,25 +359,26 @@ if 'df' in st.session_state:
                 key="fsf_spectrum_select"
             )
 
-            st.number_input(
-                label="Number of Peaks (Components) to Fit",
-                value=30,
-                min_value=1,
-                max_value=60,
-                step=1,
-                help="The number of peaks (components) to fit to your data. Expect slower runtimes with greater numbers.",
-                key="fsf_num_peaks"
-            )
-
-            st.number_input(
-                label="Peak Prominence Threshold",
-                value=30.0,
-                min_value=2.0,
-                max_value=1000.0,
-                step=1.0,
-                help="The minimum prominence required for peaks included in the fit.",
-                key="fsf_prominence_threshold"
-            )
+            if st.session_state.fsf_algorithm_version == "V2 (Number of Components)":
+                st.number_input(
+                    label="Number of Peaks (Components) to Fit",
+                    value=30,
+                    min_value=1,
+                    max_value=60,
+                    step=1,
+                    help="The number of peaks (components) to fit to your data. Expect slower runtimes with greater numbers.",
+                    key="fsf_num_peaks"
+                )
+            if st.session_state.fsf_algorithm_version == "V3 (Prominence Threshold)":
+                st.number_input(
+                    label="Peak Prominence Threshold",
+                    value=100.0,
+                    min_value=50.0,
+                    max_value=1000.0,
+                    step=1.0,
+                    help="The minimum prominence required for peaks included in the fit.",
+                    key="fsf_prominence_threshold"
+                )
             
             st.selectbox(
                 label="Peak Shape",
@@ -380,29 +391,30 @@ if 'df' in st.session_state:
                 key="fsf_peak_shape"
             )
 
-            st.number_input(
-                label="Cofit Range Multiplier",
-                value=0.7,
-                min_value=0.4,
-                max_value=1.0,
-                step=0.01,
-                format="%0.2f",
-                help="The distance, relative to the width of any given peak, at which other peaks must be cofit together with this peak. Higher values may improve fit quality with a sacrifice in performance.",
-                key="fsf_cofit_range_multiplier"
-            )
+            if st.session_state.fsf_algorithm_version == "V2 (Number of Components)":
+                st.number_input(
+                    label="Cofit Range Multiplier",
+                    value=0.7,
+                    min_value=0.4,
+                    max_value=1.0,
+                    step=0.01,
+                    format="%0.2f",
+                    help="The distance, relative to the width of any given peak, at which other peaks must be cofit together with this peak. Higher values may improve fit quality with a sacrifice in performance.",
+                    key="fsf_cofit_range_multiplier"
+                )
 
-            st.selectbox(
-                label="Runtime Control Option",
-                options=(
-                    "Quick (m=6)",
-                    "Standard (m=9)",
-                    "Slow (m=12)",
-                    "Thorough (m=15)"
-                ),
-                index=1,
-                help="Controls the worst case runtime by limiting the number of peaks `m` which may be cofit together. Quicker runtimes may result in reduced fit quality.",
-                key="fsf_runtime_control"
-            )
+                st.selectbox(
+                    label="Runtime Control Option",
+                    options=(
+                        "Quick (m=6)",
+                        "Standard (m=9)",
+                        "Slow (m=12)",
+                        "Thorough (m=15)"
+                    ),
+                    index=1,
+                    help="Controls the worst case runtime by limiting the number of peaks `m` which may be cofit together. Quicker runtimes may result in reduced fit quality.",
+                    key="fsf_runtime_control"
+                )
 
             fsf_run = st.form_submit_button("Run Fit")
 
@@ -1645,40 +1657,49 @@ else:
                     filtered_fsf_df = stats_data_melted[stats_data_melted['Sample ID'] == st.session_state.fsf_spectrum_select]
                     x, y = filtered_fsf_df['Ramanshift'].to_numpy(), filtered_fsf_df['Intensity'].to_numpy()
 
-                    max_cofits = {
-                        "Quick (m=6)": 6,
-                        "Standard (m=9)": 9,
-                        "Slow (m=12)": 12,
-                        "Thorough (m=15)": 15
-                    }[st.session_state.fsf_runtime_control]
+                    if st.session_state.fsf_algorithm_version == "V2 (Number of Components)":
+                        max_cofits = {
+                            "Quick (m=6)": 6,
+                            "Standard (m=9)": 9,
+                            "Slow (m=12)": 12,
+                            "Thorough (m=15)": 15
+                        }[st.session_state.fsf_runtime_control]
 
-                    start = time.perf_counter()
-                    fit, residual, components, rmse = function.fit_full_spectrum_v2(x, y, 
-                                                                    num_peaks=st.session_state.fsf_num_peaks,
-                                                                    cofit_range_multiplier=st.session_state.fsf_cofit_range_multiplier,
-                                                                    peak_shape=st.session_state.fsf_peak_shape,
-                                                                    max_cofits=max_cofits
-                                                                )
-                    end = time.perf_counter()
-                    v3_start = time.perf_counter()
-                    fit, residual, components, rmse = function.fit_full_spectrum_v3(x, y, 
-                                                                    min_prominence=st.session_state.fsf_prominence_threshold,
-                                                                    cofit_range_multiplier=st.session_state.fsf_cofit_range_multiplier,
-                                                                    peak_shape=st.session_state.fsf_peak_shape,
-                                                                    max_cofits=max_cofits
-                                                                )
-                    v3_end = time.perf_counter()
-                    st.session_state.fsf_time = end - start # fit runtime
-                    st.session_state.fsf_time_v3 = v3_end - v3_start
+                        start = time.perf_counter()
+                        fit, residual, components, rmse = function.fit_full_spectrum_v2(x, y, 
+                                                                        num_peaks=st.session_state.fsf_num_peaks,
+                                                                        cofit_range_multiplier=st.session_state.fsf_cofit_range_multiplier,
+                                                                        peak_shape=st.session_state.fsf_peak_shape,
+                                                                        max_cofits=max_cofits
+                                                                    )
+                        end = time.perf_counter()
+                        st.session_state.fsf_time = end - start # fit runtime
+
+                        f_params={
+                            "num_peaks":st.session_state.fsf_num_peaks,
+                            "peak_shape":st.session_state.fsf_peak_shape,
+                            "cofit_range_multiplier":st.session_state.fsf_cofit_range_multiplier,
+                            "runtime":st.session_state.fsf_time,
+                            "runtime_option":st.session_state.fsf_runtime_control,
+                        }
+
+                    elif st.session_state.fsf_algorithm_version == "V3 (Prominence Threshold)":
+                        start = time.perf_counter()
+                        fit, residual, components, rmse = function.fit_full_spectrum_v3(x, y, 
+                                                                        min_prominence=st.session_state.fsf_prominence_threshold,
+                                                                        peak_shape=st.session_state.fsf_peak_shape,
+                                                                    )
+                        end = time.perf_counter()
+                        st.session_state.fsf_time = end - start # fit runtime
+
+                        f_params={
+                            "min_prominence":st.session_state.fsf_prominence_threshold,
+                            "peak_shape":st.session_state.fsf_peak_shape,
+                            "runtime":st.session_state.fsf_time,
+                        }
 
                     log.log_function_call("Analytics_Peak_Fitting_Full_Spectrum",
-                                          f_params={
-                                              "num_peaks":st.session_state.fsf_num_peaks,
-                                              "peak_shape":st.session_state.fsf_peak_shape,
-                                              "cofit_range_multiplier":st.session_state.fsf_cofit_range_multiplier,
-                                              "runtime":st.session_state.fsf_time,
-                                              "runtime_option":st.session_state.fsf_runtime_control,
-                                          })
+                                          f_params=f_params)
 
                     st.session_state.fsf_residual_df = pd.DataFrame(np.array([x, residual]).T, columns=['Ramanshift', 'Residual'])
                     st.session_state.fsf_rmse = rmse
@@ -1693,12 +1714,17 @@ else:
                 results_df_melted = results_df.melt(id_vars=['Ramanshift'], var_name='Sample ID', value_name='Intensity').round(4)
 
                 st.success(f"Fit completed in {st.session_state.fsf_time:.3f} seconds.")
-                st.success(f"V3 Fit completed in {st.session_state.fsf_time_v3:.3f} seconds.")
 
                 # Plot results
 
+                component_base_filter = {
+                    "Gaussian":0.1,
+                    "Lorentzian":5.0,
+                    "Pseudovoigt":1.0,
+                }[st.session_state.fsf_peak_shape]
+
                 fsf_plot = (alt.Chart(results_df_melted)
-                    .transform_filter((alt.datum['Intensity'] >= 0.1) | (alt.datum['Sample ID'] == st.session_state.fsf_spectrum_select) | (alt.datum['Sample ID'] == "Total Fit"))
+                    .transform_filter((alt.datum['Intensity'] >= component_base_filter) | (alt.datum['Sample ID'] == st.session_state.fsf_spectrum_select) | (alt.datum['Sample ID'] == "Total Fit"))
                     .mark_line()
                     .encode(
                         x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),

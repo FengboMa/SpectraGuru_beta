@@ -341,10 +341,10 @@ if 'df' in st.session_state:
         st.sidebar.selectbox(
             label="Algorithm Version",
             options=(
-                "V2 (Number of Components)",
-                "V3 (Prominence Threshold)"
+                "Discrete",
+                "Prominence-Based"
             ),
-            help="Select the fitting algorithm version you would like to use. Version 2 allows you to specify an exact number of components, while Version 3 uses a peak prominence threshold to determine which peaks to include in the fit.",
+            help="Select the fitting algorithm version you would like to use. The Discrete implementation allows you to specify an exact number of components, while the Prominence-Based implementation uses a prominence threshold to determine which peaks to include in the fit.",
             key="fsf_algorithm_version"
         )
         with st.sidebar.form("fsf_form"):
@@ -359,7 +359,7 @@ if 'df' in st.session_state:
                 key="fsf_spectrum_select"
             )
 
-            if st.session_state.fsf_algorithm_version == "V2 (Number of Components)":
+            if st.session_state.fsf_algorithm_version == "Discrete":
                 st.number_input(
                     label="Number of Peaks (Components) to Fit",
                     value=30,
@@ -369,7 +369,7 @@ if 'df' in st.session_state:
                     help="The number of peaks (components) to fit to your data. Expect slower runtimes with greater numbers.",
                     key="fsf_num_peaks"
                 )
-            if st.session_state.fsf_algorithm_version == "V3 (Prominence Threshold)":
+            if st.session_state.fsf_algorithm_version == "Prominence-Based":
                 st.number_input(
                     label="Peak Prominence Threshold",
                     value=100.0,
@@ -391,7 +391,7 @@ if 'df' in st.session_state:
                 key="fsf_peak_shape"
             )
 
-            if st.session_state.fsf_algorithm_version == "V2 (Number of Components)":
+            if st.session_state.fsf_algorithm_version == "Discrete":
                 st.number_input(
                     label="Cofit Range Multiplier",
                     value=0.7,
@@ -1657,7 +1657,7 @@ else:
                     filtered_fsf_df = stats_data_melted[stats_data_melted['Sample ID'] == st.session_state.fsf_spectrum_select]
                     x, y = filtered_fsf_df['Ramanshift'].to_numpy(), filtered_fsf_df['Intensity'].to_numpy()
 
-                    if st.session_state.fsf_algorithm_version == "V2 (Number of Components)":
+                    if st.session_state.fsf_algorithm_version == "Discrete":
                         max_cofits = {
                             "Quick (m=6)": 6,
                             "Standard (m=9)": 9,
@@ -1676,6 +1676,7 @@ else:
                         st.session_state.fsf_time = end - start # fit runtime
 
                         f_params={
+                            "algorithm":"discrete",
                             "num_peaks":st.session_state.fsf_num_peaks,
                             "peak_shape":st.session_state.fsf_peak_shape,
                             "cofit_range_multiplier":st.session_state.fsf_cofit_range_multiplier,
@@ -1683,7 +1684,7 @@ else:
                             "runtime_option":st.session_state.fsf_runtime_control,
                         }
 
-                    elif st.session_state.fsf_algorithm_version == "V3 (Prominence Threshold)":
+                    elif st.session_state.fsf_algorithm_version == "Prominence-Based":
                         start = time.perf_counter()
                         fit, residual, components, rmse = function.fit_full_spectrum_v3(x, y, 
                                                                         min_prominence=st.session_state.fsf_prominence_threshold,
@@ -1693,6 +1694,7 @@ else:
                         st.session_state.fsf_time = end - start # fit runtime
 
                         f_params={
+                            "algorithm":"prominence_based",
                             "min_prominence":st.session_state.fsf_prominence_threshold,
                             "peak_shape":st.session_state.fsf_peak_shape,
                             "runtime":st.session_state.fsf_time,

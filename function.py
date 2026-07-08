@@ -2895,7 +2895,7 @@ def fit_full_spectrum_v3(x, y, min_prominence,
                          pseudovoigt_eta_min=0.0,
                          pseudovoigt_eta_max=1.0,
                          min_peak_distance=2.0,
-                         max_iterations=60,
+                         max_iterations=100,
                          min_window_width=10.0,
                          max_cofits=9):
     import numpy as np
@@ -2908,24 +2908,37 @@ def fit_full_spectrum_v3(x, y, min_prominence,
     prominent_peaks_exist, iter = True, 0
     while prominent_peaks_exist and iter < max_iterations:
         idx, props = find_peaks(np.maximum(residual, 0.0), prominence=min_prominence, width=0, distance=min_peak_distance, rel_height=0.5)
-        n = len(idx)
+        order = np.argsort(props['prominences'])
+        centers = x[idx[order]]
+        widths = props['widths'][order]
+
+        def collides_with_known_peak(cand):
+            for comp in comps:
+                if np.abs(comp['parameters']['fitted_center'] - cand) < min_peak_distance:
+                    return True
+            return False
+        
+        centers_filtered, widths_filtered = [], []
+        for k, c in enumerate(centers):
+            if not collides_with_known_peak(c):
+                centers_filtered.append(c)
+                widths_filtered.append(widths[k])
+
+        n = len(centers_filtered)
         if n > 0:
-            order = np.argsort(props['prominences'])
-            centers = x[idx[order][:n-1]]
-            widths = props['widths'][order][:n-1]
-            target = x[idx[order][n-1]]
-            target_width = props['widths'][order][n-1]
             
+            target = centers_filtered[n-1]
+            target_width = widths_filtered[n-1]
+
             # Append fitted centers to the list of known centers
-            all_centers, all_widths = [], []
-            for c in centers:
-                all_centers.append(c)
-            for w in widths:
-                all_widths.append(w)
-            #print(all_centers, all_widths)
+            all_centers, all_widths, n_comps = [], [], len(comps)
             for comp in comps:
                 all_centers.append(comp['parameters']['fitted_center'])
                 all_widths.append(comp['parameters']['fwhm'])
+            for k, c in enumerate(centers_filtered):
+                if k < n-1:
+                    all_centers.append(c)
+                    all_widths.append(widths[k])
             
             
             # Determine the appropriate window to use.
@@ -2975,10 +2988,10 @@ def fit_full_spectrum_v3(x, y, min_prominence,
                                  pseudovoigt_eta_max=pseudovoigt_eta_max)
             
             for k, l in enumerate(local_comps):
-                if k == 0 or cofit_idcs[k-1] < n-1:
+                if k == 0 or cofit_idcs[k-1] >= n_comps:
                     comps.append(l)
                 else:
-                    comps[cofit_idcs[k-1]-n+1] = l
+                    comps[cofit_idcs[k-1]] = l
                 
             # Update residual based on new components
             total = np.zeros_like(y)

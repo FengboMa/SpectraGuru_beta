@@ -1666,6 +1666,9 @@ else:
                 if fsf_run:
 
                     results = {}
+                    num_spectra = len(spectrum_select)
+                    if num_spectra > 1:
+                        progress_bar = st.progress(0.0, text=f"Fits completed {0}/{num_spectra} ({0}%)")
 
                     if st.session_state.fsf_algorithm_version == "Discrete":
                         max_cofits = {
@@ -1677,7 +1680,7 @@ else:
 
                         start = time.perf_counter()
 
-                        for column in spectrum_select:
+                        for i, column in enumerate(spectrum_select):
                             filtered_fsf_df = stats_data_melted[stats_data_melted['Sample ID'] == column]
                             x, y = filtered_fsf_df['Ramanshift'].to_numpy(), filtered_fsf_df['Intensity'].to_numpy()
 
@@ -1696,6 +1699,9 @@ else:
                                 "rmse": rmse
                             }
 
+                            if num_spectra > 1:
+                                progress_bar.progress((i+1) / float(num_spectra), text=f"Fits completed {i+1}/{num_spectra} ({100 * (i+1) / float(num_spectra):.1f}%)")
+
                         end = time.perf_counter()
                         st.session_state.fsf_time = end - start # fit runtime
 
@@ -1711,7 +1717,7 @@ else:
 
                     elif st.session_state.fsf_algorithm_version == "Prominence-Based":
                         start = time.perf_counter()
-                        for column in spectrum_select:
+                        for i, column in enumerate(spectrum_select):
                             filtered_fsf_df = stats_data_melted[stats_data_melted['Sample ID'] == column]
                             x, y = filtered_fsf_df['Ramanshift'].to_numpy(), filtered_fsf_df['Intensity'].to_numpy()
 
@@ -1729,6 +1735,9 @@ else:
                                 "rmse": rmse
                             }
 
+                            if num_spectra > 1:
+                                progress_bar.progress((i+1) / float(num_spectra), text=f"Fits completed {i+1}/{num_spectra} ({100 * (i+1) / float(num_spectra):.1f}%)")
+
                         end = time.perf_counter()
                         st.session_state.fsf_time = end - start # fit runtime
 
@@ -1745,6 +1754,7 @@ else:
 
                     st.session_state.fsf_results = results
                     st.session_state.fsf_results_peak_shape = st.session_state.fsf_peak_shape
+                    st.rerun()
                 
                 spectrum_view_options = list(st.session_state.fsf_results.keys())
                 num_spectra = len(spectrum_view_options)

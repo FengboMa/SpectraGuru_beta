@@ -378,7 +378,7 @@ if 'df' in st.session_state:
                     min_value=1,
                     max_value=30,
                     step=1,
-                    help="Decides the prominence threshold `n` for the fit. Any components more prominent than the `nth` most prominent peak will be included.",
+                    help="Gives an approximate number of components `n` for the fit. Any components more prominent than the `nth` most prominent peak will be included.",
                     key="fsf_prominence_rank_threshold"
                 )
             
@@ -1670,6 +1670,19 @@ else:
                     if num_spectra > 1:
                         progress_bar = st.progress(0.0, text=f"Fits completed {0}/{num_spectra} ({0}%)")
 
+                    def display_progress(start_time, iteration, num_spectra):
+                        TIME_WARN_THRESHOLD = 30 # Streamlit should display a warning if the estimated time remaining exceeds this value.
+                        end_estimate = time.perf_counter()
+                        estimate = int((end_estimate - start_time) * (num_spectra / (iteration+1.0) - 1))
+                        progress_text = f"Fits completed {iteration+1}/{num_spectra} ({100 * (iteration+1) / float(num_spectra):.1f}%)."
+                        if iteration+1 < num_spectra:
+                            estimate_minutes, estimate_seconds = int(estimate / 60), estimate % 60
+                            minute_string = f"{estimate_minutes}m " if estimate_minutes > 0 else ""
+                            progress_text += f" Estimated time remaining: {minute_string}{estimate_seconds}s."
+                        progress_bar.progress((iteration+1) / float(num_spectra), text=progress_text)
+                        if iteration == 0 and estimate > TIME_WARN_THRESHOLD:
+                            st.warning(f"Warning: Based on your parameters and the server speed, it may take a while to process all spectra.")
+
                     if st.session_state.fsf_algorithm_version == "Discrete":
                         max_cofits = {
                             "Quick (m=6)": 6,
@@ -1699,15 +1712,16 @@ else:
                                 "rmse": rmse
                             }
 
+                            # Display estimated time remaining
                             if num_spectra > 1:
-                                progress_bar.progress((i+1) / float(num_spectra), text=f"Fits completed {i+1}/{num_spectra} ({100 * (i+1) / float(num_spectra):.1f}%)")
+                                display_progress(start, i, num_spectra)
 
                         end = time.perf_counter()
                         st.session_state.fsf_time = end - start # fit runtime
 
                         f_params={
                             "algorithm":"discrete",
-                            "num_spectra":len(spectrum_select),
+                            "num_spectra":num_spectra,
                             "num_peaks":st.session_state.fsf_num_peaks,
                             "peak_shape":st.session_state.fsf_peak_shape,
                             "cofit_range_multiplier":st.session_state.fsf_cofit_range_multiplier,
@@ -1735,15 +1749,16 @@ else:
                                 "rmse": rmse
                             }
 
+                            # Display estimated time remaining
                             if num_spectra > 1:
-                                progress_bar.progress((i+1) / float(num_spectra), text=f"Fits completed {i+1}/{num_spectra} ({100 * (i+1) / float(num_spectra):.1f}%)")
+                                display_progress(start, i, num_spectra)
 
                         end = time.perf_counter()
                         st.session_state.fsf_time = end - start # fit runtime
 
                         f_params={
                             "algorithm":"prominence_based",
-                            "num_spectra":len(spectrum_select),
+                            "num_spectra":num_spectra,
                             "peak_ranking_threshold":st.session_state.fsf_prominence_rank_threshold,
                             "peak_shape":st.session_state.fsf_peak_shape,
                             "runtime":st.session_state.fsf_time,

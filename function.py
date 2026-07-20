@@ -2884,7 +2884,7 @@ def fit_full_spectrum_v2(x, y, num_peaks,
 #
 # The user will specify a `min_prominence`. The algorithm ends once all valid peaks more prominent than `min_prominence` are fitted. This includes
 # prominent peaks in the residual after each iteration.
-def fit_full_spectrum_v3(x, y, min_prominence, 
+def fit_full_spectrum_v3(x, y, prominence_rank_threshold, 
                          cofit_range_multiplier=0.7,
                          tolerance=5.0,
                          peak_shape="Gaussian",
@@ -2895,7 +2895,7 @@ def fit_full_spectrum_v3(x, y, min_prominence,
                          pseudovoigt_eta_min=0.0,
                          pseudovoigt_eta_max=1.0,
                          min_peak_distance=2.0,
-                         max_iterations=100,
+                         max_iterations=50,
                          min_window_width=10.0,
                          max_cofits=9):
     import numpy as np
@@ -2903,6 +2903,14 @@ def fit_full_spectrum_v3(x, y, min_prominence,
 
     total = np.zeros_like(y)
     residual = y
+
+    # Determine the prominence threshold
+    idx, props = find_peaks(np.maximum(residual, 0.0), prominence=0, rel_height=0.5)
+    order = np.argsort(props['prominences'])
+    if len(idx) >= prominence_rank_threshold:
+        min_prominence = props['prominences'][order][::-1][prominence_rank_threshold-1]
+    else:
+        min_prominence = props['prominences'][order][0]
 
     comps = []
     prominent_peaks_exist, iter = True, 0

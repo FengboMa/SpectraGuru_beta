@@ -1770,20 +1770,24 @@ else:
                     spectrum_view = spectrum_view_options[0]
 
                 x, y, fit, residual, components, rmse = st.session_state.fsf_results[spectrum_view].values()
+                scale_factor = np.max(y)
+                round_to = max(7-int(np.log10(scale_factor)), 1)
                 num_components = len(components)
                 results_df = pd.DataFrame(np.array([x, y]+[c['curve'] for c in components]+[fit]).T, columns=['Ramanshift', spectrum_view]+[f"Component {i}" for i in range(num_components)]+['Total Fit']) #if st.session_state.fsf_plot_components else st.session_state.fsf_results_df
-                results_df_melted = results_df.melt(id_vars=['Ramanshift'], var_name='Sample ID', value_name='Intensity').round(4)
+                results_df_melted = results_df.melt(id_vars=['Ramanshift'], var_name='Sample ID', value_name='Intensity').round(round_to)
 
                 # Plot results
 
-                component_base_filter = {
+                component_base_filter = ({
                     "Gaussian":0.1,
                     "Lorentzian":5.0,
                     "Pseudovoigt":1.0,
-                }[st.session_state.fsf_results_peak_shape]
+                }[st.session_state.fsf_results_peak_shape] * scale_factor / 4000.0).round(max(round_to - 2, 1))
+
+                #print(scale_factor, round_to, component_base_filter)
 
                 fsf_plot = (alt.Chart(results_df_melted)
-                    .transform_filter((alt.datum['Intensity'] >= component_base_filter) | (alt.datum['Sample ID'] == spectrum_view) | (alt.datum['Sample ID'] == "Total Fit"))
+                    .transform_filter((alt.datum['Intensity'] >= float(component_base_filter)) | (alt.datum['Sample ID'] == spectrum_view) | (alt.datum['Sample ID'] == "Total Fit"))
                     .mark_line()
                     .encode(
                         x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
@@ -1805,7 +1809,7 @@ else:
                         tooltip=alt.value(None),
                         color=alt.value('red'),
                         size=alt.value(3)
-                    ).properties(width=1300, height=300, title=f"Fit Spectrum - Residual / (RMSE = {rmse:.3f})")
+                    ).properties(width=1300, height=300, title=f"Fit Spectrum - Residual / (RMSE = {np.round(rmse, round_to)})")
                 )
                 st.altair_chart(function.style_altair_chart(fsf_plot), use_container_width=False)
                 log.log_plot_generated_count()
@@ -1815,7 +1819,7 @@ else:
                 component_params_df = pd.DataFrame([c['parameters'] for c in components])
 
                 st.write("Component Parameters")
-                st.dataframe(component_params_df.round(4))
+                st.dataframe(component_params_df.round(round_to))
 
                 st.write("Component Curves")
-                st.dataframe(results_df.round(4)[['Ramanshift', spectrum_view, 'Total Fit']+[f"Component {i}" for i in range(num_components)]])
+                st.dataframe(results_df.round(round_to)[['Ramanshift', spectrum_view, 'Total Fit']+[f"Component {i}" for i in range(num_components)]])

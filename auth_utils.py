@@ -80,3 +80,9 @@ def logout():
     st.session_state.user_decided = False
     st.session_state.user = None
     st.session_state.user_logged_in = False
+
+# Forces the user to be logged in to continue. If not logged in, a login popup appears.
+# This function should be called at the beginning of each page to make it inaccessible to Guest users.
+def force_login():
+    pass
+

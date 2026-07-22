@@ -10,6 +10,9 @@ from datetime import datetime
 
 import function
 import log_utils as log
+from auth_utils import force_login
+
+force_login()
 
 function.wide_space_default()
 

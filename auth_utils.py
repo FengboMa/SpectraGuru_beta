@@ -28,7 +28,6 @@ def populate(user):
             st.session_state.user_logged_in = user.get('signedIn', False)
             st.session_state.username = user.get('firstName') or "Guest"
 
-            st.session_state.show_login_modal = False
             st.session_state.show_welcome_modal = False
 
             return True
@@ -56,16 +55,32 @@ def startup():
     else:
         st.write("Loading user data...")
         st.stop() # do not go forward without getting confirmation from Clerk about user login status
+    
+def login_modal(on_dismiss):
+    @st.dialog("Log in to SpectraGuru™", width="small", dismissible=True, on_dismiss=on_dismiss)
+    def login_dialog():
+        left, center, right = st.columns([2, 90, 1])
+        
+        with center:
+            user = clerk_component(key="login", action="login")
+
+            if populate(user):
+                #print("POPULATED")
+                st.rerun()
+
+    login_dialog()
+
 
 def login():
     if LOCAL_DEPLOY:
-        st.session_state.show_login_modal = False
         return
 
     if 'global_placeholder' in st.session_state:
         st.session_state.global_placeholder.empty()
 
-    st.session_state.show_login_modal = True
+    def abort():
+        return
+    login_modal(on_dismiss=abort)
     
 def logout():
     if LOCAL_DEPLOY:
@@ -84,5 +99,16 @@ def logout():
 # Forces the user to be logged in to continue. If not logged in, a login popup appears.
 # This function should be called at the beginning of each page to make it inaccessible to Guest users.
 def force_login():
-    pass
+    if st.session_state.user is None or not st.session_state.user_logged_in:
+
+        if 'login_popup_dismissed' in st.session_state and st.session_state.login_popup_dismissed:
+            st.session_state.login_popup_dismissed = False
+            st.switch_page("SpectraGuru Home.py")
+
+        # Force the user to log in to continue
+        def abort():
+            st.session_state.login_popup_dismissed = True
+        login_modal(on_dismiss=abort)
+
+        st.stop()
 

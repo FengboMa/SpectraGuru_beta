@@ -50,14 +50,12 @@ if 'do_startup' not in st.session_state:
     st.session_state.do_startup = True
 if 'show_welcome_modal' not in st.session_state:
     st.session_state.show_welcome_modal = True
-if 'show_login_modal' not in st.session_state:
-    st.session_state.show_login_modal = False
 
 if st.session_state.do_startup:
-    print("DOING STARTUP...")
+    #print("DOING STARTUP...")
     startup()
-else:
-    print("STARTUP SKIPPED")
+#else:
+    #print("STARTUP SKIPPED")
 
 #st.write(st.session_state.user)
 print("User:", st.session_state.user)
@@ -90,11 +88,11 @@ def guest_entry():
     st.session_state.user_logged_in = False
     st.session_state.show_welcome_modal = False
 
-print("Welcome:",st.session_state.show_welcome_modal)
-print("Logged in:",st.session_state.user_logged_in)
+#print("Welcome:",st.session_state.show_welcome_modal)
+#print("Logged in:",st.session_state.user_logged_in)
 
 # ---------- welcome modal ----------
-if st.session_state.show_welcome_modal and not st.session_state.show_login_modal:
+if st.session_state.show_welcome_modal:
     # hide close icon
     st.markdown(
         """
@@ -117,16 +115,12 @@ if st.session_state.show_welcome_modal and not st.session_state.show_login_modal
         if LOCAL_DEPLOY:
             st.button("Continue as Guest", on_click=guest_entry)
         else:
-            col1, col2 = st.columns(2)
-
-            # left: guest
-            col1.button("Continue as Guest", on_click=guest_entry)
-
+            
             # right: login via Clerk—just a link
             #signin_url = clerk_signin_url()           # already returns the full redirect URL
             #col2.link_button("Log in", signin_url,type="primary")
 
-            col2.button("Log in here", on_click=login, type="primary")
+            st.button("Log in here", on_click=login, type="primary")
 
 
         st.caption(
@@ -135,26 +129,9 @@ if st.session_state.show_welcome_modal and not st.session_state.show_login_modal
             "(https://fengboma.github.io/docs.spectraguru/docs/License-Policies-Disclaimers.html)"
         )
 
-print("Login modal:", st.session_state.show_login_modal)
-print("User decided:", st.session_state.user_decided)
+#print("Login modal:", st.session_state.show_login_modal)
+#print("User decided:", st.session_state.user_decided)
 # ---------- login modal ----------- #
-if st.session_state.show_login_modal and not LOCAL_DEPLOY:
-
-    def abort():
-        st.session_state.show_login_modal = False
-
-    @st.dialog("Log in to SpectraGuru™", width="small", dismissible=True, on_dismiss=abort)
-    def login_dialog():
-        left, center, right = st.columns([2, 90, 1])
-        
-        with center:
-            user = clerk_component(key="login", action="login")
-
-            if populate(user):
-                print("POPULATED")
-                st.rerun()
-
-    login_dialog()
 
 st.write("# SpectraGuru™ - A Spectral Analysis Application")
 if LOCAL_DEPLOY:

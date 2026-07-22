@@ -5,6 +5,9 @@ from pathlib import Path
 import function
 import log_utils as log
 import datetime as dt
+from auth_utils import force_login
+
+force_login()
 
 function.wide_space_default()
 

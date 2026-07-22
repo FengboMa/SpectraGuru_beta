@@ -4,6 +4,9 @@ import function
 import psycopg2
 import numpy as np
 from scipy.interpolate import interp1d
+from auth_utils import force_login
+
+force_login()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Page-scoped key helper  ➜  every widget / cache key on this page is prefixed

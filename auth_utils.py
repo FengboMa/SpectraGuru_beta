@@ -99,6 +99,8 @@ def logout():
 # Forces the user to be logged in to continue. If not logged in, a login popup appears.
 # This function should be called at the beginning of each page to make it inaccessible to Guest users.
 def force_login():
+    if LOCAL_DEPLOY:
+        return
     if st.session_state.user is None or not st.session_state.user_logged_in:
 
         if 'login_popup_dismissed' in st.session_state and st.session_state.login_popup_dismissed:

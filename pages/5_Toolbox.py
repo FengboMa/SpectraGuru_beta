@@ -7,9 +7,9 @@ import log_utils as log
 import datetime as dt
 from auth_utils import force_login
 
-force_login()
-
 function.wide_space_default()
+
+force_login()
 
 DEFAULT_X_AXIS_TITLE = "Raman shift/cm⁻¹"
 DEFAULT_Y_AXIS_TITLE = "Intensity/a.u."

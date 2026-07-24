@@ -1,7 +1,6 @@
 import streamlit as st
 from streamlit_modal import Modal
-from auth_utils import LOCAL_DEPLOY, login, logout, startup, populate
-from auth_utils import clerk_component
+from auth_utils import LOCAL_DEPLOY, login, logout, startup
 # import streamlit.components.v1 as components
 
 import function
@@ -40,25 +39,13 @@ function.wide_space_default(page_title="SpectraGuru")
 
 #####################
 
-if 'user_decided' not in st.session_state:
-    st.session_state.user_decided = False
-if 'user' not in st.session_state:
-    st.session_state.user = None
-if 'user_logged_in' not in st.session_state:
-    st.session_state.user_logged_in = False
-if 'do_startup' not in st.session_state:
-    st.session_state.do_startup = True
 if 'show_welcome_modal' not in st.session_state:
     st.session_state.show_welcome_modal = True
 
-if st.session_state.do_startup:
-    #print("DOING STARTUP...")
-    startup()
-#else:
-    #print("STARTUP SKIPPED")
+startup()
 
 #st.write(st.session_state.user)
-print("User:", st.session_state.user)
+#print("User:", st.session_state.user)
 
 #log.clear_call_log()
 #log.clear_count_log()

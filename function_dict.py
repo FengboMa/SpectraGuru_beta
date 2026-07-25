@@ -140,7 +140,7 @@ reference_map = {
     'Analytics_ML_Classification_Random_Forest':[38,9],
     'Analytics_ML_Classification_KNN':[39,9],
     'Analytics_ML_Classification_SVM':[40,9],
-    'Analytics_Fitting_Full_Spectrum':[46,1],
+    'Analytics_Peak_Fitting_Full_Spectrum':[46,1],
     'Toolbox_Spectrum_Simulation':[41],
     'Toolbox_Peak_Assignment_Table':[42]
 }

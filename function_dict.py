@@ -101,7 +101,7 @@ references = {
     43:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/Fast_Fourier_Transform/", "link":True, "doc_page":True, "notes":"Analytics FFT doc page"},
     44:{"text":"https://doi.org/10.1016/S0168-9002(97)01023-1", "link":True, "doc_page":False, "notes":"SNIP reference"},
     45:{"text":"https://doi.org/10.1090/S0025-5718-1965-0178586-1", "link":True, "doc_page":False, "notes":"Cooley-Tukey FFT reference"},
-    46:{"text":"", "link":None, "doc_page":None, "notes":""},
+    46:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/Full_Spectrum_Fitting/", "link":True, "doc_page":True, "notes":"Full Spectrum Fitting doc page"},
     47:{"text":"", "link":None, "doc_page":None, "notes":""},
     48:{"text":"", "link":None, "doc_page":None, "notes":""},
     49:{"text":"", "link":None, "doc_page":None, "notes":""},
@@ -140,6 +140,7 @@ reference_map = {
     'Analytics_ML_Classification_Random_Forest':[38,9],
     'Analytics_ML_Classification_KNN':[39,9],
     'Analytics_ML_Classification_SVM':[40,9],
+    'Analytics_Fitting_Full_Spectrum':[46,1],
     'Toolbox_Spectrum_Simulation':[41],
     'Toolbox_Peak_Assignment_Table':[42]
 }

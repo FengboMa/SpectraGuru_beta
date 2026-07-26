@@ -24,6 +24,7 @@ names = {
     'Processing_Normalization_Area':("Normalization", "Normalization by area"),
     'Processing_Normalization_Peak':("Normalization", "Normalization by peak"),
     'Processing_Normalization_Minmax':("Normalization", "Min-max normalization"),
+    'Processing_Normalization_Mean':("Normalization", "Normalization by mean"),
     'Processing_Remove_Outliers':("Outlier removal", "Outlier removal"),
     'Analytics_Spectral_Derivation':("Spectral derivation", "Spectral derivation"),
     'Analytics_FFT':("Fast Fourier Transform (FFT) analysis", "Fast Fourier Transform (FFT) analysis"),

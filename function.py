@@ -2649,3 +2649,175 @@ def als_baseline_removal(spectra, lam=1e7, p=0.001, d=2, max_iter=50, return_bas
     if return_baseline:
         return baseline
     return y - baseline
+
+# --------------------  SILICON RAMAN CALIBRATION  --------------------------
+# Reference position of the first-order Raman band of crystalline silicon.
+SILICON_REFERENCE_PEAK = 520.7
+
+# Crystalline silicon has an intrinsic linewidth near 3-4 cm-1, broadened by the instrument
+# response to roughly 5-18 cm-1 even on low-resolution and handheld spectrometers. A fitted
+# width far above that range still fits a Lorentzian well, so the goodness of fit does not
+# flag it; it usually means the sample is not crystalline silicon.
+SILICON_TYPICAL_MAX_FWHM = 25.0
+
+def fit_silicon_peak(axis_values, intensity_values, reference=SILICON_REFERENCE_PEAK,
+                     half_width=25.0, max_shift=10.0):
+    """Fit the silicon reference band and measure the wavenumber offset of the axis.
+
+    A Lorentzian peak on a linear baseline is fitted inside a window around the
+    reference position by Levenberg-Marquardt least squares. Fitting the true line
+    shape rather than interpolating the strongest sample keeps the measured offset
+    free of the grid-spacing bias that a parabola through the apex introduces.
+
+    Parameters
+    ----------
+    axis_values, intensity_values : array-like
+        Raman shift axis and intensity of the measured silicon spectrum.
+    reference : float
+        Literature position of the reference band, in cm-1.
+    half_width : float
+        Half-width of the search window around `reference`, in cm-1.
+    max_shift : float
+        Largest offset accepted before the selection is rejected as implausible.
+
+    Returns
+    -------
+    dict
+        Fitted centre and its 1-sigma uncertainty, the measured shift, FWHM,
+        amplitude, R-squared, RMSE, and the fitted curve for plotting.
+    """
+    import numpy as np
+
+    x = np.asarray(axis_values, dtype=float)
+    y = np.asarray(intensity_values, dtype=float)
+    if x.ndim != 1 or x.shape != y.shape:
+        raise ValueError("Raman shift and intensity must be one-dimensional arrays of equal length.")
+    if not np.isfinite(x).all() or not np.isfinite(y).all():
+        raise ValueError("The silicon spectrum contains missing or non-numeric values.")
+
+    reference = float(reference)
+    half_width = float(half_width)
+    if not np.isfinite(reference) or reference <= 0:
+        raise ValueError("Reference peak position must be a positive wavenumber (cm-1).")
+    if not np.isfinite(half_width) or half_width <= 0:
+        raise ValueError("Search window half-width must be greater than zero.")
+
+    order = np.argsort(x)
+    x, y = x[order], y[order]
+    window = (x >= reference - half_width) & (x <= reference + half_width)
+    if window.sum() < 7:
+        raise ValueError(
+            f"The search window around {reference:g} cm-1 holds {int(window.sum())} points; at least 7 "
+            "are required. Check that the uploaded spectrum covers the silicon band, or widen the window."
+        )
+    xw, yw = x[window], y[window]
+
+    # Initial guess: linear baseline from the window edges, peak from the strongest sample.
+    edge = max(3, xw.size // 5)
+    baseline = float(np.median(np.concatenate((yw[:edge], yw[-edge:]))))
+    amplitude = float(yw.max() - baseline)
+    if amplitude <= 0:
+        raise ValueError(
+            "No positive peak was found in the search window. Check that the uploaded spectrum is a "
+            "silicon measurement."
+        )
+    above_half = xw[yw >= baseline + amplitude / 2.0]
+    gamma = float(above_half.max() - above_half.min()) / 2.0 if above_half.size > 1 else 2.0
+    params = np.array([amplitude, float(xw[np.argmax(yw)]),
+                       min(max(gamma, 1e-3), half_width), 0.0, baseline])
+
+    # The baseline is anchored at `reference` rather than at the moving centre, which keeps
+    # every Jacobian column exact.
+    def model(p):
+        return p[0] * p[2] ** 2 / ((xw - p[1]) ** 2 + p[2] ** 2) + p[3] * (xw - reference) + p[4]
+
+    def jacobian(p):
+        denominator = (xw - p[1]) ** 2 + p[2] ** 2
+        return np.column_stack((
+            p[2] ** 2 / denominator,
+            2.0 * p[0] * p[2] ** 2 * (xw - p[1]) / denominator ** 2,
+            2.0 * p[0] * p[2] * (xw - p[1]) ** 2 / denominator ** 2,
+            xw - reference,
+            np.ones_like(xw),
+        ))
+
+    damping = 1e-3
+    residual = yw - model(params)
+    cost = float(residual @ residual)
+    for _ in range(100):
+        jac = jacobian(params)
+        normal_matrix = jac.T @ jac
+        try:
+            step = np.linalg.lstsq(normal_matrix + damping * np.diag(np.diag(normal_matrix)),
+                                   jac.T @ residual, rcond=None)[0]
+        except np.linalg.LinAlgError:
+            break
+        trial = params + step
+        trial_residual = yw - model(trial)
+        trial_cost = float(trial_residual @ trial_residual)
+        if trial_cost < cost:
+            settled = abs(cost - trial_cost) < 1e-10 * max(cost, 1.0)
+            params, residual, cost = trial, trial_residual, trial_cost
+            damping = max(damping * 0.3, 1e-9)
+            if settled:
+                break
+        else:
+            damping = min(damping * 10.0, 1e7)
+
+    centre = float(params[1])
+    if not xw[0] <= centre <= xw[-1]:
+        raise ValueError(
+            "The fitted peak fell outside the search window. Check the uploaded spectrum or widen the window."
+        )
+    shift = centre - reference
+    if abs(shift) > float(max_shift):
+        raise ValueError(
+            f"The measured offset {shift:+.2f} cm-1 exceeds the maximum reasonable shift of "
+            f"{float(max_shift):g} cm-1. Check that the selected spectrum really shows the "
+            f"{reference:g} cm-1 silicon band."
+        )
+
+    total_sum_squares = float(((yw - yw.mean()) ** 2).sum())
+    degrees_of_freedom = max(xw.size - params.size, 1)
+    try:
+        covariance = np.linalg.inv(jacobian(params).T @ jacobian(params)) * cost / degrees_of_freedom
+        centre_error = float(np.sqrt(abs(covariance[1, 1])))
+    except np.linalg.LinAlgError:
+        centre_error = float("nan")
+
+    return {
+        "center": centre,
+        "center_error": centre_error,
+        "shift": float(shift),
+        "fwhm": float(2.0 * abs(params[2])),
+        "amplitude": float(params[0]),
+        "r_squared": float(1.0 - cost / total_sum_squares) if total_sum_squares > 0 else float("nan"),
+        "rmse": float(np.sqrt(cost / xw.size)),
+        "reference": reference,
+        "fit_x": xw,
+        "fit_y": yw,
+        "fitted_y": model(params),
+    }
+
+def apply_silicon_calibration(df, shift):
+    """Return a copy of a wide dataframe with the measured offset removed from its axis.
+
+    Calibration is a pure axis relabel: no interpolation is performed and every
+    intensity column is carried over untouched.
+    """
+    import numpy as np
+    import pandas as pd
+
+    if not isinstance(df, pd.DataFrame) or "Ramanshift" not in df.columns or df.shape[1] < 2:
+        raise ValueError('Input must be a wide dataframe with a "Ramanshift" column and at least one spectrum.')
+    shift = float(shift)
+    if not np.isfinite(shift):
+        raise ValueError("The calibration shift must be a finite number.")
+
+    axis_values = pd.to_numeric(df["Ramanshift"], errors="coerce").to_numpy(dtype=float)
+    if not np.isfinite(axis_values).all():
+        raise ValueError("The Raman shift axis contains missing or non-numeric values.")
+
+    calibrated = df.copy()
+    calibrated["Ramanshift"] = axis_values - shift
+    return calibrated

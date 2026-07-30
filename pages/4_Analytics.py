@@ -33,6 +33,7 @@ if 'df' in st.session_state:
                                 "Confidence Interval Plot",
                                 "Spectral Derivation",
                                 "Fast Fourier Transform (FFT) analysis",
+                                "Silicon Calibration",
                                 "Correlation Heatmap",
                                 "Peak Identification and Stats",
                                 "Hierarchically-clustered Heatmap",
@@ -117,6 +118,47 @@ if 'df' in st.session_state:
             label="Subtract average value before FFT",
             value=False,
             key="fft_subtract_average"
+        )
+    elif st.session_state.stats_plot_select == "Silicon Calibration":
+        silicon_uploaded_file = st.sidebar.file_uploader(
+            label="Silicon reference spectrum (CSV)",
+            type="csv",
+            key="silicon_calibration_file",
+            help="A silicon measurement recorded on the same instrument as the session data. "
+                 "Same wide format as Data Upload: the first column is the Raman shift axis and "
+                 "each remaining column is one spectrum."
+        )
+        st.sidebar.number_input(
+            label="Reference peak position (cm⁻¹)",
+            min_value=1.0,
+            max_value=10000.0,
+            value=function.SILICON_REFERENCE_PEAK,
+            step=0.1,
+            format="%.1f",
+            key="silicon_reference_peak",
+            help="Literature position of the first-order silicon Raman band. Editable so that "
+                 "other reference standards remain possible."
+        )
+        st.sidebar.number_input(
+            label="Search window half-width (cm⁻¹)",
+            min_value=1.0,
+            max_value=200.0,
+            value=25.0,
+            step=1.0,
+            format="%.0f",
+            key="silicon_search_half_width",
+            help="The silicon peak is fitted only inside the reference position ± this half-width."
+        )
+        st.sidebar.number_input(
+            label="Maximum reasonable shift (cm⁻¹)",
+            min_value=0.1,
+            max_value=200.0,
+            value=10.0,
+            step=1.0,
+            format="%.0f",
+            key="silicon_max_shift",
+            help="Larger measured offsets are rejected, because they usually mean the uploaded "
+                 "spectrum is not a silicon measurement."
         )
     elif st.session_state.stats_plot_select == "Correlation Heatmap":
 
@@ -738,6 +780,181 @@ else:
                 )
             except Exception as e:
                 st.error(f"Error during FFT processing: {e}")
+
+        elif st.session_state.stats_plot_select == "Silicon Calibration":
+            if silicon_uploaded_file is None:
+                st.info(
+                    "Upload a silicon reference spectrum in the sidebar. Its first-order Raman band "
+                    "is fitted and compared with the reference position, and the resulting offset "
+                    "can then be removed from the wavenumber axis of every spectrum in this session."
+                )
+            else:
+                try:
+                    silicon_source_df = pd.read_csv(silicon_uploaded_file)
+                    silicon_source_df = silicon_source_df.drop(
+                        columns=[c for c in silicon_source_df.columns if str(c).startswith("Unnamed")])
+                    if silicon_source_df.shape[1] < 2:
+                        raise ValueError(
+                            "The file must contain a Raman shift column and at least one spectrum column.")
+
+                    silicon_axis_column = ("Ramanshift" if "Ramanshift" in silicon_source_df.columns
+                                           else silicon_source_df.columns[0])
+                    silicon_spectrum_options = [
+                        column for column in silicon_source_df.columns
+                        if column not in (silicon_axis_column, "Average", "Standard Deviation")
+                    ]
+                    if not silicon_spectrum_options:
+                        raise ValueError("No spectrum column was found in the uploaded file.")
+
+                    selected_silicon_column = silicon_spectrum_options[0]
+                    if len(silicon_spectrum_options) > 1:
+                        selected_silicon_column = st.selectbox(
+                            "Silicon spectrum used for the fit",
+                            options=silicon_spectrum_options,
+                            index=0,
+                            key="silicon_calibration_column",
+                            help="Which column of the uploaded file holds the silicon measurement."
+                        )
+
+                    silicon_fit = function.fit_silicon_peak(
+                        pd.to_numeric(silicon_source_df[silicon_axis_column],
+                                      errors="coerce").to_numpy(dtype=float),
+                        pd.to_numeric(silicon_source_df[selected_silicon_column],
+                                      errors="coerce").to_numpy(dtype=float),
+                        reference=st.session_state.silicon_reference_peak,
+                        half_width=st.session_state.silicon_search_half_width,
+                        max_shift=st.session_state.silicon_max_shift
+                    )
+
+                    silicon_metric_columns = st.columns(3)
+                    silicon_metric_columns[0].metric(
+                        "Measured peak", f"{silicon_fit['center']:.3f} cm⁻¹",
+                        f"± {silicon_fit['center_error']:.3f} (1σ)", delta_color="off")
+                    silicon_metric_columns[1].metric(
+                        "Axis offset", f"{silicon_fit['shift']:+.3f} cm⁻¹",
+                        "measured − reference", delta_color="off")
+                    silicon_metric_columns[2].metric(
+                        "Fitted FWHM", f"{silicon_fit['fwhm']:.2f} cm⁻¹",
+                        f"R² = {silicon_fit['r_squared']:.4f}", delta_color="off")
+                    if silicon_fit["r_squared"] < 0.95:
+                        st.warning(
+                            f"The peak fit is poor (R² = {silicon_fit['r_squared']:.3f}). Check that the "
+                            "uploaded spectrum is a silicon measurement and that the search window "
+                            "covers the band before applying the offset."
+                        )
+                    # A broad band still fits a Lorentzian well, so R² alone does not catch a
+                    # spectrum measured on the wrong material. The fitted width does.
+                    if silicon_fit["fwhm"] > function.SILICON_TYPICAL_MAX_FWHM:
+                        st.warning(
+                            f"The fitted band is unusually broad (FWHM {silicon_fit['fwhm']:.1f} cm⁻¹). "
+                            "Crystalline silicon gives a narrow band of roughly 3–18 cm⁻¹ even on "
+                            "low-resolution instruments. Check that the uploaded spectrum is "
+                            "crystalline silicon rather than amorphous silicon or another material, "
+                            "and that the measurement is in focus, before applying the offset."
+                        )
+
+                    # The calibration is a pure x-axis shift, so the clearest picture is simply
+                    # the silicon peak before and after that shift, against the reference line.
+                    silicon_window_x = silicon_fit["fit_x"]
+                    silicon_window_y = silicon_fit["fit_y"]
+                    silicon_compare_frame = pd.concat([
+                        pd.DataFrame({
+                            "Ramanshift": silicon_window_x,
+                            "Intensity": silicon_window_y,
+                            "Trace": "Original silicon (uncalibrated)"
+                        }),
+                        pd.DataFrame({
+                            "Ramanshift": silicon_window_x - silicon_fit["shift"],
+                            "Intensity": silicon_window_y,
+                            "Trace": "Calibrated silicon"
+                        }),
+                    ], ignore_index=True)
+
+                    silicon_compare_chart = alt.Chart(silicon_compare_frame).mark_line(
+                        strokeWidth=2
+                    ).encode(
+                        x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative',
+                                scale=alt.Scale(zero=False)),
+                        y=alt.Y('Intensity', title=analytics_y_axis_title, type='quantitative',
+                                scale=alt.Scale(zero=False)),
+                        color=alt.Color('Trace:N', scale=alt.Scale(
+                            domain=["Original silicon (uncalibrated)", "Calibrated silicon"],
+                            range=["#9aa5b1", "#1f77b4"]
+                        ), legend=alt.Legend(title='Trace')),
+                        tooltip=alt.value(None)
+                    ).properties(
+                        height=600,
+                        title=f"Silicon peak moved from {silicon_fit['center']:.3f} cm⁻¹ onto the "
+                              f"{silicon_fit['reference']:g} cm⁻¹ reference "
+                              f"(shift {-silicon_fit['shift']:+.3f} cm⁻¹)"
+                    )
+                    silicon_reference_rule = alt.Chart(
+                        pd.DataFrame({"Ramanshift": [silicon_fit["reference"]]})
+                    ).mark_rule(color="#2e8b57", strokeDash=[6, 4], strokeWidth=2).encode(
+                        x='Ramanshift:Q')
+
+                    st.altair_chart(
+                        function.style_altair_chart(silicon_compare_chart + silicon_reference_rule),
+                        use_container_width=True,
+                        key=f"silicon_calibration_fit_{silicon_fit['center']:.4f}"
+                    )
+                    st.caption(
+                        "Grey is the silicon spectrum as it was measured; blue is the same spectrum "
+                        "after the offset is removed. Calibration moves the curve along the x-axis "
+                        "only, so the calibrated peak sits on the green reference line while the "
+                        "peak shape and every intensity value stay exactly the same."
+                    )
+                    log.log_plot_generated_count()
+                    log.log_function_call("Analytics_Silicon_Calibration", f_params={
+                        "reference_peak": st.session_state.silicon_reference_peak,
+                        "search_half_width": st.session_state.silicon_search_half_width,
+                        "measured_peak": round(silicon_fit["center"], 4),
+                        "shift": round(silicon_fit["shift"], 4),
+                    })
+
+                    st.write("### Apply to all data")
+                    st.caption(
+                        "Subtracts the measured offset from the wavenumber axis of every spectrum in "
+                        "the current session data. Intensity values are not changed and no "
+                        "interpolation is performed; applying creates a new calibrated dataframe and "
+                        "never overwrites the uploaded or processed data."
+                    )
+                    if st.button("Apply calibration to all spectra", key="silicon_calibration_apply"):
+                        # Calibrated results live under a dedicated session key so the upstream
+                        # df/temp dataframes from Data Upload and Processing are never overwritten.
+                        st.session_state.silicon_calibrated_df = function.apply_silicon_calibration(
+                            st.session_state.temp, silicon_fit["shift"])
+                        st.session_state.silicon_calibration_applied_shift = silicon_fit["shift"]
+                        log.log_function_call("Analytics_Silicon_Calibration", f_params={
+                            "shift": round(silicon_fit["shift"], 4), "apply_to_all": True})
+
+                    if "silicon_calibrated_df" in st.session_state:
+                        silicon_calibrated_df = st.session_state.silicon_calibrated_df
+                        applied_silicon_shift = st.session_state.silicon_calibration_applied_shift
+                        st.success(
+                            f"Calibration applied to {silicon_calibrated_df.shape[1] - 1} spectra: the "
+                            f"wavenumber axis was corrected by {-applied_silicon_shift:+.3f} cm⁻¹."
+                        )
+                        if abs(applied_silicon_shift - silicon_fit["shift"]) > 1e-9:
+                            st.warning(
+                                f"These results were calibrated with an offset of "
+                                f"{applied_silicon_shift:+.3f} cm⁻¹, but the fit above now reads "
+                                f"{silicon_fit['shift']:+.3f} cm⁻¹. Apply the calibration again to "
+                                "refresh them."
+                            )
+                        if st.toggle("Preview calibrated data", value=False,
+                                     key="silicon_calibration_preview"):
+                            st.dataframe(silicon_calibrated_df, use_container_width=True)
+                        st.download_button(
+                            label="Download calibrated data as CSV",
+                            data=silicon_calibrated_df.to_csv(
+                                index=False, float_format="%.4f").encode("utf-8"),
+                            file_name=f"data_silicon_calibrated_"
+                                      f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv",
+                        )
+                except Exception as e:
+                    st.error(f"Error during silicon calibration: {e}")
 
         elif st.session_state.stats_plot_select == "Correlation Heatmap":
             # Select only the columns we need for correlation calculation

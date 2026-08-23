@@ -739,13 +739,14 @@ else:
         
         if baselineremoval_act:
             # Add more functions to this selectbox if needed
-            baselineremoval_functions = ["airPLS", "ModPoly","Gaussian-Lorentzian Fitting", "SNIP", "ALS"]
+            baselineremoval_functions = ["airPLS", "ModPoly","Gaussian-Lorentzian Fitting", "SNIP", "ALS", "iModPoly"]
             st.session_state.baselineremoval_function = st.selectbox(
                 label="Select baseline removal function",
                 options=baselineremoval_functions,
                 format_func={
                     "airPLS": "AirPLS",
                     "ModPoly": "ModPoly",
+                    "iModPoly": "iModPoly",
                     "Gaussian-Lorentzian Fitting": "Gaussian-Lorentzian fitting",
                     "SNIP": "SNIP",
                     "ALS": "ALS"
@@ -773,6 +774,27 @@ else:
                 st.session_state.baselineremoval_ModPoly_degree = st.number_input(label="ModPoly polynomial degree",
                                                                         min_value=1, max_value = 20, value = 5, 
                                                                         step = 1, placeholder="Insert a number") 
+
+            elif st.session_state.baselineremoval_function == "iModPoly":
+                st.session_state.baselineremoval_iModPoly_degree = st.number_input(label="iModPoly polynomial degree",
+                                                                        min_value=1, max_value = 20, value = 5, 
+                                                                        step = 1, placeholder="Insert a number") 
+                st.session_state.baselineremoval_iModPoly_max_iter = st.number_input(label="Number of peak removal procedures",
+                                                                        help = "Determines how many times the peak-removal step repeats before the baseline is fit. Higher values strip out more of the spectrum's peaks across successive passes, leaving a cleaner, more peak-free reference for the fit.",
+                                                                        min_value=0, max_value = 7, value = 1, 
+                                                                        step = 1, placeholder="Insert a number")
+                st.session_state.baselineremoval_iModPoly_tol = st.number_input(label="Scaling factor for peak removal",
+                                                                        help = "Determines how far above the fitted curve, in standard deviations of the noise, a point must rise before it's discarded as a peak. Higher values are more forgiving, keeping more of the spectrum and removing only the most prominent peaks.",
+                                                                        min_value=0.0, max_value = 2.0, value = 1.0, 
+                                                                        step = 0.1, placeholder="Insert a number",format="%.1f")
+                st.session_state.baselineremoval_iModPoly_tol = st.number_input(label="Scaling factor for polyfit",
+                                                                        help = "Determines how far above the fitted curve, in standard deviations of the noise, a point is allowed to sit before it's clamped down during baseline refitting. Higher values let the baseline rise closer to the peaks, producing a baseline that hugs the signal less tightly.",
+                                                                        min_value=0.0, max_value = 2.0, value = 0.0, 
+                                                                        step = 0.1, placeholder="Insert a number",format="%.1f")
+                st.session_state.baselineremoval_iModPoly_tol = st.number_input(label="Termination criteria for polynomial fitting",
+                                                                        help ="Determines when the iterative baseline fit stops: fitting continues only while each pass reduces the residual noise by more than this fraction. Higher values require a smaller improvement to keep going, allowing more refinement iterations before the fit is considered converged.",
+                                                                        min_value=0.95, max_value = 0.99, value = 0.95, 
+                                                                        step = 0.01, placeholder="Insert a number",format="%.2f")
             elif st.session_state.baselineremoval_function == "Gaussian-Lorentzian Fitting":
                 st.session_state.baselineremoval_GLF_num_range = st.number_input(label="Number of fitting ranges",
                                                                         min_value=2, max_value = 10, value = 2, 

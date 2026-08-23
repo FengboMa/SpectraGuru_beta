@@ -2649,3 +2649,186 @@ def als_baseline_removal(spectra, lam=1e7, p=0.001, d=2, max_iter=50, return_bas
     if return_baseline:
         return baseline
     return y - baseline
+
+
+# ── iModPoly  baseline correction ──────────────────────────────────────────────────
+"""
+# This program implements fluorescence background removal based on Vancouver Raman Algorithm
+# Ref: Zhao, Lui, McLean and Zeng, "Automated autofluorescence background subtraction algorithm
+#      for biomedical Raman spectroscopy", Applied Spectroscopy; Vol 61, No 11, 1225-1232 (2007)
+#
+# Slightly modified to provide the users more flexibility to choose the number of peak removal
+# procedures and the range of baseline correction. Once the parameters were optimized, these factors 
+# should not be changed during study.
+#
+# It contains the following functions:
+#     peak_removal       - peak removal procedure
+#     modified_polyfit   - polynomial fitting procedure
+#     imodified_polyfit  - combines peak removal and polynomial fitting
+#     spec_boxcar_smooth - used for noise reduction (sliding window averaging) 
+#     spec_interpolation - for data interpolation in case of need
+#
+# Edited by Kyla Tsuyuki, Jianhua Zhao and Haishan Zeng
+# 2026-06-10
+# Implemented by Nayeong Kweon (UGA)
+# 2026-08-07
+"""
+
+#-------------------PEAK REMOVAL--------------------
+def peak_removal(spec_in, nth = 5, iter_max=1, scale_factor =1.0):
+    """
+    Implementing Peak Removal procedure for Vancouver Raman Algorithm
+    Arg:
+        spec_in:   Input array of spectra
+                   spec_in([:,0]) = wavenumber
+                   spec_in([:,1]) = Raman intensity
+        nth:       Order of polynomial to be used in peak removal, default = 5
+        iter_max:  number of peak removal procedures (0-7), default = 1, Max = 7
+        scale_factor: scaling factor for peak removal (0-2), default = 1
+    Returns:
+        spec_out:  Output array of peak-removed spectra
+                   spec_out([:,0]) = wavenumber without peak region
+                   spec_out([:,1]) = Raman intensity without peak region
+    """
+    import numpy as np
+
+    #Initialization
+    wvnum = spec_in[:,0]
+    spec = spec_in[:,1]
+    iter = 0             # iteration counter
+    if iter_max >= 7:    # check max iterations, default = 1, max = 7
+       iter_max = 7
+
+    # Peak removal
+    while iter < iter_max:
+        # Polynomial fitting, p - coeff
+        p = np.polyfit(wvnum, spec, nth)    #nth order polynomial fitting
+        y1 = np.polyval(p, wvnum)           #fitted spec
+        res = spec - y1                     #residual 
+        error = np.std(res, ddof=1)         #estimate error (std)
+        iter += 1                           #increase iteration count
+
+        # Remove peaks
+        diff_spec = spec - y1 - error * scale_factor
+        spec2 = spec[diff_spec < 0]            # intensity without peak region
+        wvnum2 = wvnum[diff_spec < 0]          # wavenumber without peak region
+
+        # Replace spec and wvnum for subsequent iterations
+        spec = spec2
+        wvnum = wvnum2
+
+    # Combine final wavenumber and intensity columns into one output array
+    spec_out = np.column_stack((wvnum, spec))
+
+    # Plotting removed
+
+    return spec_out
+
+# ------------- MODIFIED POLYFIT----------------
+def modified_polyfit(spec_in, nth = 5, scale_factor = 0.0, cutoff= 0.95):
+    """
+    Implements polynomial fitting after peak-removal
+    Arg:
+        spec_in: Input array of peak-removed spectra
+                spec_in([:,0]) = wavenumber
+                spec_in([:,1]) = Raman intensity
+        nth:    Order of polynomial to be used, default = 5
+        scale_factor: scaling factor for baseline correction (0-2), default = 0
+        cutoff: cutoff value for termination of polynomial fitting (0.95-0.99), default = 0.95
+    Returns:
+        spec_out: Output array with background fitted to the last iteration
+                 spec_out([:,0]) = wavenumber
+                 spec_out([:,1]) = Fitted background
+    """
+    import numpy as np
+
+    # check spectra size
+    nx, ny = spec_in.shape  # nx = spectrum length (size), ny = 2
+
+    # Initialization
+    wvnum = spec_in[:,0]  # wavenumber after peak removal
+    spec = spec_in[:, 1]  # Intensity after peak removal
+    error_max = 1e10      # error of previous iteration
+    error = 1e8           # error of current iteration.
+                          # initial value should be less than errorMax, but grater than future errors
+
+    # Polynomial fitting procedure
+    while error < cutoff * error_max:
+        error_max = error
+
+        # Polynomial fitting, p - coeff
+        p = np.polyfit(wvnum, spec, nth)    # nth order polynomial fitting
+        y1 = np.polyval(p, wvnum)           # fitted spec
+        res = spec - y1                     # residual
+        error = np.std(res, ddof=1)         # estimated error (std)
+
+        # replace spec values with either old spec values OR y1 + error * scale_factor
+        # whichever is smaller
+        diff_spec = spec - y1 - error * scale_factor
+
+        # create empty list for spec
+        s = [] 
+        for i in range(nx):
+            if diff_spec[i] > 0:
+                s.append(y1[i]+ error * scale_factor)
+            else:
+                s.append(spec[i])
+        #convert list back into array
+        spec = np.array(s)
+
+        #output fitted background from latest iteration 
+        spec_out = np.column_stack((wvnum, y1))
+
+    # Plotting removed
+
+    return spec_out
+
+
+#-----------------IMPROVED MODIFIED POLYFIT------------------------------------
+# This calls all previous functions and plots final spectrum
+def imodified_polyfit(spec_raw, nth = 5, iter_max = 1, scale_factor1 = 1.0, scale_factor2 = 0.0, cutoff = 0.95, return_baseline=False):
+    """
+    Implements fluorescence background removal using the Vancouver Raman Algorithm.
+    Arg:
+        spec_raw: raw input spectrum within ROI and post smoothing
+                 spec_raw([:,0]) = wavenumber
+                 spec_raw([:,1]) = Raw Raman intensity
+        nth:            Order of polynomial fitting, default = 5
+        iter_max:       Number of peak removal procedure (0-7), default = 1
+        scale_factor1:  Scaling factor for peak removal (0-2), default = 1
+        scale_factor2:  Scaling factor for polyfit (0-2), default = 0
+        cutoff:         Termination criteria for polynomial fitting(0.95-0.99), default = 0.95
+        return_baseline: If True, returns the estimated fluorescence background
+    Returns:
+        ram_spec:       Raman spectrum without fluorescence background
+        fluo_spec:      Fluorescence background
+    """
+    import numpy as np
+
+    # Peak Removal
+    # 1st column of output array is wavenumber
+    spec_peak_removed = peak_removal(spec_raw, nth, iter_max, scale_factor1)
+
+    # Polynomial Fitting after peak removal
+    # 1st column of output array is wavenumber
+    spec_peak_removed_fitted = modified_polyfit(spec_peak_removed, nth, scale_factor2, cutoff)
+
+    # Polynomial Fitting coefficient of last iteration
+    p = np.polyfit(spec_peak_removed_fitted[:,0], spec_peak_removed_fitted[:,1], nth)
+
+    # Calculating fluorescence background based on original Raman Shift
+    fluo_background = np.polyval(p, spec_raw[:,0])
+
+    # Calculating Raman by subtracting fluorescence background
+    ram_intensity = spec_raw[:, 1]- fluo_background
+
+    #Combine Wavenumber with Raman spectrum and fluorescence background
+    ram_spec = np.column_stack((spec_raw[:, 0], ram_intensity))
+    fluo_spec = np.column_stack((spec_raw[:,0], fluo_background))
+
+    # Plotting removed
+
+    if return_baseline:
+        return fluo_spec
+    else:
+        return ram_spec

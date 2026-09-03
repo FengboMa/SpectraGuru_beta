@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-# import numpy as np
+import numpy as np
 import altair as alt
 # from streamlit_extras.chart_container import chart_container
 from streamlit_extras.row import row
@@ -205,6 +205,19 @@ def collect_current_preprocessing_entries():
                     "degree": st.session_state.baselineremoval_ModPoly_degree
                 }
             })
+        if st.session_state.baselineremoval_function == "iModPoly":
+            run_log_entries.append({
+                "step": "baseline_removal",
+                "display_name": "Baseline Removal",
+                "parameters": {
+                    "function": "iModPoly",
+                    "degree": st.session_state.baselineremoval_iModPoly_degree,
+                    "max_iter": st.session_state.baselineremoval_iModPoly_max_iter,
+                    "scale_factor1": st.session_state.baselineremoval_iModPoly_scale_factor1,
+                    "scale_factor2": st.session_state.baselineremoval_iModPoly_scale_factor2,
+                    "cutoff": st.session_state.baselineremoval_iModPoly_cutoff
+                }
+            })
         if st.session_state.baselineremoval_function == "Gaussian-Lorentzian Fitting":
             if "fitting_ranges" not in st.session_state:
                 raise AttributeError("fitting_ranges")
@@ -368,6 +381,17 @@ def apply_preprocessing_step(df, step_entry):
         elif params["function"] == "ModPoly":
             result_df.iloc[:, 1:] = result_df.iloc[:, 1:] - result_df.iloc[:, 1:].apply(
                 lambda col: function.ModPoly(col.values, degree=params["degree"])
+            )
+        elif params["function"] == "iModPoly":
+            result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
+                lambda col: function.imodified_polyfit(
+                    np.column_stack((result_df.iloc[:, 0].values, col.values)),
+                    nth=params["degree"],
+                    iter_max=params["max_iter"],
+                    scale_factor1=params["scale_factor1"],
+                    scale_factor2=params["scale_factor2"],
+                    cutoff=params["cutoff"]
+                )[:, 1]
             )
         elif params["function"] == "Gaussian-Lorentzian Fitting":
             result_df.iloc[:, 1:] = result_df.iloc[:, 1:] - result_df.iloc[:, 1:].apply(
@@ -783,15 +807,15 @@ else:
                                                                         help = "Determines how many times the peak-removal step repeats before the baseline is fit. Higher values strip out more of the spectrum's peaks across successive passes, leaving a cleaner, more peak-free reference for the fit.",
                                                                         min_value=0, max_value = 7, value = 1, 
                                                                         step = 1, placeholder="Insert a number")
-                st.session_state.baselineremoval_iModPoly_tol = st.number_input(label="Scaling factor for peak removal",
+                st.session_state.baselineremoval_iModPoly_scale_factor1 = st.number_input(label="Scaling factor for peak removal",
                                                                         help = "Determines how far above the fitted curve, in standard deviations of the noise, a point must rise before it's discarded as a peak. Higher values are more forgiving, keeping more of the spectrum and removing only the most prominent peaks.",
                                                                         min_value=0.0, max_value = 2.0, value = 1.0, 
                                                                         step = 0.1, placeholder="Insert a number",format="%.1f")
-                st.session_state.baselineremoval_iModPoly_tol = st.number_input(label="Scaling factor for polyfit",
+                st.session_state.baselineremoval_iModPoly_scale_factor2 = st.number_input(label="Scaling factor for polyfit",
                                                                         help = "Determines how far above the fitted curve, in standard deviations of the noise, a point is allowed to sit before it's clamped down during baseline refitting. Higher values let the baseline rise closer to the peaks, producing a baseline that hugs the signal less tightly.",
                                                                         min_value=0.0, max_value = 2.0, value = 0.0, 
                                                                         step = 0.1, placeholder="Insert a number",format="%.1f")
-                st.session_state.baselineremoval_iModPoly_tol = st.number_input(label="Termination criteria for polynomial fitting",
+                st.session_state.baselineremoval_iModPoly_cutoff = st.number_input(label="Termination criteria for polynomial fitting",
                                                                         help ="Determines when the iterative baseline fit stops: fitting continues only while each pass reduces the residual noise by more than this fraction. Higher values require a smaller improvement to keep going, allowing more refinement iterations before the fit is considered converged.",
                                                                         min_value=0.95, max_value = 0.99, value = 0.95, 
                                                                         step = 0.01, placeholder="Insert a number",format="%.2f")
@@ -1027,6 +1051,14 @@ else:
                     log.log_function_call("Processing_Baseline_Mod_Poly", f_params={
                         'degree': step_entry["parameters"]["degree"]
                     })
+                elif step_entry["parameters"]["function"] == "iModPoly":
+                    log.log_function_call("Processing_Baseline_iMod_Poly", f_params={
+                        'degree': step_entry["parameters"]["degree"],
+                        'max_iter': step_entry["parameters"]["max_iter"],
+                        'scale_factor1': step_entry["parameters"]["scale_factor1"],
+                        'scale_factor2': step_entry["parameters"]["scale_factor2"],
+                        'cutoff': step_entry["parameters"]["cutoff"]
+                    })
                 elif step_entry["parameters"]["function"] == "SNIP":
                     log.log_function_call("Processing_Baseline_SNIP", f_params={
                         'num_iterations': step_entry["parameters"]["num_iterations"]
@@ -1038,7 +1070,7 @@ else:
                         'd': step_entry["parameters"]["d"],
                         'max_iter': step_entry["parameters"]["max_iter"]
                     })
-                else:
+                elif step_entry["parameters"]["function"] == "Gaussian-Lorentzian Fitting":
                     log.log_function_call("Processing_Baseline_Gaussian_Lorentzian_Fitting", f_params={
                         'fitting_ranges': step_entry["parameters"]["fitting_ranges"]
                     })

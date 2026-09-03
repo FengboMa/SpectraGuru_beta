@@ -10,8 +10,11 @@ from datetime import datetime
 
 import function
 import log_utils as log
+from auth_utils import force_login
 
 function.wide_space_default()
+
+force_login()
 
 if 'preprocessing_log' not in st.session_state:
     st.session_state.preprocessing_log = []

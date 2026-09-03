@@ -4,6 +4,7 @@ import function
 import psycopg2
 import numpy as np
 from scipy.interpolate import interp1d
+from auth_utils import force_login
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Page-scoped key helper  ➜  every widget / cache key on this page is prefixed
@@ -13,6 +14,9 @@ def pkey(name: str) -> str:
     return f"{PAGE_ID}_{name}"
 
 function.wide_space_default()
+
+force_login()
+
 st.session_state.log_file_path = (
     r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group"
     r"\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software"

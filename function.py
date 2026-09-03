@@ -125,7 +125,7 @@ def airPLS(x, lambda_=100, porder=1, itermax=15, tau = 0.001):
 # Normalize by area
 def normalize_by_area(spectra, ramanshift, scale_factor=1):
     import numpy as np
-    area = np.trapz(y = spectra, x = ramanshift)
+    area = np.trapezoid(y = spectra, x = ramanshift)
     normalized_spectra = spectra / abs(area)  # Ensure the area is always positive
     scaled_normalized_spectra = normalized_spectra * scale_factor
     return scaled_normalized_spectra
@@ -148,9 +148,8 @@ def min_max_normalize(spectra):
 # Normalize by mean
 def normalize_by_mean(spectra):
     import numpy as np
-    spectra_arr = np.array(spectra)
-    spectra_arr /= spectra_arr.mean()
-    return spectra_arr
+    spectra_arr = np.array(spectra, dtype=float)
+    return spectra_arr / spectra_arr.mean()
 
 # Despike
 def despikeSpec(spectra, ramanshift, threshold=100, zap_length=11):

@@ -262,7 +262,7 @@ def collect_current_preprocessing_entries():
                     "display_name": "Normalization",
                     "parameters": {
                         "function": "Normalize by area",
-                        "scalar": st.session_state.normalization_act_scalar
+                        "scale_factor": st.session_state.normalization_act_scale_factor
                     }
                 })
         else:
@@ -439,21 +439,13 @@ def apply_preprocessing_step(df, step_entry):
 
     if step == "normalization":
         if params["function"] == "Normalize by area":
-            if ("scalar" in params):
-                result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
-                    lambda col: function.normalize_by_area(
-                        col,
-                        ramanshift=result_df.iloc[:, 0],
-                        scale_factor=params["scalar"]
-                )   
-            )
-            else:
-                result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
-                    lambda col: function.normalize_by_area(
-                        col,
-                        ramanshift=result_df.iloc[:,0]
-                    )
+            result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
+                lambda col: function.normalize_by_area(
+                    col,
+                    ramanshift=result_df.iloc[:, 0],
+                    scale_factor=params["scale_factor"]
                 )
+            )
         elif params["function"] == "Normalize by peak":
             result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(function.normalize_by_peak, axis=0)
         elif params["function"] == "Min max normalize":
@@ -981,22 +973,22 @@ else:
                                                                         "Normalize by mean": "Normalize by mean"
                                                                     }.get)
             if st.session_state.normalization_function == "Normalize by area":
-                use_scalar = st.toggle(label="Enable scalar", 
+                use_scale_factor = st.toggle(label="Enable scale factor",
                           value=False,
-                          help="Optionally multiply the result spectra by an integer scalar after area normalization")
-                if use_scalar:
+                          help="Optionally multiply the result spectra by an integer scale factor after area normalization")
+                if use_scale_factor:
                     st.number_input(
-                        label="Scalar",
+                        label="Scale factor",
                         help="After area normalization is applied, the spectra will be multiplied by this value. The value must be an integer between 1 and 100000.",
                         min_value=1,
                         max_value=100000,
                         value=len(st.session_state.df.iloc[:, 0]),
                         step=1,
                         placeholder="Insert a number",
-                        key="normalization_act_scalar"
+                        key="normalization_act_scale_factor"
                     )
                 else:
-                    st.session_state.normalization_act_scalar = 1
+                    st.session_state.normalization_act_scale_factor = 1
 
         # Outlier removal
         if 'outlierremoval_act' not in st.session_state:
@@ -1121,13 +1113,14 @@ else:
             elif step_entry["step"] == "normalization":
                 if step_entry["parameters"]["function"] == "Normalize by area":
                     log.log_function_call("Processing_Normalization_Area", f_params={
-                        #'scalar': step_entry["parameters"]["scalar"]
-                        'scalar': step_entry["parameters"]["scalar"]
+                        'scale_factor': step_entry["parameters"]["scale_factor"]
                     })
                 elif step_entry["parameters"]["function"] == "Normalize by peak":
                     log.log_function_call("Processing_Normalization_Peak", f_params={})
-                else:
+                elif step_entry["parameters"]["function"] == "Min max normalize":
                     log.log_function_call("Processing_Normalization_Minmax", f_params={})
+                elif step_entry["parameters"]["function"] == "Normalize by mean":
+                    log.log_function_call("Processing_Normalization_Mean", f_params={})
             elif step_entry["step"] == "outlier_removal":
                 log.log_function_call("Processing_Remove_Outliers", f_params={
                     'single_thresh': step_entry["parameters"]["single_threshold"],

@@ -18,6 +18,7 @@ names = {
     'Processing_Smoothing_Wavelet_Denoising':("Smoothing", "Wavelet denoising"),
     'Processing_Baseline_AirPLS':("Baseline removal", "AirPLS"),
     'Processing_Baseline_Mod_Poly':("Baseline removal", "Modified polynomial fitting"),
+    'Processing_Baseline_iMod_Poly':("Baseline removal", "Improved modified polynomial (iModPoly) fitting"),
     'Processing_Baseline_Gaussian_Lorentzian_Fitting':("Baseline removal", "Gaussian-Lorentzian fitting"),
     'Processing_Baseline_SNIP':("Baseline removal", "SNIP"),
     'Processing_Baseline_ALS':("Baseline removal", "Asymmetric least squares (ALS)"),
@@ -106,8 +107,8 @@ references = {
     46:{"text":"", "link":None, "doc_page":None, "notes":"Full Spectrum Fitting doc page placeholder"},
     47:{"text":"", "link":None, "doc_page":None, "notes":"Mean Normalization doc page placeholder"},
     48:{"text":"", "link":None, "doc_page":None, "notes":"Spectrum Calculation doc page placeholder"},
-    49:{"text":"", "link":None, "doc_page":None, "notes":""},
-    50:{"text":"", "link":None, "doc_page":None, "notes":""},
+    49:{"text":"", "link":None, "doc_page":None, "notes":"iModPoly doc page placeholder"},
+    50:{"text":"https://doi.org/10.1366/000370207782597003", "link":True, "doc_page":False, "notes":"iModPoly reference"},
 }
 
 # This dictionary maps functions to their documentation and literature references. These links are displayed in the
@@ -124,6 +125,7 @@ reference_map = {
     'Processing_Smoothing_Wavelet_Denoising':[37,31,32],
     'Processing_Baseline_AirPLS':[15,3,4],
     'Processing_Baseline_Mod_Poly':[16,5],
+    'Processing_Baseline_iMod_Poly':[49,50,5],
     'Processing_Baseline_Gaussian_Lorentzian_Fitting':[17,6,7],
     'Processing_Baseline_SNIP':[34,44],
     'Processing_Baseline_ALS':[35,33],

@@ -50,8 +50,8 @@ if 'df' in st.session_state:
                         key="stats_plot_select")
 
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
-        st.sidebar.toggle(label='Show spectra you selected', value=True, key = 'stats_avg_act',help='Show or hide original selected spectra.')
-        st.sidebar.toggle(label='Show standard deviation', value=True, key = 'stats_avg_std_act',help='Show or hide standard deviation.')
+        st.sidebar.toggle(label='Show selected spectra', value=True, key = 'stats_avg_act',help='Show or hide original selected spectra.')
+        st.sidebar.toggle(label='Show standard deviation plot', value=True, key = 'stats_avg_std_act',help='Show or hide standard deviation.')
     elif st.session_state.stats_plot_select == "Confidence Interval Plot":
         # Interval method selector
         interval_method = st.sidebar.radio(
@@ -549,6 +549,7 @@ else:
         
         if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
             average_plot_key_suffix = f"{st.session_state.stats_avg_act}_{st.session_state.stats_avg_std_act}"
+            average_plot_height = 600
 
             if st.session_state.stats_avg_act:
                 avg_stats_base = alt.Chart(stats_data_melted).mark_line().encode(
@@ -558,7 +559,7 @@ else:
                         color=alt.condition(
                             alt.datum['Sample ID'] == 'Average',
                             alt.value('blue'),  # Color for the "Average" sample
-                            'Sample ID:N'      # Default color for other samples
+                            alt.Color('Sample ID:N', legend=None)  # Default color for other samples
                         ),
                         size=alt.condition(
                             alt.datum['Sample ID'] == 'Average',
@@ -566,8 +567,7 @@ else:
                             alt.value(1)   # Line width for other samples
                         )
                         ).properties(
-                            width=1300,
-                            height=600,
+                            height=average_plot_height,
                             title='Spectra Data Plot'
                         )
                 # avg_stats_base = function.style_altair_chart(avg_stats_base)
@@ -584,8 +584,7 @@ else:
                         color=alt.value('blue'),
                         size=alt.value(3)
                         ).properties(
-                            width=1300,
-                            height=600,
+                            height=average_plot_height,
                             title='Spectra Average Data Plot'
                         )
                 
@@ -593,6 +592,13 @@ else:
                 show_plot = avg_stats_base2
                 log.log_plot_generated_count()
             
+            show_plot = function.style_altair_chart(show_plot)
+            st.altair_chart(
+                show_plot,
+                use_container_width=True,
+                key=f"analytics_average_plot_main_{average_plot_key_suffix}"
+            )
+
             if st.session_state.stats_avg_std_act:
                 ramanshift = st.session_state.df_stats["Ramanshift"]
                 # Select only the columns we need for standard deviation calculation
@@ -615,27 +621,16 @@ else:
                     x=alt.X('Ramanshift', axis=alt.Axis(title=analytics_x_axis_title)),
                     y='Standard Deviation'
                 ).properties(
-                            width=1300,
-                            height=300,
+                            height=average_plot_height,
                 )
                 
-                combined_plot = alt.vconcat(show_plot, std_plot).resolve_scale(
-                                                x='shared'  # Share the x-axis between the plots
-                                            )
-                combined_plot = function.style_altair_chart(combined_plot)
+                std_plot = function.style_altair_chart(std_plot)
                 st.altair_chart(
-                    combined_plot,
-                    use_container_width=False,
-                    key=f"analytics_average_plot_combined_{average_plot_key_suffix}"
+                    std_plot,
+                    use_container_width=True,
+                    key=f"analytics_average_plot_std_{average_plot_key_suffix}"
                 )
                 log.log_plot_generated_count()
-            else:
-                show_plot = function.style_altair_chart(show_plot)
-                st.altair_chart(
-                    show_plot,
-                    use_container_width=False,
-                    key=f"analytics_average_plot_single_{average_plot_key_suffix}"
-                )
             
             stats_download_df = st.session_state.df_stats
             if 'Average' in stats_download_df:

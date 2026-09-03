@@ -4,7 +4,7 @@ import function
 import psycopg2
 import numpy as np
 from scipy.interpolate import interp1d
-from auth_utils import force_login
+import auth_utils
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Page-scoped key helper  ➜  every widget / cache key on this page is prefixed
@@ -15,7 +15,8 @@ def pkey(name: str) -> str:
 
 function.wide_space_default()
 
-force_login()
+if not auth_utils.LOCAL_DEPLOY:
+    auth_utils.force_login()
 
 st.session_state.log_file_path = (
     r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group"

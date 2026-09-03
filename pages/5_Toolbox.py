@@ -5,11 +5,12 @@ from pathlib import Path
 import function
 import log_utils as log
 import datetime as dt
-from auth_utils import force_login
+import auth_utils
 
 function.wide_space_default()
 
-force_login()
+if not auth_utils.LOCAL_DEPLOY:
+    auth_utils.force_login()
 
 DEFAULT_X_AXIS_TITLE = "Raman shift/cm⁻¹"
 DEFAULT_Y_AXIS_TITLE = "Intensity/a.u."

@@ -1436,7 +1436,7 @@ else:
             cached_plot = generate_altair_plot(data_melted, x_axis, x_axis_title, y_axis_title)
             # st.write("yyyyy")
             # Display Plot
-            st.altair_chart(cached_plot, use_container_width=False)
+            st.altair_chart(cached_plot, width="content")
             # st.write("zzzzz")
             log.log_plot_generated_count()
             
@@ -1474,7 +1474,7 @@ else:
             cached_plot = generate_altair_plot_fastmode(data_melted, x_axis, x_axis_title, y_axis_title)
             # st.write("1111")
             # Display Plot
-            st.altair_chart(cached_plot, use_container_width=False)
+            st.altair_chart(cached_plot, width="content")
             # st.write("2222")
             log.log_plot_generated_count()
             # # Define the nearest selection

@@ -162,7 +162,7 @@ st.info("Check out our latest news and updates on SpectraGuru™!")
 
 # Add expander to show the flyer
 with st.expander("View SpectraGuru™ flyer"):
-    st.image("element/Spectraguru flyer.png", caption="SpectraGuru™ flyer", use_container_width=True)
+    st.image("element/Spectraguru flyer.png", caption="SpectraGuru™ flyer", width="stretch")
 st.divider()
 
 
@@ -335,9 +335,8 @@ st.markdown(
 """
 )
 
-import streamlit.components.v1 as components
 p = open(r"element/traffic_heatmap.html")
-components.html(p.read(), scrolling=True, height=550)
+st.iframe(p.read(), height=550)
 
 st.markdown(
     """

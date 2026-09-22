@@ -596,7 +596,7 @@ else:
             show_plot = function.style_altair_chart(show_plot)
             st.altair_chart(
                 show_plot,
-                use_container_width=True,
+                width="stretch",
                 key=f"analytics_average_plot_main_{average_plot_key_suffix}"
             )
 
@@ -628,7 +628,7 @@ else:
                 std_plot = function.style_altair_chart(std_plot)
                 st.altair_chart(
                     std_plot,
-                    use_container_width=True,
+                    width="stretch",
                     key=f"analytics_average_plot_std_{average_plot_key_suffix}"
                 )
                 log.log_plot_generated_count()
@@ -711,7 +711,7 @@ else:
             # Combine the plots
             confidence_plot = confidence_interval + mean_line
             confidence_plot = function.style_altair_chart(confidence_plot)
-            st.altair_chart(confidence_plot, use_container_width=False)
+            st.altair_chart(confidence_plot, width="content")
             log.log_plot_generated_count()
 
         elif st.session_state.stats_plot_select == "Spectral Derivation":
@@ -786,7 +786,7 @@ else:
 
                 show_plot = first_deriv & second_deriv  # vertical concat
                 show_plot = function.style_altair_chart(show_plot)
-                st.altair_chart(show_plot, use_container_width=False)
+                st.altair_chart(show_plot, width="content")
 
                 # --- Build tidy DataFrames for export ---
                 # y1_df = (
@@ -879,21 +879,21 @@ else:
 
                 row1_col1, row1_col2 = st.columns(2)
                 with row1_col1:
-                    st.altair_chart(fft_plots["amplitude"], use_container_width=True)
+                    st.altair_chart(fft_plots["amplitude"], width="stretch")
                 with row1_col2:
-                    st.altair_chart(fft_plots["phase"], use_container_width=True)
+                    st.altair_chart(fft_plots["phase"], width="stretch")
 
                 row2_col1, row2_col2 = st.columns(2)
                 with row2_col1:
-                    st.altair_chart(fft_plots["power"], use_container_width=True)
+                    st.altair_chart(fft_plots["power"], width="stretch")
                 with row2_col2:
-                    st.altair_chart(fft_plots["real_imaginary"], use_container_width=True)
+                    st.altair_chart(fft_plots["real_imaginary"], width="stretch")
 
                 row3_col1, row3_col2 = st.columns(2)
                 with row3_col1:
-                    st.altair_chart(fft_plots["real"], use_container_width=True)
+                    st.altair_chart(fft_plots["real"], width="stretch")
                 with row3_col2:
-                    st.altair_chart(fft_plots["imaginary"], use_container_width=True)
+                    st.altair_chart(fft_plots["imaginary"], width="stretch")
 
                 for _ in range(6):
                     log.log_plot_generated_count()
@@ -1014,7 +1014,7 @@ else:
                 calc_plot = function.style_altair_chart(calc_plot)
                 st.altair_chart(
                     calc_plot,
-                    use_container_width=True,
+                    width="stretch",
                     key=f"spectrum_calculation_preview_{calc_operation_text}"
                 )
                 if calculation_ready:
@@ -1249,7 +1249,7 @@ else:
 
             # Display the heatmap
             combined = function.style_altair_chart(combined)
-            st.altair_chart(combined, use_container_width=False)
+            st.altair_chart(combined, width="content")
             log.log_plot_generated_count()
             log.log_function_call("Analytics_Correlation_Heatmap",
                                     f_params={
@@ -1444,7 +1444,7 @@ else:
             interactive_plot = function.style_altair_chart(interactive_plot)
 
             # Display the plot in Streamlit (if using Streamlit)
-            st.altair_chart(interactive_plot, use_container_width=False)
+            st.altair_chart(interactive_plot, width="content")
             
             
             st.write("**Peak property**")
@@ -1524,13 +1524,13 @@ else:
             # ------------------------------------------------------------------
             # 3.  Display results
             # ------------------------------------------------------------------
-            st.altair_chart(function.style_altair_chart(pc1_vs_pc2_plot), use_container_width=False)
+            st.altair_chart(function.style_altair_chart(pc1_vs_pc2_plot), width="content")
             log.log_plot_generated_count()
 
-            st.altair_chart(function.style_altair_chart(cumulative_variance_plot), use_container_width=False)
+            st.altair_chart(function.style_altair_chart(cumulative_variance_plot), width="content")
             log.log_plot_generated_count()
 
-            st.altair_chart(function.style_altair_chart(loading_plot), use_container_width=False)
+            st.altair_chart(function.style_altair_chart(loading_plot), width="content")
             log.log_plot_generated_count()
 
             log.log_function_call("Analytics_PCA", f_params={})
@@ -1552,7 +1552,7 @@ else:
                 n_iter=st.session_state.tSNE_n_iter,
                 label_df=label_df
             )
-            st.altair_chart(function.style_altair_chart(tsne_plot), use_container_width=False)
+            st.altair_chart(function.style_altair_chart(tsne_plot), width="content")
 
             log.log_plot_generated_count()
             log.log_function_call("Analytics_TSNE",
@@ -1592,11 +1592,11 @@ else:
                         class_counts_df = eda["class_counts"].copy()
                         for percent_column in [col for col in class_counts_df.columns if "Percent" in col]:
                             class_counts_df[percent_column] = class_counts_df[percent_column].map(lambda value: f"{value:.1%}")
-                        st.dataframe(class_counts_df, use_container_width=True)
+                        st.dataframe(class_counts_df, width="stretch")
 
                         st.write("### Class Balance")
                         st.caption("Compares class-frequency distributions across the exact samples used for model fitting and evaluation.")
-                        st.altair_chart(eda["class_count_chart"], use_container_width=False)
+                        st.altair_chart(eda["class_count_chart"], width="content")
                         log.log_plot_generated_count()
 
                         spectra_envelopes = eda.get("spectra_envelopes", [])
@@ -1605,16 +1605,16 @@ else:
                             st.caption("Class mean spectra are shown as lines; shaded envelopes span the class-wise minimum-to-maximum intensity range.")
                             train_eda_col, test_eda_col = st.columns(2)
                             with train_eda_col:
-                                st.altair_chart(spectra_envelopes[0]["chart"], use_container_width=False)
+                                st.altair_chart(spectra_envelopes[0]["chart"], width="content")
                                 log.log_plot_generated_count()
                             with test_eda_col:
-                                st.altair_chart(spectra_envelopes[1]["chart"], use_container_width=False)
+                                st.altair_chart(spectra_envelopes[1]["chart"], width="content")
                                 log.log_plot_generated_count()
                         else:
                             st.write("### Full Dataset Class Spectra Visualization")
                             st.caption("Class mean spectra are shown as lines; shaded envelopes span the class-wise minimum-to-maximum intensity range.")
                             for envelope in spectra_envelopes:
-                                st.altair_chart(envelope["chart"], use_container_width=False)
+                                st.altair_chart(envelope["chart"], width="content")
                                 log.log_plot_generated_count()
 
                     if rf_result.get("mode") == "train_test_split" and len(rf_result["sections"]) == 2:
@@ -1624,44 +1624,44 @@ else:
                         with train_col:
                             section = rf_result["sections"][0]
                             st.write("#### Training Performance")
-                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.dataframe(section["metrics"], width="content")
                         with test_col:
                             section = rf_result["sections"][1]
                             st.write("#### Test Performance")
-                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.dataframe(section["metrics"], width="content")
 
                         st.write("### Confusion Matrix")
                         st.caption("Rows encode observed classes and columns encode predicted classes; diagonal counts are correct predictions.")
                         train_col, test_col = st.columns(2)
                         with train_col:
-                            st.altair_chart(rf_result["sections"][0]["confusion_matrix"], use_container_width=False)
+                            st.altair_chart(rf_result["sections"][0]["confusion_matrix"], width="content")
                             log.log_plot_generated_count()
                         with test_col:
-                            st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                            st.altair_chart(section["confusion_matrix"], width="content")
                             log.log_plot_generated_count()
 
                         st.write("### ROC Curve")
                         st.caption("One-vs-rest ROC curves quantify class separability; larger AUC values indicate stronger discrimination.")
                         train_col, test_col = st.columns(2)
                         with train_col:
-                            st.altair_chart(rf_result["sections"][0]["roc_curve"], use_container_width=False)
+                            st.altair_chart(rf_result["sections"][0]["roc_curve"], width="content")
                             log.log_plot_generated_count()
                         with test_col:
-                            st.altair_chart(section["roc_curve"], use_container_width=False)
+                            st.altair_chart(section["roc_curve"], width="content")
                             log.log_plot_generated_count()
                     else:
                         st.write("### Performance Table")
                         st.caption("Macro-averaged metrics summarize model discrimination on the full selected dataset.")
                         for section in rf_result["sections"]:
                             st.write("#### Full Dataset Performance")
-                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.dataframe(section["metrics"], width="content")
                             st.write("### Full Dataset Confusion Matrix")
                             st.caption("Rows encode observed classes and columns encode predicted classes; diagonal counts are correct predictions.")
-                            st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                            st.altair_chart(section["confusion_matrix"], width="content")
                             log.log_plot_generated_count()
                             st.write("### Full Dataset ROC Curve")
                             st.caption("One-vs-rest ROC curves quantify class separability; larger AUC values indicate stronger discrimination.")
-                            st.altair_chart(section["roc_curve"], use_container_width=False)
+                            st.altair_chart(section["roc_curve"], width="content")
                             log.log_plot_generated_count()
 
                     # Model-specific extra plots are intentionally hidden for now.
@@ -1711,11 +1711,11 @@ else:
                         class_counts_df = eda["class_counts"].copy()
                         for percent_column in [col for col in class_counts_df.columns if "Percent" in col]:
                             class_counts_df[percent_column] = class_counts_df[percent_column].map(lambda value: f"{value:.1%}")
-                        st.dataframe(class_counts_df, use_container_width=True)
+                        st.dataframe(class_counts_df, width="stretch")
 
                         st.write("### Class Balance")
                         st.caption("Compares class-frequency distributions across the exact samples used for model fitting and evaluation.")
-                        st.altair_chart(eda["class_count_chart"], use_container_width=False)
+                        st.altair_chart(eda["class_count_chart"], width="content")
                         log.log_plot_generated_count()
 
                         spectra_envelopes = eda.get("spectra_envelopes", [])
@@ -1724,16 +1724,16 @@ else:
                             st.caption("Class mean spectra are shown as lines; shaded envelopes span the class-wise minimum-to-maximum intensity range.")
                             train_eda_col, test_eda_col = st.columns(2)
                             with train_eda_col:
-                                st.altair_chart(spectra_envelopes[0]["chart"], use_container_width=False)
+                                st.altair_chart(spectra_envelopes[0]["chart"], width="content")
                                 log.log_plot_generated_count()
                             with test_eda_col:
-                                st.altair_chart(spectra_envelopes[1]["chart"], use_container_width=False)
+                                st.altair_chart(spectra_envelopes[1]["chart"], width="content")
                                 log.log_plot_generated_count()
                         else:
                             st.write("### Full Dataset Class Spectra Visualization")
                             st.caption("Class mean spectra are shown as lines; shaded envelopes span the class-wise minimum-to-maximum intensity range.")
                             for envelope in spectra_envelopes:
-                                st.altair_chart(envelope["chart"], use_container_width=False)
+                                st.altair_chart(envelope["chart"], width="content")
                                 log.log_plot_generated_count()
 
                     if knn_result.get("mode") == "train_test_split" and len(knn_result["sections"]) == 2:
@@ -1743,44 +1743,44 @@ else:
                         with train_col:
                             section = knn_result["sections"][0]
                             st.write("#### Training Performance")
-                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.dataframe(section["metrics"], width="content")
                         with test_col:
                             section = knn_result["sections"][1]
                             st.write("#### Test Performance")
-                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.dataframe(section["metrics"], width="content")
 
                         st.write("### Confusion Matrix")
                         st.caption("Rows encode observed classes and columns encode predicted classes; diagonal counts are correct predictions.")
                         train_col, test_col = st.columns(2)
                         with train_col:
-                            st.altair_chart(knn_result["sections"][0]["confusion_matrix"], use_container_width=False)
+                            st.altair_chart(knn_result["sections"][0]["confusion_matrix"], width="content")
                             log.log_plot_generated_count()
                         with test_col:
-                            st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                            st.altair_chart(section["confusion_matrix"], width="content")
                             log.log_plot_generated_count()
 
                         st.write("### ROC Curve")
                         st.caption("One-vs-rest ROC curves quantify class separability; larger AUC values indicate stronger discrimination.")
                         train_col, test_col = st.columns(2)
                         with train_col:
-                            st.altair_chart(knn_result["sections"][0]["roc_curve"], use_container_width=False)
+                            st.altair_chart(knn_result["sections"][0]["roc_curve"], width="content")
                             log.log_plot_generated_count()
                         with test_col:
-                            st.altair_chart(section["roc_curve"], use_container_width=False)
+                            st.altair_chart(section["roc_curve"], width="content")
                             log.log_plot_generated_count()
                     else:
                         st.write("### Performance Table")
                         st.caption("Macro-averaged metrics summarize model discrimination on the full selected dataset.")
                         for section in knn_result["sections"]:
                             st.write("#### Full Dataset Performance")
-                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.dataframe(section["metrics"], width="content")
                             st.write("### Full Dataset Confusion Matrix")
                             st.caption("Rows encode observed classes and columns encode predicted classes; diagonal counts are correct predictions.")
-                            st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                            st.altair_chart(section["confusion_matrix"], width="content")
                             log.log_plot_generated_count()
                             st.write("### Full Dataset ROC Curve")
                             st.caption("One-vs-rest ROC curves quantify class separability; larger AUC values indicate stronger discrimination.")
-                            st.altair_chart(section["roc_curve"], use_container_width=False)
+                            st.altair_chart(section["roc_curve"], width="content")
                             log.log_plot_generated_count()
 
                     log.log_function_call(
@@ -1826,11 +1826,11 @@ else:
                         class_counts_df = eda["class_counts"].copy()
                         for percent_column in [col for col in class_counts_df.columns if "Percent" in col]:
                             class_counts_df[percent_column] = class_counts_df[percent_column].map(lambda value: f"{value:.1%}")
-                        st.dataframe(class_counts_df, use_container_width=True)
+                        st.dataframe(class_counts_df, width="stretch")
 
                         st.write("### Class Balance")
                         st.caption("Compares class-frequency distributions across the exact samples used for model fitting and evaluation.")
-                        st.altair_chart(eda["class_count_chart"], use_container_width=False)
+                        st.altair_chart(eda["class_count_chart"], width="content")
                         log.log_plot_generated_count()
 
                         spectra_envelopes = eda.get("spectra_envelopes", [])
@@ -1839,16 +1839,16 @@ else:
                             st.caption("Class mean spectra are shown as lines; shaded envelopes span the class-wise minimum-to-maximum intensity range.")
                             train_eda_col, test_eda_col = st.columns(2)
                             with train_eda_col:
-                                st.altair_chart(spectra_envelopes[0]["chart"], use_container_width=False)
+                                st.altair_chart(spectra_envelopes[0]["chart"], width="content")
                                 log.log_plot_generated_count()
                             with test_eda_col:
-                                st.altair_chart(spectra_envelopes[1]["chart"], use_container_width=False)
+                                st.altair_chart(spectra_envelopes[1]["chart"], width="content")
                                 log.log_plot_generated_count()
                         else:
                             st.write("### Full Dataset Class Spectra Visualization")
                             st.caption("Class mean spectra are shown as lines; shaded envelopes span the class-wise minimum-to-maximum intensity range.")
                             for envelope in spectra_envelopes:
-                                st.altair_chart(envelope["chart"], use_container_width=False)
+                                st.altair_chart(envelope["chart"], width="content")
                                 log.log_plot_generated_count()
 
                     if svm_result.get("mode") == "train_test_split" and len(svm_result["sections"]) == 2:
@@ -1858,44 +1858,44 @@ else:
                         with train_col:
                             section = svm_result["sections"][0]
                             st.write("#### Training Performance")
-                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.dataframe(section["metrics"], width="content")
                         with test_col:
                             section = svm_result["sections"][1]
                             st.write("#### Test Performance")
-                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.dataframe(section["metrics"], width="content")
 
                         st.write("### Confusion Matrix")
                         st.caption("Rows encode observed classes and columns encode predicted classes; diagonal counts are correct predictions.")
                         train_col, test_col = st.columns(2)
                         with train_col:
-                            st.altair_chart(svm_result["sections"][0]["confusion_matrix"], use_container_width=False)
+                            st.altair_chart(svm_result["sections"][0]["confusion_matrix"], width="content")
                             log.log_plot_generated_count()
                         with test_col:
-                            st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                            st.altair_chart(section["confusion_matrix"], width="content")
                             log.log_plot_generated_count()
 
                         st.write("### ROC Curve")
                         st.caption("One-vs-rest ROC curves quantify class separability; larger AUC values indicate stronger discrimination.")
                         train_col, test_col = st.columns(2)
                         with train_col:
-                            st.altair_chart(svm_result["sections"][0]["roc_curve"], use_container_width=False)
+                            st.altair_chart(svm_result["sections"][0]["roc_curve"], width="content")
                             log.log_plot_generated_count()
                         with test_col:
-                            st.altair_chart(section["roc_curve"], use_container_width=False)
+                            st.altair_chart(section["roc_curve"], width="content")
                             log.log_plot_generated_count()
                     else:
                         st.write("### Performance Table")
                         st.caption("Macro-averaged metrics summarize model discrimination on the full selected dataset.")
                         for section in svm_result["sections"]:
                             st.write("#### Full Dataset Performance")
-                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.dataframe(section["metrics"], width="content")
                             st.write("### Full Dataset Confusion Matrix")
                             st.caption("Rows encode observed classes and columns encode predicted classes; diagonal counts are correct predictions.")
-                            st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                            st.altair_chart(section["confusion_matrix"], width="content")
                             log.log_plot_generated_count()
                             st.write("### Full Dataset ROC Curve")
                             st.caption("One-vs-rest ROC curves quantify class separability; larger AUC values indicate stronger discrimination.")
-                            st.altair_chart(section["roc_curve"], use_container_width=False)
+                            st.altair_chart(section["roc_curve"], width="content")
                             log.log_plot_generated_count()
 
                     # Model-specific extra plots are intentionally hidden for now.
@@ -2098,9 +2098,9 @@ else:
                         size=alt.value(3)
                     ).properties(width=1300, height=300, title=f"Fit Spectrum - Residual / (RMSE = {np.round(rmse, round_to)})")
                 )
-                st.altair_chart(function.style_altair_chart(fsf_plot), use_container_width=False)
+                st.altair_chart(function.style_altair_chart(fsf_plot), width="content")
                 log.log_plot_generated_count()
-                st.altair_chart(function.style_altair_chart(residual_plot), use_container_width=False)
+                st.altair_chart(function.style_altair_chart(residual_plot), width="content")
                 log.log_plot_generated_count()
 
                 component_params_df = pd.DataFrame([c['parameters'] for c in components])

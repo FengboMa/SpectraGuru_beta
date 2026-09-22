@@ -1158,9 +1158,18 @@ else:
     
     # Reset button and reaction
 
-    if st.sidebar.button("Reset", type='secondary', on_click=function.reset_processing, key = 'reset'):
-            # st.session_state.df = st.session_state.backup
-            pass
+    @st.dialog("Reset preprocessing?")
+    def confirm_reset():
+        st.warning("This removes all preprocessing steps and restores the original uploaded data. This action cannot be undone. Proceed?")
+        if st.button("Cancel"):
+            st.rerun()
+        if st.button("Yes, reset", type="primary"):
+            function.reset_processing()
+            st.session_state.refresh_plot_pending = True
+            st.rerun()
+
+    if st.sidebar.button("Reset", type='secondary', key='reset'):
+        confirm_reset()
 
     # st.write(st.session_state.backup)
 """"""""
@@ -1227,7 +1236,7 @@ else:
         # Get cached selected data
         refresh_plot_pending = st.session_state.pop("refresh_plot_pending", False)
         plot_button_col, fast_mode_col, custom_axis_col = st.columns([0.16, 0.44, 0.40])
-        if plot_button_col.button("Plot", type="primary", key="plot") or st.session_state.get("process") or refresh_plot_pending or st.session_state.get("reset"):
+        if plot_button_col.button("Plot", type="primary", key="plot") or st.session_state.get("process") or refresh_plot_pending:
             if st.session_state.spectra_selected:
                 st.session_state.temp = get_selected_columns(st.session_state.df, st.session_state.spectra_selected)
             else:

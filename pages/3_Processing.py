@@ -297,7 +297,12 @@ def apply_preprocessing_step(df, step_entry):
     remove_outliers_log = None
 
     if step == "interpolation":
-        interpolated_df = pd.DataFrame(result_df.iloc[:, 0].round(), columns=[result_df.columns[0]])
+        integer_x = np.arange(
+            np.ceil(result_df.iloc[:, 0].min()),
+            np.floor(result_df.iloc[:, 0].max()) + 1,
+            dtype=int
+        )
+        interpolated_df = pd.DataFrame(integer_x, columns=[result_df.columns[0]])
         for col in result_df.columns[1:]:
             interpolator = interp1d(
                 result_df.iloc[:, 0],
@@ -306,8 +311,8 @@ def apply_preprocessing_step(df, step_entry):
                 bounds_error=False,
                 fill_value="extrapolate"
             )
-            interpolated_df[col] = interpolator(result_df.iloc[:, 0].round())
-        return interpolated_df.drop_duplicates(), remove_outliers_log
+            interpolated_df[col] = interpolator(integer_x)
+        return interpolated_df, remove_outliers_log
 
     if step == "crop":
         return result_df[
@@ -536,7 +541,7 @@ else:
         if 'interpolation_act' not in st.session_state:
             st.session_state.interpolation_act = False
 
-        interpolation_act = st.toggle("Interpolation", value=False, help="Round each Raman shift value to the closest integer.", key='interpolation_act')
+        interpolation_act = st.toggle("Interpolation", value=False, help="Interpolate intensity values at each integer Raman shift.", key='interpolation_act')
         # st.sidebar.write(interpolation_ref_x)
         
         # crop

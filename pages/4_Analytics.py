@@ -303,10 +303,9 @@ if 'df' in st.session_state:
         pc_list = [f"PC{i+1}" for i in range(num_rows)] 
         st.sidebar.selectbox(label="Select horizontal PC", options=pc_list, index=0,key="PCA_horizontal")
         st.sidebar.selectbox(label="Select vertical PC", options=pc_list, index=1,key="PCA_vertical")
-        st.sidebar.subheader("Loading curves")
-        st.sidebar.caption("Select the principal components to show in the loading curves plot.")
         for pc in pc_list[:3]:
-            st.sidebar.checkbox(pc, value=True, key=f"PCA_loading_{pc}")
+            st.sidebar.checkbox(f"{pc} loading curve", value=True, key=f"PCA_loading_{pc}",
+                                help=f"Show the {pc} loading curve in the plot.")
     elif st.session_state.stats_plot_select == "T-SNE Dimensionality Reduction":
         max_perplexity = st.session_state.df.shape[1] - 1
         st.sidebar.select_slider(label="t-SNE Perplexity", options=list(range(1,max_perplexity)),value=2, key="tSNE_perplexity")

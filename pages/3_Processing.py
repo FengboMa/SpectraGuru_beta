@@ -979,22 +979,16 @@ else:
                                                                         "Normalize by mean": "Normalize by mean"
                                                                     }.get)
             if st.session_state.normalization_function == "Normalize by area":
-                use_scale_factor = st.toggle(label="Enable scale factor",
-                          value=False,
-                          help="Optionally multiply the result spectra by an integer scale factor after area normalization")
-                if use_scale_factor:
-                    st.number_input(
-                        label="Scale factor",
-                        help="After area normalization is applied, the spectra will be multiplied by this value. The value must be an integer between 1 and 100000.",
-                        min_value=1,
-                        max_value=100000,
-                        value=len(st.session_state.df.iloc[:, 0]),
-                        step=1,
-                        placeholder="Insert a number",
-                        key="normalization_act_scale_factor"
-                    )
-                else:
-                    st.session_state.normalization_act_scale_factor = 1
+                st.number_input(
+                    label="Scale factor",
+                    help="After area normalization is applied, the spectra will be multiplied by this value. The value must be an integer between 1 and 100000.",
+                    min_value=1,
+                    max_value=100000,
+                    value=1,
+                    step=1,
+                    placeholder="Insert a number",
+                    key="normalization_act_scale_factor"
+                )
 
         # Outlier removal
         if 'outlierremoval_act' not in st.session_state:
@@ -1158,15 +1152,18 @@ else:
     
     # Reset button and reaction
 
-    @st.dialog("Reset preprocessing?")
+    @st.dialog("Reset preprocessing?", width="small")
     def confirm_reset():
-        st.warning("This removes all preprocessing steps and restores the original uploaded data. This action cannot be undone. Proceed?")
-        if st.button("Cancel"):
-            st.rerun()
-        if st.button("Yes, reset", type="primary"):
-            function.reset_processing()
-            st.session_state.refresh_plot_pending = True
-            st.rerun()
+        st.markdown("⚠️ **Reset all preprocessing steps?** Your data will return to its original uploaded form. **This action cannot be undone.**")
+        cancel_col, reset_col = st.columns(2)
+        with cancel_col:
+            if st.button("Cancel"):
+                st.rerun()
+        with reset_col:
+            if st.button("Yes, reset", type="primary"):
+                function.reset_processing()
+                st.session_state.refresh_plot_pending = True
+                st.rerun()
 
     if st.sidebar.button("Reset", type='secondary', key='reset'):
         confirm_reset()

@@ -82,7 +82,7 @@ def WhittakerSmooth(x,w,lambda_,differences=1):
     output
         the fitted background vector
     '''
-    X=np.matrix(x)
+    X=np.asarray(x).reshape(1, -1)
     m=X.size
     E=eye(m,format='csc')
     for i in range(differences):

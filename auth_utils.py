@@ -48,12 +48,12 @@ def populate(user):
 
 # checks whether the user is already logged in and populates the user dict accordingly.
 def startup():
+    setup_defaults()
+
     if LOCAL_DEPLOY:
         st.session_state.user_decided = True
         st.session_state.do_startup = False
         return
-    
-    setup_defaults()
 
     if st.session_state.do_startup:
 

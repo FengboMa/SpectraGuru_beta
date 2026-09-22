@@ -32,9 +32,9 @@ You do not have to host it locally to use the application. But if you wish to de
 
    SpectraGuru is tested with Python 3.12. The important runtime packages are pinned in `requirements.txt`:
 
-   - `streamlit==1.49.1`
+   - `streamlit==1.64.0`
    - `pandas==2.3.2`
-   - `numpy==2.3.3`
+   - `numpy==2.5.3`
    - `scipy==1.16.2`
    - `scikit-learn==1.7.2`
    - `matplotlib==3.10.6`

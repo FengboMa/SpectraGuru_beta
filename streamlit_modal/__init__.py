@@ -2,7 +2,6 @@ from contextlib import contextmanager
 
 from deprecation import deprecated
 import streamlit as st
-import streamlit.components.v1 as components
 
 try:
     from streamlit import rerun as rerun  # type: ignore
@@ -110,7 +109,7 @@ class Modal:
                 # if close_:
                 #     self.close()
 
-        components.html(
+        st.iframe(
             f"""
             <script>
             // STREAMLIT-MODAL-IFRAME-{self.key} <- Don't remove this comment. It's used to find our iframe
@@ -126,7 +125,7 @@ class Modal:
             }}
             </script>
             """,
-            height=0, width=0
+            height=1, width=1
         )
 
         with _container:

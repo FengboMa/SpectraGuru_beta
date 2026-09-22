@@ -294,7 +294,7 @@ if st.session_state.tool_select == "Spectrum Simulation":
                             title="Simulated Spectra"
                         )
         simulated_spectra = function.style_altair_chart(simulated_spectra)
-        st.altair_chart(simulated_spectra, use_container_width=False)
+        st.altair_chart(simulated_spectra, width="content")
 
         @st.cache_data
         def download_df(df):
@@ -333,12 +333,12 @@ elif st.session_state.tool_select == "Peak Assignment Table":
         st.dataframe(
             peak_assignment_descriptions,
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
         )
 
     st.dataframe(
         peak_assignment_df,
-        use_container_width=True,
+        width="stretch",
         height=700,
     )
 

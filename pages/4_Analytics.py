@@ -299,11 +299,14 @@ if 'df' in st.session_state:
     elif st.session_state.stats_plot_select == "Hierarchically-clustered Heatmap":
         st.sidebar.toggle(label="Show clustered heatmap", value=True, key="HCA_heatmap")
     elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)":
-        num_rows = st.session_state.df.shape[1] - 1
+        num_rows = st.session_state.temp.drop(columns=['Average'], errors='ignore').shape[1] - 1
         pc_list = [f"PC{i+1}" for i in range(num_rows)] 
         st.sidebar.selectbox(label="Select horizontal PC", options=pc_list, index=0,key="PCA_horizontal")
         st.sidebar.selectbox(label="Select vertical PC", options=pc_list, index=1,key="PCA_vertical")
-        st.sidebar.toggle(label="Color by labels", value=True, key="PCA_label")
+        st.sidebar.subheader("Loading curves")
+        st.sidebar.caption("Select the principal components to show in the loading curves plot.")
+        for pc in pc_list[:3]:
+            st.sidebar.checkbox(pc, value=True, key=f"PCA_loading_{pc}")
     elif st.session_state.stats_plot_select == "T-SNE Dimensionality Reduction":
         max_perplexity = st.session_state.df.shape[1] - 1
         st.sidebar.select_slider(label="t-SNE Perplexity", options=list(range(1,max_perplexity)),value=2, key="tSNE_perplexity")
@@ -1488,6 +1491,7 @@ else:
             
             temp = st.session_state.temp.drop(columns=['Average'], errors='ignore')
             label_df = st.session_state.get('label_df')
+            loading_pcs = [pc for pc in pc_list[:3] if st.session_state[f"PCA_loading_{pc}"]]
 
             if label_df is None:
                 st.warning(
@@ -1515,7 +1519,8 @@ else:
                     is_label=True,                 # always True now – we supply label_df
                     label_df=label_df,
                     horizontal_pc=st.session_state.PCA_horizontal,
-                    vertical_pc=st.session_state.PCA_vertical
+                    vertical_pc=st.session_state.PCA_vertical,
+                    loading_pcs=loading_pcs
                 )
             )
             # Re‑order columns for display
@@ -1536,12 +1541,13 @@ else:
             st.altair_chart(function.style_altair_chart(cumulative_variance_plot), width="content")
             log.log_plot_generated_count()
 
-            st.altair_chart(function.style_altair_chart(loading_plot), width="content")
-            log.log_plot_generated_count()
+            if loading_plot is not None:
+                st.altair_chart(function.style_altair_chart(loading_plot), width="content")
+                log.log_plot_generated_count()
 
             log.log_function_call("Analytics_PCA", f_params={})
 
-            st.write("### PCA scores table")
+            st.write("### PCA Scores by Spectrum")
             st.write(pca_result_df)
 
         elif st.session_state.stats_plot_select == "T-SNE Dimensionality Reduction":

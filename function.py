@@ -1191,7 +1191,7 @@ def hierarchical_clustering_tree(df):
 #     # Return PCA-transformed data and the plots
 #     return pca_df, pc1_vs_pc2_plot, cumulative_variance_plot, loading_plot
 
-def pca(df, label_df=None, is_label=False, horizontal_pc='PC1', vertical_pc='PC2'):
+def pca(df, label_df=None, is_label=False, horizontal_pc='PC1', vertical_pc='PC2', loading_pcs=('PC1', 'PC2', 'PC3')):
     import altair as alt
     from sklearn.preprocessing import StandardScaler
     from sklearn.decomposition import PCA
@@ -1253,28 +1253,24 @@ def pca(df, label_df=None, is_label=False, horizontal_pc='PC1', vertical_pc='PC2
         height=500
     )
 
-    # Step 8: Loading Plot for PC1, PC2, and PC3
-    loadings = pca.components_[:3]
-    feature_names = df_transposed.columns  # Original feature names
+    # Step 8: Loading Plot
+    loading_plot = None
+    if loading_pcs:
+        loading_df = pd.DataFrame({'Feature': df_transposed.columns})
+        for pc in loading_pcs:
+            loading_df[pc] = pca.components_[int(pc[2:]) - 1]
 
-    loading_df = pd.DataFrame({
-        'Feature': feature_names,
-        'PC1': loadings[0],
-        'PC2': loadings[1],
-        'PC3': loadings[2]
-    })
+        loading_df_melted = loading_df.melt(id_vars='Feature', var_name='Principal Component', value_name='Loading')
 
-    loading_df_melted = loading_df.melt(id_vars='Feature', var_name='Principal Component', value_name='Loading')
-
-    loading_plot = alt.Chart(loading_df_melted).mark_line(point=False).encode(
-        x=alt.X('Feature', title='Original Features'),
-        y=alt.Y('Loading', title='Loading Value'),
-        color='Principal Component'
-    ).properties(
-        title='Loadings on Principal Components 1, 2, and 3',
-        width=1000,
-        height=500
-    )
+        loading_plot = alt.Chart(loading_df_melted).mark_line(point=False).encode(
+            x=alt.X('Feature', title='Original Features'),
+            y=alt.Y('Loading', title='Loading Value'),
+            color='Principal Component'
+        ).properties(
+            title=f"Loadings on {', '.join(loading_pcs)}",
+            width=1000,
+            height=500
+        )
 
     # Return PCA-transformed data and the plots
     return pca_df, pc1_vs_pc2_plot, cumulative_variance_plot, loading_plot

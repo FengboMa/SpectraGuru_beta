@@ -1168,11 +1168,11 @@ else:
     
     preview_act = st.toggle("Preview Data")
     
-    if preview_act:
+    if preview_act and "temp" in st.session_state:
     
         st.write("**Preview**")
         
-        st.dataframe(st.session_state.df, hide_index=True)
+        st.dataframe(st.session_state.temp, hide_index=True)
         # st.table(st.session_state.df)
     
     # arr = np.random.normal(1, 1, size=100)
@@ -1223,7 +1223,10 @@ else:
         refresh_plot_pending = st.session_state.pop("refresh_plot_pending", False)
         plot_button_col, fast_mode_col, custom_axis_col = st.columns([0.16, 0.44, 0.40])
         if plot_button_col.button("Plot", type="primary", key="plot") or st.session_state.get("process") or refresh_plot_pending or st.session_state.get("reset"):
-            st.session_state.temp = get_selected_columns(st.session_state.df, st.session_state.spectra_selected)
+            if st.session_state.spectra_selected:
+                st.session_state.temp = get_selected_columns(st.session_state.df, st.session_state.spectra_selected)
+            else:
+                st.warning("Select at least one spectrum.")
 
     
     # st.write(st.session_state.temp)
@@ -1498,7 +1501,7 @@ else:
         export_dt = datetime.now()
         export_timestamp = export_dt.isoformat(timespec="seconds")
         preprocessing_summary = build_preprocessing_log_line(st.session_state.preprocessing_log)
-        csv = download_df(st.session_state.df, export_timestamp, preprocessing_summary)
+        csv = download_df(st.session_state.temp, export_timestamp, preprocessing_summary)
 
         current_time = export_dt.strftime("%Y%m%d_%H%M%S")
         download_file_name = f"data_{current_time}.csv"

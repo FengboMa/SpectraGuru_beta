@@ -48,6 +48,8 @@ if 'df' in st.session_state:
                                 "K-Nearest Neighbors(KNN) Classification",
                                 "Support Vector Machine(SVM) Classification",
                                 "Full Spectrum Fitting"),
+                        index=None,
+                        placeholder="Please select...",
                         key="stats_plot_select")
 
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
@@ -532,6 +534,10 @@ else:
     if 'temp' not in st.session_state:
         st.error('Please process your data, and select Spectra you would like to use.')
     else:
+        if st.session_state.stats_plot_select is None:
+            st.warning("Please select an analytics plot from the sidebar.")
+            st.stop()
+
         if st.session_state.get("custom_axis_titles_act", False):
             analytics_x_axis_title = st.session_state.get("custom_x_axis_title", DEFAULT_X_AXIS_TITLE)
             analytics_y_axis_title = st.session_state.get("custom_y_axis_title", DEFAULT_Y_AXIS_TITLE)

@@ -1492,7 +1492,6 @@ else:
         
         
         # Download handlers
-        @st.cache_data
         def download_df(df, export_timestamp, preprocessing_summary):
             csv_data = df.to_csv(index=False)
             metadata = [
@@ -1506,18 +1505,11 @@ else:
         export_dt = datetime.now()
         export_timestamp = export_dt.isoformat(timespec="seconds")
         preprocessing_summary = build_preprocessing_log_line(st.session_state.preprocessing_log)
-        csv = download_df(st.session_state.temp, export_timestamp, preprocessing_summary)
+        selected_data = st.session_state.temp
 
         current_time = export_dt.strftime("%Y%m%d_%H%M%S")
         download_file_name = f"data_{current_time}.csv"
         download_plot_name = f"spectra_plot_{current_time}.png"
-
-        png_bytes = function.make_matplotlib_png(
-            data_melted,
-            x_axis,
-            x_label=x_axis_title,
-            y_label=y_axis_title
-        )
 
         # Create a single row with two columns
         dcol1,dcol2, col_spacer  = st.columns([1, 1, 3])
@@ -1525,17 +1517,24 @@ else:
         with dcol1:
             st.download_button(
                 label="Data export (CSV)",
-                data=csv,
+                data=lambda: download_df(selected_data, export_timestamp, preprocessing_summary),
                 file_name=download_file_name,
-                mime="text/csv"
+                mime="text/csv",
+                on_click="ignore"
             )
 
         with dcol2:
             st.download_button(
                 label="Plot export (PNG, 600 dpi)",
-                data=png_bytes,
+                data=lambda: function.make_matplotlib_png(
+                    data_melted,
+                    x_axis,
+                    x_label=x_axis_title,
+                    y_label=y_axis_title
+                ),
                 file_name=download_plot_name,
-                mime="image/png"
+                mime="image/png",
+                on_click="ignore"
             )
 
         render_preprocessing_log(st.session_state.preprocessing_log)

@@ -2268,7 +2268,7 @@ def make_matplotlib_png(data, x_col,
     old_rc = plt.rcParams.copy()
     try:
         plt.rcParams.update({
-            "font.family": "Times New Roman",
+            # "font.family": "Times New Roman",
             "font.size": 14,
             "axes.labelsize": 18,
             "xtick.labelsize": 16,

@@ -517,7 +517,7 @@ def rebuild_dataframe_from_log(log_entries=None):
                         "failed_step": step_name,
                         "error_message": str(error)
                     })
-            if not failed_columns:
+            if not failed_columns or len(failed_columns) == rebuilt_df.shape[1] - 1:
                 raise
             rebuilt_df = rebuilt_df.drop(columns=failed_columns)
             if rebuilt_df.shape[1] == 1:

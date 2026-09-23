@@ -9,6 +9,7 @@ from scipy.interpolate import interp1d
 from datetime import datetime
 
 import function
+from function import show_feedback
 import log_utils as log
 import auth_utils
 
@@ -79,6 +80,22 @@ def render_preprocessing_log(log_entries):
     for idx, entry in enumerate(log_entries, start=1):
         params_text = format_preprocessing_parameters(entry["parameters"])
         st.write(f"{idx}. {entry['display_name']}, {params_text}")
+
+
+def render_failed_spectra():
+    if not st.session_state.get("failed_spectra"):
+        return
+
+    st.write("**Spectra excluded after processing errors**")
+    st.dataframe(pd.DataFrame([
+        {
+            "Index": index,
+            "Column name": f"⚠️ {failure['spectrum_column']}",
+            "Failed step": failure["failed_step"],
+            "Error message": failure["error_message"]
+        }
+        for index, failure in enumerate(st.session_state.failed_spectra, start=1)
+    ]), hide_index=True)
 
 
 def build_preprocessing_log_line(log_entries):
@@ -476,19 +493,57 @@ def rebuild_dataframe_from_log(log_entries=None):
     if log_entries is None:
         log_entries = st.session_state.preprocessing_log
 
+    previous_selection = st.session_state.get("spectra_selected", list(st.session_state.backup.columns[1:]))
+    selected_failed_spectra = st.session_state.get("selected_failed_spectra", [])
     rebuilt_df = st.session_state.backup.copy()
     latest_remove_outliers_log = None
+    failed_spectra = []
 
     for step_entry in log_entries:
-        rebuilt_df, step_remove_outliers_log = apply_preprocessing_step(rebuilt_df, step_entry)
+        try:
+            rebuilt_df, step_remove_outliers_log = apply_preprocessing_step(rebuilt_df, step_entry)
+        except Exception:
+            if step_entry["step"] not in ("interpolation", "despike", "smoothening", "baseline_removal", "normalization"):
+                raise
+            failed_columns = []
+            step_name = step_entry["parameters"].get("function", step_entry["display_name"])
+            for column_name in rebuilt_df.columns[1:]:
+                try:
+                    apply_preprocessing_step(rebuilt_df[[rebuilt_df.columns[0], column_name]], step_entry)
+                except Exception as error:
+                    failed_columns.append(column_name)
+                    failed_spectra.append({
+                        "spectrum_column": column_name,
+                        "failed_step": step_name,
+                        "error_message": str(error)
+                    })
+            if not failed_columns or len(failed_columns) == rebuilt_df.shape[1] - 1:
+                raise
+            rebuilt_df = rebuilt_df.drop(columns=failed_columns)
+            if rebuilt_df.shape[1] == 1:
+                break
+            rebuilt_df, step_remove_outliers_log = apply_preprocessing_step(rebuilt_df, step_entry)
         if step_remove_outliers_log is not None:
             latest_remove_outliers_log = step_remove_outliers_log
 
     st.session_state.df = rebuilt_df
+    st.session_state.pop("temp", None)
+    st.session_state.failed_spectra = failed_spectra
+    failed_names = {failure["spectrum_column"] for failure in failed_spectra}
+    st.session_state.spectra_selected = [
+        name for name in st.session_state.backup.columns[1:]
+        if name in rebuilt_df.columns and (name in previous_selection or name in selected_failed_spectra)
+    ]
+    st.session_state.selected_failed_spectra = [
+        name for name in st.session_state.backup.columns[1:]
+        if name in failed_names and (name in previous_selection or name in selected_failed_spectra)
+    ]
     if latest_remove_outliers_log is None:
         st.session_state.pop("remove_outliers_log", None)
     else:
         st.session_state.remove_outliers_log = latest_remove_outliers_log
+
+    return failed_spectra
 
 
 if st.session_state.pop("undo_pending", False):
@@ -1131,8 +1186,13 @@ else:
         if run_log_entries:
             candidate_log = st.session_state.preprocessing_log + run_log_entries
             try:
-                rebuild_dataframe_from_log(candidate_log)
+                failed_spectra = rebuild_dataframe_from_log(candidate_log)
                 st.session_state.preprocessing_log = candidate_log
+                for failure in failed_spectra:
+                    st.toast(
+                        f"{failure['spectrum_column']} failed during {failure['failed_step']}: {failure['error_message']}",
+                        icon="⚠️"
+                    )
             except Exception as e:
                 failed_step = run_log_entries[-1]["display_name"] if run_log_entries else "Preprocessing"
                 st.toast(f"{failed_step} could not be applied. Details: {e}", icon="⚠️")
@@ -1162,6 +1222,13 @@ else:
         with reset_col:
             if st.button("Yes, reset", type="primary"):
                 function.reset_processing()
+                st.session_state.spectra_selected = [
+                    name for name in st.session_state.df.columns[1:]
+                    if name in st.session_state.get("spectra_selected", [])
+                    or name in st.session_state.get("selected_failed_spectra", [])
+                ]
+                st.session_state.pop("selected_failed_spectra", None)
+                st.session_state.pop("failed_spectra", None)
                 st.session_state.refresh_plot_pending = True
                 st.rerun()
 
@@ -1227,7 +1294,10 @@ else:
         st.session_state.spectra_selected = st.multiselect(
             label="**Select Spectra/s you want to visualize**",
             options=list(st.session_state.df.columns[1:]),
-            default=list(st.session_state.df.columns[1:])
+            default=[
+                column for column in st.session_state.get("spectra_selected", st.session_state.df.columns[1:])
+                if column in st.session_state.df.columns[1:]
+            ]
         )
 
         # Get cached selected data
@@ -1282,6 +1352,11 @@ else:
     else:
         x_axis_title = DEFAULT_X_AXIS_TITLE
         y_axis_title = DEFAULT_Y_AXIS_TITLE
+
+    if not st.session_state.spectra_selected or "temp" not in st.session_state:
+        render_preprocessing_log(st.session_state.preprocessing_log)
+        render_failed_spectra()
+        st.stop()
         
     
     try:
@@ -1550,5 +1625,17 @@ else:
             st.write("**The following spectra have been detected and removed by the outlier removal function**")
             st.table(st.session_state.remove_outliers_log)
                 
-    except:
-        pass
+    except Exception as error:
+        show_feedback(
+            message="Error generating visualization.",
+            severity="error",
+            suggestions=[
+                "Click Plot after selecting spectra",
+                "Try Reset if preprocessing parameters are invalid",
+                "Check that preprocessing ranges were applied"
+            ],
+            details=str(error),
+            doc_link="https://fengboma.github.io/docs.spectraguru/docs/Processing_Page"
+        )
+
+    render_failed_spectra()

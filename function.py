@@ -37,6 +37,22 @@ def reset_processing():
     st.session_state.preprocessing_log = []
     st.session_state.pop("remove_outliers_log", None)
 
+def show_feedback(message, severity="error", details=None, suggestions=None, doc_link="https://fengboma.github.io/docs.spectraguru/"):
+    import streamlit as st
+
+    display_func = {
+        "error": st.error,
+        "warning": st.warning,
+        "info": st.info,
+        "success": st.success
+    }.get(severity, st.error)
+    content = f"### {message}\n\n📖 Documentation: [SpectraGuru Docs]({doc_link})\n\n"
+    if suggestions:
+        content += "##### 💡 Suggestions\n" + "".join(f"- {suggestion}\n" for suggestion in suggestions) + "\n"
+    if details:
+        content += f"##### 🔧 Technical Details\n```text\n{details}\n```\n"
+    display_func(content)
+
 # airPLS function
 '''
 airPLS.py Copyright 2014 Renato Lombardo - renato.lombardo@unipa.it

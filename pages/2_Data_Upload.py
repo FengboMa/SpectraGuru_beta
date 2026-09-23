@@ -4,6 +4,7 @@ import function
 import psycopg2
 import numpy as np
 from scipy.interpolate import interp1d
+import auth_utils
 from function import show_feedback
 import traceback
 
@@ -15,6 +16,10 @@ def pkey(name: str) -> str:
     return f"{PAGE_ID}_{name}"
 
 function.wide_space_default()
+
+if not auth_utils.LOCAL_DEPLOY:
+    auth_utils.force_login()
+
 st.session_state.log_file_path = (
     r"C:\Users\zhaoy_admin\Desktop\OneDrive - University of Georgia\Research Group"
     r"\Projects\2024-Redwan & Henry & Jiaheng-Spectra Analysis Software"
@@ -32,7 +37,7 @@ st.markdown(hide_st_style, unsafe_allow_html=True)
 
 @st.cache_data
 def load_data(file):
-    return pd.read_csv(file, encoding='utf-8')
+    return pd.read_csv(file, encoding='utf-8', comment='#')
 
 @st.cache_data
 def load_tab_data(file):
@@ -40,7 +45,6 @@ def load_tab_data(file):
 
 @st.cache_data
 def load_multi_data(file_paths):
-    # UPDATE TO READ_COLUMNS TO INCLUDE FEEDBACK COMPONENT
     def read_columns(file_path):
         try:
             df = pd.read_csv(
@@ -99,12 +103,12 @@ def show_label_editor(temp_df, default_labels):
     """
     st.write(
         """
-        **Please use the following dataframe editor to insert labels**
+        **Use the following dataframe editor to insert labels.**
 
-        *Note:*  
-        - The first column shows each spectrum column’s name.  
-        - Edit the **Label** column to assign an integer class label.  
-        - Double-click to edit; drag the cell’s bottom-right corner to copy.  
+        *Note:*
+        - The first column shows each spectrum column’s name.
+        - Edit the **Label** column to assign an integer class label.
+        - Double-click to edit; drag the cell’s bottom-right corner to copy.
         - Only integer values are accepted.
         """
     )
@@ -129,8 +133,8 @@ def show_label_editor(temp_df, default_labels):
     st.session_state.label_df = edited
 
 # ----------------------------------------
-st.write("## Data Upload")
-st.divider()
+st.write("## Data upload")
+st.write("Upload spectra by class, choose the data source and format, then assign labels before moving to processing.")
 
 # ----------------------------------------
 # --- Automatic database connection ------------------------------------------
@@ -147,33 +151,39 @@ if 'connection' not in st.session_state:
         )
         st.session_state.db_logged_in = True
         st.session_state.connection   = conn
-        st.session_state.user         = "sg_user"
-        st.session_state.passkey      = "Aa123456"
+        st.session_state.db_user      = "sg_user"
+        st.session_state.db_passkey   = "Aa123456"
     except Exception as e:
         st.session_state.connection = None
         st.session_state.db_logged_in = False
         st.session_state.db_error     = str(e)
 
-# with st.expander("Database Login", expanded=False):
-#     if st.session_state.db_logged_in:
-#         st.success("Logged in as **sg_user**.")
-#     else:
-#         st.error(f"Database connection failed: {st.session_state.get('db_error', 'unknown error')}")
+
 
 # ----------------------------------------
 def reset_application():
     """
-    Clears all keys in st.session_state except for 'run_count'.
-    This is important to prevent the button from disappearing after a reset.
+    Clears uploaded/processed data while preserving login and reset state.
     """
     st.toast("Application has been reset!", icon="✅")
-    
+
+    keys_to_keep = {
+        'run_count',
+        'user_decided',
+        'user',
+        'user_logged_in',
+        'username',
+        'do_startup',
+        'show_welcome_modal',
+        'show_login_modal',
+    }
+
     # Keep track of the keys to delete
     keys_to_delete = []
     for key in st.session_state.keys():
-        if key != 'run_count': # We want to preserve the run_count
+        if key not in keys_to_keep:
             keys_to_delete.append(key)
-    
+
     # Delete the keys
     for key in keys_to_delete:
         del st.session_state[key]
@@ -197,11 +207,12 @@ st.session_state.run_count += 1
 # The button will only appear AFTER the first run.
 if st.session_state.run_count > 1:
     st.button(
-        "⚠️Reset Uploaded data and reset application",
+        "⚠️ Reset uploaded data and reset application",
         on_click=reset_application,
         type="primary"
     )
 
+st.divider()
 
 # --- Number of classes selector ---
 n_classes = st.number_input(
@@ -214,19 +225,26 @@ n_classes = st.number_input(
 )
 st.divider()
 
+# --- Preview control ---------------------------------------------------------
+preview_data = st.toggle(
+    "Preview data",
+    value=False,
+    key=pkey("preview_data"),
+    help="Show loaded class dataframes on this page."
+)
+
 # === NEW: initialize global selection counters (total spectra across expanders)
 if 'selected_counts' not in st.session_state:
     st.session_state.selected_counts = {}   # {class_idx: total_spectra_in_that_class}
 
 # --- Data format options ---
 FORMAT_OPTIONS = {
-    "Multi TXT (two-column, common x)": {"kind": "multi_txt", "multi": True,  "types": ["txt"]},
-    "Multi CSV (two-column, common x)": {"kind": "multi_csv", "multi": True,  "types": ["csv"]},
-    "Single TSV (.tsv / tab-separated)": {"kind": "single_tsv", "multi": False, "types": ["csv"]},
-    "Single CSV (comma-separated)":      {"kind": "single_csv", "multi": False, "types": ["csv"]},
+    "Multi TXT (two-column, common x-axis)": {"kind": "multi_txt", "multi": True,  "types": ["txt"]},
+    "Multi CSV (two-column, common x-axis)": {"kind": "multi_csv", "multi": True,  "types": ["csv"]},
+    "Single TSV (.tsv / tab-separated)":     {"kind": "single_tsv", "multi": False, "types": ["csv"]},
+    "Single CSV (comma-separated)":          {"kind": "single_csv", "multi": False, "types": ["csv"]},
 }
 
-# UPDATE TO READ_COLUMNS TO INCLUDE FEEDBACK COMPONENT
 def process_upload(kind, uploaded):
     if not uploaded:
         show_feedback(
@@ -295,6 +313,16 @@ def process_upload(kind, uploaded):
         )
         return None
 
+def describe_loaded_spectra(class_label, df, status="loaded"):
+    """Return a user-facing summary: spectra columns and data points."""
+    spectrum_count = max(0, df.shape[1] - 1)
+    point_count = df.shape[0]
+    spectrum_word = "spectrum" if spectrum_count == 1 else "spectra"
+    point_word = "point" if point_count == 1 else "points"
+    if spectrum_count == 1:
+        return f"{class_label} {status} with 1 spectrum containing {point_count} data {point_word}."
+    return f"{class_label} {status} with {spectrum_count} spectra, each containing {point_count} data {point_word}."
+
 if n_classes > 1:
     st.warning(
         "All uploaded classes will be **automatically interpolated** to a "
@@ -322,14 +350,14 @@ for idx in range(int(n_classes)):
         cache_key = pkey(f"class_df_{idx}")
         df_cached = st.session_state.get(cache_key)
         if df_cached is not None:
-            st.success(f"{class_label} already loaded. Shape: {df_cached.shape}")
-            st.dataframe(df_cached.head())
+            st.success(describe_loaded_spectra(class_label, df_cached, status="is already loaded"))
+            if preview_data:
+                st.dataframe(df_cached, hide_index=True)
 
             # NEW: count spectra columns for cached data and store for this class
             manual_count = max(0, df_cached.shape[1] - 1)  # minus RamanShift
             st.session_state.selected_counts[idx] = manual_count
-            total_selected_preview = sum(st.session_state.selected_counts.values())
-            st.caption(f"This class: **{manual_count}** spectra · Total: **{total_selected_preview} / 1000**")
+            st.caption(f"This class: **{manual_count}** spectra")
 
             class_labels.append(class_label)
             class_dfs.append((class_label, df_cached))
@@ -337,8 +365,13 @@ for idx in range(int(n_classes)):
 
         # 2. Data source --------------------------------------------------
         source = st.radio(
-            "Data Source", ["Manual Upload", "Database Query"],
-            horizontal=True, key=pkey(f"source_{idx}")
+            "Data source", ["Manual Upload", "Database Query"],
+            horizontal=True,
+            key=pkey(f"source_{idx}"),
+            format_func={
+                "Manual Upload": "Manual upload",
+                "Database Query": "Database query"
+            }.get
         )
         df_this = None
 
@@ -408,15 +441,16 @@ for idx in range(int(n_classes)):
                         )
 
             if df_this is not None:
-                st.success(f"{class_label} loaded. Shape: {df_this.shape}")
-                st.dataframe(df_this.head())
+                st.success(describe_loaded_spectra(class_label, df_this, status="loaded"))
+                if preview_data:
+                    st.dataframe(df_this, hide_index=True)
                 st.session_state[cache_key] = df_this
 
                 # NEW: manual uploads contribute to the global total
                 manual_count = max(0, df_this.shape[1] - 1)  # minus RamanShift
                 st.session_state.selected_counts[idx] = manual_count
                 prospective_total = sum(st.session_state.selected_counts.values())
-                st.caption(f"This class: **{manual_count}** spectra · Total (all classes): **{prospective_total} / 1000**")
+                st.caption(f"This class: **{manual_count}** spectra")
                 if prospective_total > 1000:
                     st.error("Total selected spectra exceed **1000**. Remove data to proceed.")
                     all_ready = False
@@ -439,12 +473,18 @@ for idx in range(int(n_classes)):
                 all_ready = False
                 st.session_state.selected_counts[idx] = 0
             else:
-                advanced_search = st.checkbox("Advanced Search", key=pkey(f"adv_{idx}"))
+                advanced_search = st.checkbox("Advanced search", key=pkey(f"adv_{idx}"))
                 data_type_filter = (
                     st.radio(
-                        "Select Data Type to Search:",
+                        "Select data type to search:",
                         ["Both", "Raw Data Only", "Standard Data Only"], index=0,
-                        horizontal=True, key=pkey(f"dtf_{idx}")
+                        horizontal=True,
+                        key=pkey(f"dtf_{idx}"),
+                        format_func={
+                            "Both": "Both",
+                            "Raw Data Only": "Raw data only",
+                            "Standard Data Only": "Standard data only"
+                        }.get
                     )
                     if advanced_search else "Both"
                 )
@@ -483,11 +523,11 @@ for idx in range(int(n_classes)):
                         else:
                             sel_preview = ", ".join(f"{r['batch_analyte_name']}_{r['batch_id']}" for _, r in selected_rows.iterrows())
                             st.write(f"Selected: {sel_preview}")
-                            st.caption(f"This class: **{class_sel_count}** spectra · Total (all classes): **{prospective_total} / 1000**")
+                            st.caption(f"This class: **{class_sel_count}** spectra")
 
                             # Global safeguards
                             if prospective_total > 1000:
-                                st.error("Total selected spectra exceed **1000**. Reduce your selection to enable **Get Data**.")
+                                st.error("Total selected spectra exceed **1000**. Reduce your selection to enable **Get data**.")
                                 allow_get = False
                                 all_ready = False
                             else:
@@ -496,7 +536,7 @@ for idx in range(int(n_classes)):
                                 allow_get = True
 
                             # Only show the button if allowed under the global rule
-                            if allow_get and st.button("Get Data", key=pkey(f"getdata_{idx}")):
+                            if allow_get and st.button("Get data", key=pkey(f"getdata_{idx}")):
                                 with st.spinner("Fetching and processing spectrum data..."):
                                     try:
                                         conn = st.session_state.connection
@@ -581,7 +621,8 @@ for idx in range(int(n_classes)):
                                                     .reset_index().drop_duplicates()
                                                 )
                                                 st.success(f"Fetched {len(data_dfs)} batch(es) for {class_label}.")
-                                                st.dataframe(df_this.head())
+                                                if preview_data:
+                                                    st.dataframe(df_this, hide_index=True)
                                                 st.session_state[cache_key] = df_this
                                     except Exception as e:
                                         st.error(f"Error fetching data: {e}")
@@ -614,7 +655,7 @@ elif total_selected > 500:
 if total_selected > 1000:
     all_ready = False
 
-if all_ready and all(df is not None for _, df in class_dfs):
+if all_ready and all(df is not None for _, df in class_dfs) and int(n_classes) > 1:
     st.success(f"All {n_classes} classes loaded successfully.")
     mins, maxs = [], []
     for _, df in class_dfs:
@@ -652,21 +693,23 @@ if all_ready and all(df is not None for _, df in class_dfs):
     )
     st.session_state.class_data = interpolated_class_dfs
     st.session_state.df        = combined_df
-    st.session_state.backup    = combined_df.copy() 
+    st.session_state.backup    = combined_df.copy()
 
     # --- Label editor ---
     default_lbls_multi = {}
     for idx, (class_label, df_cls) in enumerate(interpolated_class_dfs, start=1):
         for col in df_cls.columns[1:]:
             default_lbls_multi[col] = idx
+    st.divider()
     show_label_editor(combined_df, default_lbls_multi)
 
-elif all_ready and all(df is not None for _, df in class_dfs) and n_classes == 1:
+elif all_ready and all(df is not None for _, df in class_dfs) and int(n_classes) == 1:
     _, df = class_dfs[0]
     st.session_state.df     = df
-    st.session_state.backup = df.copy() 
+    st.session_state.backup = df.copy()
     st.session_state.class_data = class_dfs
     default_lbls_single = {col: 1 for col in df.columns[1:]}
+    st.divider()
     show_label_editor(df, default_lbls_single)
 
 else:
@@ -676,9 +719,15 @@ else:
 if 'df' in st.session_state:
     st.divider()
     col1, col2 = st.columns([2, 12])
-    if col1.button(label='Processing Page', key=pkey('switch_processing_page')):
+    if col1.button(label='Processing page', key=pkey('switch_processing_page'), type="primary"):
         st.switch_page("pages/3_Processing.py")
-    col2.markdown(' :arrow_left: **Go to Processing Page to process data**')
-    st.write("#### Preview")
-    st.write(st.session_state.backup)
+    col2.markdown(' :arrow_left: **Go to the Processing page to process data**')
+    if st.toggle(
+        "Preview combined dataset",
+        value=True,
+        key=pkey("preview_combined_dataset"),
+        help="Show the combined dataset copy that will be used on the Processing page."
+    ):
+        st.write("#### Combined dataset preview")
+        st.dataframe(st.session_state.backup, hide_index=True)
     function.update_mode_option()

@@ -1,17 +1,22 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-# import numpy as np
+import numpy as np
 import altair as alt
 # from streamlit_extras.chart_container import chart_container
 from streamlit_extras.row import row
 from scipy.interpolate import interp1d
 from datetime import datetime
-from function import show_feedback
+
 import function
+from function import show_feedback
 import log_utils as log
+import auth_utils
 
 function.wide_space_default()
+
+if not auth_utils.LOCAL_DEPLOY:
+    auth_utils.force_login()
 
 if 'preprocessing_log' not in st.session_state:
     st.session_state.preprocessing_log = []
@@ -35,9 +40,32 @@ def load_widget_value(key):
 
 
 def format_preprocessing_parameters(parameters):
+    label_overrides = {
+        "fft_threshold": "FFT threshold",
+        "padding_method": "Padding method",
+        "window_length": "Window length",
+        "polynomial_order": "Polynomial order",
+        "window_size": "Window size",
+        "num_iterations": "Number of iterations",
+        "max_iter": "Maximum iterations",
+        "single_threshold": "Single threshold",
+        "distance_threshold": "Distance threshold",
+        "correlation_threshold": "Correlation threshold",
+        "fitting_ranges": "Fitting ranges",
+        "zap_length": "Zap length",
+        "window_start": "Window start",
+        "window_end": "Window end",
+        "porder": "P-order",
+        "lambda": "Lambda",
+        "p": "P",
+        "d": "D",
+        "tau": "Tau",
+        "min": "Min",
+        "max": "Max",
+    }
     parts = []
     for key, value in parameters.items():
-        label = key.replace('_', ' ')
+        label = label_overrides.get(key, key.replace('_', ' ').capitalize())
         parts.append(f"{label}: {value}")
     return ", ".join(parts)
 
@@ -52,6 +80,22 @@ def render_preprocessing_log(log_entries):
     for idx, entry in enumerate(log_entries, start=1):
         params_text = format_preprocessing_parameters(entry["parameters"])
         st.write(f"{idx}. {entry['display_name']}, {params_text}")
+
+
+def render_failed_spectra():
+    if not st.session_state.get("failed_spectra"):
+        return
+
+    st.write("**Spectra excluded after processing errors**")
+    st.dataframe(pd.DataFrame([
+        {
+            "Index": index,
+            "Column name": f"⚠️ {failure['spectrum_column']}",
+            "Failed step": failure["failed_step"],
+            "Error message": failure["error_message"]
+        }
+        for index, failure in enumerate(st.session_state.failed_spectra, start=1)
+    ]), hide_index=True)
 
 
 def build_preprocessing_log_line(log_entries):
@@ -114,7 +158,7 @@ def collect_current_preprocessing_entries():
         if st.session_state.smoothening_function == "Savitzky-Golay filter":
             run_log_entries.append({
                 "step": "smoothening",
-                "display_name": "Smoothening",
+                "display_name": "Smoothing",
                 "parameters": {
                     "function": "Savitzky-Golay filter",
                     "window_length": st.session_state.smoothening_act_window_length,
@@ -124,12 +168,40 @@ def collect_current_preprocessing_entries():
         elif st.session_state.smoothening_function == "1D Fast Fourier Transform filter":
             run_log_entries.append({
                 "step": "smoothening",
-                "display_name": "Smoothening",
+                "display_name": "Smoothing",
                 "parameters": {
                     "function": "1D Fast Fourier Transform filter",
                     "fft_threshold": st.session_state.smoothening_act_FFT_threshold,
                     "padding_method": st.session_state.smoothening_act_FFT_padding
                 }
+            })
+        elif st.session_state.smoothening_function == "Median filter":
+            run_log_entries.append({
+                "step": "smoothening",
+                "display_name": "Smoothing",
+                "parameters": {
+                    "function": "Median filter",
+                    "window_size": st.session_state.smoothening_act_median_filter_window_size,
+                    "padding_method": st.session_state.smoothening_act_median_filter_padding_method
+                }
+            })
+        elif st.session_state.smoothening_function == "Wavelet Denoising":
+            method = st.session_state.wavelet_method
+            params = {
+                "function": "Wavelet Denoising",
+                "method": method,
+                "wavelet": st.session_state.wavelet_family,
+                "level": st.session_state.wavelet_level
+            }
+            if method in ("Sardy Block Coordinate Relaxation(BCR)", "Sardy BCR"):
+                params["n_iter"] = st.session_state.wavelet_n_iter
+                params["loss"] = st.session_state.wavelet_loss
+            else:
+                params["mode"] = st.session_state.wavelet_mode
+            run_log_entries.append({
+                "step": "smoothening",
+                "display_name": "Smoothing",
+                "parameters": params
             })
 
     if st.session_state.baselineremoval_act:
@@ -154,6 +226,19 @@ def collect_current_preprocessing_entries():
                     "degree": st.session_state.baselineremoval_ModPoly_degree
                 }
             })
+        if st.session_state.baselineremoval_function == "iModPoly":
+            run_log_entries.append({
+                "step": "baseline_removal",
+                "display_name": "Baseline Removal",
+                "parameters": {
+                    "function": "iModPoly",
+                    "degree": st.session_state.baselineremoval_iModPoly_degree,
+                    "max_iter": st.session_state.baselineremoval_iModPoly_max_iter,
+                    "scale_factor1": st.session_state.baselineremoval_iModPoly_scale_factor1,
+                    "scale_factor2": st.session_state.baselineremoval_iModPoly_scale_factor2,
+                    "cutoff": st.session_state.baselineremoval_iModPoly_cutoff
+                }
+            })
         if st.session_state.baselineremoval_function == "Gaussian-Lorentzian Fitting":
             if "fitting_ranges" not in st.session_state:
                 raise AttributeError("fitting_ranges")
@@ -165,16 +250,48 @@ def collect_current_preprocessing_entries():
                     "fitting_ranges": st.session_state.fitting_ranges
                 }
             })
+        if st.session_state.baselineremoval_function == "SNIP":
+            run_log_entries.append({
+                "step": "baseline_removal",
+                "display_name": "Baseline Removal",
+                "parameters": {
+                    "function": "SNIP",
+                    "num_iterations": st.session_state.baselineremoval_SNIP_num_iterations
+                }
+            })
+        if st.session_state.baselineremoval_function in ("Asymmetric Least Squares(ALS)", "ALS"):
+            run_log_entries.append({
+                "step": "baseline_removal",
+                "display_name": "Baseline Removal",
+                "parameters": {
+                    "function": "Asymmetric Least Squares(ALS)",
+                    "lambda": st.session_state.baselineremoval_ALS_lambda,
+                    "p": st.session_state.baselineremoval_ALS_p,
+                    "d": st.session_state.baselineremoval_ALS_d,
+                    "max_iter": st.session_state.baselineremoval_ALS_max_iter
+                }
+            })
+
 
     if st.session_state.normalization_act:
-        run_log_entries.append({
-            "step": "normalization",
-            "display_name": "Normalization",
-            "parameters": {
-                "function": st.session_state.normalization_function,
-                "parameter": "none"
-            }
-        })
+        if st.session_state.normalization_function == "Normalize by area":
+                run_log_entries.append({
+                    "step": "normalization",
+                    "display_name": "Normalization",
+                    "parameters": {
+                        "function": "Normalize by area",
+                        "scale_factor": st.session_state.normalization_act_scale_factor
+                    }
+                })
+        else:
+            run_log_entries.append({
+                "step": "normalization",
+                "display_name": "Normalization",
+                "parameters": {
+                    "function": st.session_state.normalization_function,
+                    "parameter": "none"
+                }
+            })
 
     if st.session_state.outlierremoval_act:
         run_log_entries.append({
@@ -197,7 +314,12 @@ def apply_preprocessing_step(df, step_entry):
     remove_outliers_log = None
 
     if step == "interpolation":
-        interpolated_df = pd.DataFrame(result_df.iloc[:, 0].round(), columns=[result_df.columns[0]])
+        integer_x = np.arange(
+            np.ceil(result_df.iloc[:, 0].min()),
+            np.floor(result_df.iloc[:, 0].max()) + 1,
+            dtype=int
+        )
+        interpolated_df = pd.DataFrame(integer_x, columns=[result_df.columns[0]])
         for col in result_df.columns[1:]:
             interpolator = interp1d(
                 result_df.iloc[:, 0],
@@ -206,8 +328,8 @@ def apply_preprocessing_step(df, step_entry):
                 bounds_error=False,
                 fill_value="extrapolate"
             )
-            interpolated_df[col] = interpolator(result_df.iloc[:, 0].round())
-        return interpolated_df.drop_duplicates(), remove_outliers_log
+            interpolated_df[col] = interpolator(integer_x)
+        return interpolated_df, remove_outliers_log
 
     if step == "crop":
         return result_df[
@@ -236,29 +358,13 @@ def apply_preprocessing_step(df, step_entry):
 
     if step == "smoothening":
         if params["function"] == "Savitzky-Golay filter":
-            trouble_spectra = []
-
-            for col_name in result_df.columns[1:]:
-                try:
-                    result_df[col_name] = function.savgol_filter_spectra(
-                        result_df[col_name],
-                        window_length=params["window_length"],
-                        polyorder=params["polynomial_order"]
-                    )
-                except Exception as e:
-                    trouble_spectra.append((col_name, str(e)))
-
-            if trouble_spectra:
-                show_feedback(
-                    message="Some spectra failed during Smoothening (Savitzky-Golay).",
-                    severity="warning",
-                    suggestions=[
-                        "Ensure window_length is odd",
-                        "Ensure polynomial_order < window_length",
-                        "Check for NaN or constant values in spectra"
-                    ],
-                    details="\n".join([f"{name}: {err}" for name, err in trouble_spectra])
+            result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
+                lambda col: function.savgol_filter_spectra(
+                    col,
+                    window_length=params["window_length"],
+                    polyorder=params["polynomial_order"]
                 )
+            )
         elif params["function"] == "1D Fast Fourier Transform filter":
             result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
                 lambda col: function.FFT_spectra(
@@ -267,6 +373,34 @@ def apply_preprocessing_step(df, step_entry):
                     padding_method=params["padding_method"]
                 )
             )
+        elif params["function"] == "Median filter":
+            result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
+                lambda col: function.median_filter_spectra(
+                    col,
+                    window_size=params["window_size"],
+                    padding_method=params["padding_method"]
+                )
+            )
+        elif params["function"] == "Wavelet Denoising":
+            if params["method"] in ("Sardy Block Coordinate Relaxation(BCR)", "Sardy BCR"):
+                result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
+                    lambda col: function.wavelet_denoise_sardy(
+                        col,
+                        wavelet=params["wavelet"],
+                        level=params["level"],
+                        n_iter=params["n_iter"],
+                        loss=params["loss"]
+                    )
+                )
+            elif params["method"] in ("Standard Universal Thresholding", "Standard"):
+                result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
+                    lambda col: function.wavelet_denoise_standard(
+                        col,
+                        wavelet=params["wavelet"],
+                        level=params["level"],
+                        mode=params["mode"]
+                    )
+                )
         return result_df, remove_outliers_log
 
     if step == "baseline_removal":
@@ -284,6 +418,17 @@ def apply_preprocessing_step(df, step_entry):
             result_df.iloc[:, 1:] = result_df.iloc[:, 1:] - result_df.iloc[:, 1:].apply(
                 lambda col: function.ModPoly(col.values, degree=params["degree"])
             )
+        elif params["function"] == "iModPoly":
+            result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
+                lambda col: function.imodified_polyfit(
+                    np.column_stack((result_df.iloc[:, 0].values, col.values)),
+                    nth=params["degree"],
+                    iter_max=params["max_iter"],
+                    scale_factor1=params["scale_factor1"],
+                    scale_factor2=params["scale_factor2"],
+                    cutoff=params["cutoff"]
+                )[:, 1]
+            )
         elif params["function"] == "Gaussian-Lorentzian Fitting":
             result_df.iloc[:, 1:] = result_df.iloc[:, 1:] - result_df.iloc[:, 1:].apply(
                 lambda col: function.GLF(
@@ -292,19 +437,44 @@ def apply_preprocessing_step(df, step_entry):
                     fitting_ranges=params["fitting_ranges"]
                 )
             )
+        elif params["function"] == "SNIP":
+            result_df.iloc[:, 1:] = result_df.iloc[:, 1:] - result_df.iloc[:, 1:].apply(
+                lambda col: function.snip_1d(
+                    col.values,
+                    iterations=params["num_iterations"],
+                    use_lls=True, # hardcoded
+                    poly_window=15, # hardcoded
+                    poly_deg=1, # hardcoded
+                    return_baseline=True # hardcoded
+                )
+            )
+        elif params["function"] in ("Asymmetric Least Squares(ALS)", "ALS"):
+            result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
+                lambda col: function.als_baseline_removal(
+                    col.values,
+                    lam=params["lambda"],
+                    p=params["p"],
+                    d=params["d"],
+                    max_iter=params["max_iter"]
+                )
+            )
         return result_df, remove_outliers_log
 
     if step == "normalization":
         if params["function"] == "Normalize by area":
             result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
-                function.normalize_by_area,
-                ramanshift=result_df.iloc[:, 0],
-                axis=0
+                lambda col: function.normalize_by_area(
+                    col,
+                    ramanshift=result_df.iloc[:, 0],
+                    scale_factor=params["scale_factor"]
+                )
             )
         elif params["function"] == "Normalize by peak":
             result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(function.normalize_by_peak, axis=0)
         elif params["function"] == "Min max normalize":
             result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(function.min_max_normalize, axis=0)
+        elif params["function"] == "Normalize by mean":
+            result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(function.normalize_by_mean, axis=0)
         return result_df, remove_outliers_log
 
     if step == "outlier_removal":
@@ -323,19 +493,57 @@ def rebuild_dataframe_from_log(log_entries=None):
     if log_entries is None:
         log_entries = st.session_state.preprocessing_log
 
+    previous_selection = st.session_state.get("spectra_selected", list(st.session_state.backup.columns[1:]))
+    selected_failed_spectra = st.session_state.get("selected_failed_spectra", [])
     rebuilt_df = st.session_state.backup.copy()
     latest_remove_outliers_log = None
+    failed_spectra = []
 
     for step_entry in log_entries:
-        rebuilt_df, step_remove_outliers_log = apply_preprocessing_step(rebuilt_df, step_entry)
+        try:
+            rebuilt_df, step_remove_outliers_log = apply_preprocessing_step(rebuilt_df, step_entry)
+        except Exception:
+            if step_entry["step"] not in ("interpolation", "despike", "smoothening", "baseline_removal", "normalization"):
+                raise
+            failed_columns = []
+            step_name = step_entry["parameters"].get("function", step_entry["display_name"])
+            for column_name in rebuilt_df.columns[1:]:
+                try:
+                    apply_preprocessing_step(rebuilt_df[[rebuilt_df.columns[0], column_name]], step_entry)
+                except Exception as error:
+                    failed_columns.append(column_name)
+                    failed_spectra.append({
+                        "spectrum_column": column_name,
+                        "failed_step": step_name,
+                        "error_message": str(error)
+                    })
+            if not failed_columns:
+                raise
+            rebuilt_df = rebuilt_df.drop(columns=failed_columns)
+            if rebuilt_df.shape[1] == 1:
+                break
+            rebuilt_df, step_remove_outliers_log = apply_preprocessing_step(rebuilt_df, step_entry)
         if step_remove_outliers_log is not None:
             latest_remove_outliers_log = step_remove_outliers_log
 
     st.session_state.df = rebuilt_df
+    st.session_state.pop("temp", None)
+    st.session_state.failed_spectra = failed_spectra
+    failed_names = {failure["spectrum_column"] for failure in failed_spectra}
+    st.session_state.spectra_selected = [
+        name for name in st.session_state.backup.columns[1:]
+        if name in rebuilt_df.columns and (name in previous_selection or name in selected_failed_spectra)
+    ]
+    st.session_state.selected_failed_spectra = [
+        name for name in st.session_state.backup.columns[1:]
+        if name in failed_names and (name in previous_selection or name in selected_failed_spectra)
+    ]
     if latest_remove_outliers_log is None:
         st.session_state.pop("remove_outliers_log", None)
     else:
         st.session_state.remove_outliers_log = latest_remove_outliers_log
+
+    return failed_spectra
 
 
 if st.session_state.pop("undo_pending", False):
@@ -388,7 +596,7 @@ else:
         if 'interpolation_act' not in st.session_state:
             st.session_state.interpolation_act = False
 
-        interpolation_act = st.toggle("Interpolation", value=False, help="Use Interpolation to transfer and round Raman shift to its closest integer.", key='interpolation_act')
+        interpolation_act = st.toggle("Interpolation", value=False, help="Interpolate intensity values at each integer Raman shift.", key='interpolation_act')
         # st.sidebar.write(interpolation_ref_x)
         
         # crop
@@ -397,7 +605,7 @@ else:
         c_crop_max = float(st.session_state.df.iloc[:, 0].max())
         if 'crop_act' not in st.session_state:
             st.session_state.crop_act = False
-        crop_act = st.toggle("Crop", value=False, help="Use Crop to select range.", key='crop_act')
+        crop_act = st.toggle("Crop", value=False, help="Select the Raman-shift range to keep.", key='crop_act')
         
         if crop_act:
             st.write("Spectra range: " ,c_crop_min, " - ", c_crop_max)
@@ -421,14 +629,14 @@ else:
         if 'despike_act' not in st.session_state:
             st.session_state.despike_act = False
         
-        despike_act = st.toggle("Despike", 
-                                        value=False, 
-                                        help="**Auto-Despike Method** - Automatically detects and corrects spikes across the entire spectrum. Regions where the signal exceeds a defined threshold within a specified scan width are replaced with linear interpolation. This method  may slightly alter the overall spectrum. \n \n **Manual Despike Method** - Allows users to define a specific window  where despiking is applied. Only spikes within this region are corrected, minimizing unintended effects on the rest of the spectrum.", 
+        despike_act = st.toggle("Despike",
+                                        value=False,
+                                        help="**Auto despike method** - Automatically detects and corrects spikes across the entire spectrum. Regions where the signal exceeds a defined threshold within a specified scan width are replaced with linear interpolation. This method may slightly alter the overall spectrum. \n \n **Manual despike method** - Allows users to define a specific window where despiking is applied. Only spikes within this region are corrected, minimizing unintended effects on the rest of the spectrum.",
                                         key='despike_act')
         
         if despike_act:
             
-            st.session_state.despike_function = st.selectbox(label="Select your despike function",  options=["Auto despike method","Manual despike method"])
+            st.session_state.despike_function = st.selectbox(label="Select despike function",  options=["Auto despike method","Manual despike method"])
             
             if st.session_state.despike_function == "Auto despike method":
                 # Add more functions to this selectbox if needed
@@ -471,25 +679,34 @@ else:
 
                         # Validate order
                         if start >= end:
-                            st.error("Start value must be less than End value.")
+                            st.error("Start value must be less than end value.")
                         else:
                             st.session_state.despike_applied_range = (start, end)
                             st.success(f"Fitting range ({start:.2f}, {end:.2f}) applied.")
         
-        # Smoothening
-        # st.sidebar.markdown("**Smoothening**")
+        # Smoothing
+        # st.sidebar.markdown("**Smoothing**")
         
         if 'smoothening_act' not in st.session_state:
             st.session_state.smoothening_act = False
         
-        smoothening_act = st.toggle("Smoothening", 
-                                        value=False, 
-                                        help="Smoothening in spectra processing is a technique used to reduce noise and enhance the signal by averaging adjacent data points to produce a clearer representation of the spectral data.", 
+        smoothening_act = st.toggle("Smoothing",
+                                        value=False,
+                                        help="Smoothing in spectra processing reduces noise and enhances the signal by averaging adjacent data points to produce a clearer representation of the spectral data.",
                                         key='smoothening_act')
-        
+
         if smoothening_act:
             # Add more functions to this selectbox if needed
-            st.session_state.smoothening_function = st.selectbox(label="Select your smoothening function",  options=["Savitzky-Golay filter","1D Fast Fourier Transform filter"])
+            st.session_state.smoothening_function = st.selectbox(
+                label="Select smoothing function",
+                options=["Savitzky-Golay filter","1D Fast Fourier Transform filter", "Median filter", "Wavelet Denoising"],
+                format_func={
+                    "Savitzky-Golay filter": "Savitzky-Golay filter",
+                    "1D Fast Fourier Transform filter": "1D Fast Fourier Transform filter",
+                    "Median filter": "Median filter",
+                    "Wavelet Denoising": "Wavelet denoising"
+                }.get
+            )
             
             if st.session_state.smoothening_function == "Savitzky-Golay filter":
             # Add more functions to this selectbox if needed
@@ -502,7 +719,7 @@ else:
                                                                 step = 1, placeholder="Insert a number", help="The order of the polynomial used to fit the samples. polyorder must be less than Savitzky-Golay window length.")
             elif st.session_state.smoothening_function == "1D Fast Fourier Transform filter":
                 help_txt = '''
-                The threshold is a parameter sets the cutoff frequency for the low-pass filter applied to the spectra in the frequency domain. This threshold determines which frequency components are preserved and which are filtered out.
+                The threshold sets the cutoff frequency for the low-pass filter applied to the spectra in the frequency domain. This threshold determines which frequency components are preserved and which are filtered out.
                 
                 The filtering process is governed by the following equation:
                 $$
@@ -526,25 +743,117 @@ else:
                 
                 **Zero Padding ('zero'):** Adds zeros to the edges of the signal. May introduce artifacts at the edges.
                 '''
-                smoothening_act_FFT_padding = st.selectbox(label="Select your FFT Padding method",  options=["mirror",
+                smoothening_act_FFT_padding = st.selectbox(label="Select FFT padding method",  options=["mirror",
                                                                                                                     "edge",
                                                                                                                     "zero"],
                                                                 key = "smoothening_act_FFT_padding",
                                                                 help = help_txt2)
+            elif st.session_state.smoothening_function == "Median filter":
+                window_size_help = '''
+                The window size parameter specifies the length of the window for the median filter to use. A small window size can remove sharp spikes or outliers while minimizing artifacts. Larger window sizes may result in feature loss and distortion of the original spectra.
+
+                Window size must be odd. The max window size is 51, but smaller window sizes may still produce significant distortion and artifacts. Be sure to select an appropriate window size considering the width of features in your spectra.
+                '''
+                st.number_input(label="Window size", key = "smoothening_act_median_filter_window_size",
+                                                min_value = 3, max_value = 51, value = 3,
+                                                step=2, placeholder="Insert a number", help=window_size_help)
+                padding_help = '''
+                The padding method parameter specifies the method used to pad the signal before applying the median filter. Padding helps to reduce edge effects and minimize artifacts introduced by the filtering process.
+                
+                **Mirror Padding ('mirror'):** Reflects the signal at its edges, creating a smooth transition.
+                
+                **Edge Padding ('edge'):** Repeats the edge values of the signal.
+                
+                **Zero Padding ('zero'):** Adds zeros to the edges of the signal. May introduce artifacts at the edges.
+                '''
+                st.selectbox(label="Padding method",
+                             options=["mirror", "edge", "zero"],
+                             key="smoothening_act_median_filter_padding_method",
+                             help=padding_help)
+            elif st.session_state.smoothening_function == "Wavelet Denoising":
+                wavelet_methods = ["Sardy Block Coordinate Relaxation(BCR)", "Standard Universal Thresholding"]
+                wavelet_help = '''
+                Selects the coefficient-shrinkage method used after wavelet decomposition.
+
+                Sardy Block Coordinate Relaxation(BCR) applies an iterative robust shrinkage procedure to detail coefficients. Standard Universal Thresholding applies a single universal threshold to detail coefficients.
+
+                Default: Sardy Block Coordinate Relaxation(BCR).
+                '''
+                st.selectbox(
+                    label="Wavelet denoising method",
+                    options=wavelet_methods,
+                    format_func={
+                        "Sardy Block Coordinate Relaxation(BCR)": "Sardy block coordinate relaxation (BCR)",
+                        "Standard Universal Thresholding": "Standard universal thresholding"
+                    }.get,
+                    help=wavelet_help,
+                    key="wavelet_method"
+                )
+                st.selectbox(
+                    label="Wavelet family",
+                    options=["sym4", "sym8", "db4", "db8", "coif1", "coif3", "haar"],
+                    index=0,
+                    help="Selects the wavelet basis used to decompose and reconstruct each spectrum. The options define different compact-support wavelet shapes. Default: sym4.",
+                    key="wavelet_family"
+                )
+                st.selectbox(
+                    label="Decomposition level",
+                    options=[1, 2, 3, 4, 5, 6],
+                    index=3,
+                    help="Sets how many recursive wavelet decomposition levels are applied before coefficient shrinkage. Larger values separate broader signal structures into lower-frequency components. Default: 4.",
+                    key="wavelet_level"
+                )
+                if st.session_state.get("wavelet_method") in ("Sardy Block Coordinate Relaxation(BCR)", "Sardy BCR"):
+                    st.number_input(
+                        label="BCR iterations",
+                        min_value=1,
+                        max_value=15,
+                        value=10,
+                        step=1,
+                        help="Sets the maximum number of block coordinate relaxation passes used to update the shrinkage solution. Larger values allow additional refinement and increase runtime. Default: 10.",
+                        key="wavelet_n_iter"
+                    )
+                    st.selectbox(
+                        label="Robust loss function",
+                        options=["huber", "l1"],
+                        index=0,
+                        help="Selects the residual loss used by the robust iterative shrinkage method. Huber uses quadratic behavior near zero residuals and linear behavior for large residuals; l1 uses absolute residual magnitude. Default: huber.",
+                        key="wavelet_loss"
+                    )
+                elif st.session_state.get("wavelet_method") in ("Standard Universal Thresholding", "Standard"):
+                    st.selectbox(
+                        label="Thresholding mode",
+                        options=["soft", "hard"],
+                        index=0,
+                        help="Selects how coefficients below the universal threshold are treated. Soft thresholding shrinks retained coefficients toward zero; hard thresholding keeps retained coefficients unchanged. Default: soft.",
+                        key="wavelet_mode"
+                    )
         # Baseline removal
         # st.markdown("**Baseline Removal**")
         
         if 'baselineremoval_act' not in st.session_state:
             st.session_state.baselineremoval_act = False
         
-        baselineremoval_act = st.toggle("Baseline Removal", 
-                                                value=False, 
-                                                help="Remove baselines (or backgrounds) from data by either by including a baseline function when fitting a sum of functions to the data, or by actually subtracting a baseline estimate from the data.", 
+        baselineremoval_act = st.toggle("Baseline removal",
+                                                value=False,
+                                                help="Remove baselines or backgrounds by fitting a baseline function or subtracting a baseline estimate from the data.",
                                                 key='baselineremoval_act')
         
         if baselineremoval_act:
             # Add more functions to this selectbox if needed
-            st.session_state.baselineremoval_function = st.selectbox(label="Select your baseline removal function",  options=["airPLS", "ModPoly","Gaussian-Lorentzian Fitting"])
+            baselineremoval_functions = ["airPLS", "ModPoly","Gaussian-Lorentzian Fitting", "SNIP", "ALS", "iModPoly"]
+            st.session_state.baselineremoval_function = st.selectbox(
+                label="Select baseline removal function",
+                options=baselineremoval_functions,
+                format_func={
+                    "airPLS": "AirPLS",
+                    "ModPoly": "ModPoly",
+                    "iModPoly": "iModPoly",
+                    "Gaussian-Lorentzian Fitting": "Gaussian-Lorentzian fitting",
+                    "SNIP": "SNIP",
+                    "ALS": "ALS"
+                }.get
+            )
             
             if st.session_state.baselineremoval_function == "airPLS":
                 st.session_state.baselineremoval_airPLS_lambda = st.number_input(label="AirPLS lambda", help="The larger lambda is,  the smoother the resulting background, z.",
@@ -564,9 +873,30 @@ else:
                                                                         step = 0.0000000001, placeholder="Insert a number",format="%.10f") 
                 
             elif st.session_state.baselineremoval_function == "ModPoly":
-                st.session_state.baselineremoval_ModPoly_degree = st.number_input(label="ModPoly Polynomial degree",
+                st.session_state.baselineremoval_ModPoly_degree = st.number_input(label="ModPoly polynomial degree",
                                                                         min_value=1, max_value = 20, value = 5, 
                                                                         step = 1, placeholder="Insert a number") 
+
+            elif st.session_state.baselineremoval_function == "iModPoly":
+                st.session_state.baselineremoval_iModPoly_degree = st.number_input(label="iModPoly polynomial degree",
+                                                                        min_value=1, max_value = 20, value = 5, 
+                                                                        step = 1, placeholder="Insert a number") 
+                st.session_state.baselineremoval_iModPoly_max_iter = st.number_input(label="Number of peak removal procedures",
+                                                                        help = "Determines how many times the peak-removal step repeats before the baseline is fit. Higher values strip out more of the spectrum's peaks across successive passes, leaving a cleaner, more peak-free reference for the fit.",
+                                                                        min_value=0, max_value = 7, value = 1, 
+                                                                        step = 1, placeholder="Insert a number")
+                st.session_state.baselineremoval_iModPoly_scale_factor1 = st.number_input(label="Scaling factor for peak removal",
+                                                                        help = "Determines how far above the fitted curve, in standard deviations of the noise, a point must rise before it's discarded as a peak. Higher values are more forgiving, keeping more of the spectrum and removing only the most prominent peaks.",
+                                                                        min_value=0.0, max_value = 2.0, value = 1.0, 
+                                                                        step = 0.1, placeholder="Insert a number",format="%.1f")
+                st.session_state.baselineremoval_iModPoly_scale_factor2 = st.number_input(label="Scaling factor for polyfit",
+                                                                        help = "Determines how far above the fitted curve, in standard deviations of the noise, a point is allowed to sit before it's clamped down during baseline refitting. Higher values let the baseline rise closer to the peaks, producing a baseline that hugs the signal less tightly.",
+                                                                        min_value=0.0, max_value = 2.0, value = 0.0, 
+                                                                        step = 0.1, placeholder="Insert a number",format="%.1f")
+                st.session_state.baselineremoval_iModPoly_cutoff = st.number_input(label="Termination criteria for polynomial fitting",
+                                                                        help ="Determines when the iterative baseline fit stops: fitting continues only while each pass reduces the residual noise by more than this fraction. Higher values require a smaller improvement to keep going, allowing more refinement iterations before the fit is considered converged.",
+                                                                        min_value=0.95, max_value = 0.99, value = 0.95, 
+                                                                        step = 0.01, placeholder="Insert a number",format="%.2f")
             elif st.session_state.baselineremoval_function == "Gaussian-Lorentzian Fitting":
                 st.session_state.baselineremoval_GLF_num_range = st.number_input(label="Number of fitting ranges",
                                                                         min_value=2, max_value = 10, value = 2, 
@@ -636,6 +966,50 @@ else:
                                 st.session_state.fitting_ranges =cleaned_ranges
                                 # st.write(st.session_state.despike_fitting_ranges)
                                 st.success(f"Saved {len(cleaned_ranges)} valid fitting ranges.")
+            elif st.session_state.baselineremoval_function == "SNIP":
+                st.session_state.baselineremoval_SNIP_num_iterations = st.number_input(label="SNIP Iterations",
+                                                                            help= "Determines the maximum peak width to be removed. Higher values create a smoother, lower baseline by allowing the algorithm to 'clip' wider peaks.",
+                                                                            min_value=10, max_value = 200, value = 50,
+                                                                            step = 1, placeholder="Insert a number")
+            elif st.session_state.baselineremoval_function in ("Asymmetric Least Squares(ALS)", "ALS"):
+                st.session_state.baselineremoval_ALS_lambda = st.number_input(
+                    label="ALS lambda",
+                    help="Controls the smoothness penalty for the estimated baseline. Larger values penalize curvature more strongly and produce a smoother baseline. Default: 100.",
+                    min_value=1.0,
+                    max_value=1e10,
+                    value=100.0,
+                    step=1e4,
+                    format="%.0f",
+                    placeholder="Insert a number"
+                )
+                st.session_state.baselineremoval_ALS_p = st.number_input(
+                    label="ALS asymmetry (p)",
+                    help="Controls the asymmetric weighting between positive and negative residuals during baseline fitting. Smaller values weight positive peak residuals less, placing the fitted baseline below peaks. Default: 0.001.",
+                    min_value=0.000001,
+                    max_value=0.999999,
+                    value=0.001,
+                    step=0.0001,
+                    format="%.6f",
+                    placeholder="Insert a number"
+                )
+                st.session_state.baselineremoval_ALS_d = st.number_input(
+                    label="ALS difference order (d)",
+                    help="Sets the finite-difference order used in the smoothness penalty. Order 1 penalizes slope changes; order 2 penalizes curvature; order 3 applies a higher-order curvature penalty. Default: 1.",
+                    min_value=1,
+                    max_value=3,
+                    value=1,
+                    step=1,
+                    placeholder="Insert a number"
+                )
+                st.session_state.baselineremoval_ALS_max_iter = st.number_input(
+                    label="ALS maximum iterations",
+                    help="Sets the maximum number of reweighted least-squares updates used to estimate the baseline. Larger values allow more weight updates and increase runtime. Default: 50.",
+                    min_value=1,
+                    max_value=200,
+                    value=50,
+                    step=1,
+                    placeholder="Insert a number"
+                )
         # Normalization
         # st.markdown("**Normalization**")
         
@@ -649,30 +1023,48 @@ else:
         
         if normalization_act:
             # Add more functions to this selectbox if needed
-            st.session_state.normalization_function = st.selectbox(label="Select your normalization function",  options=["Normalize by area", 
+            st.session_state.normalization_function = st.selectbox(label="Select normalization function",  options=["Normalize by area",
                                                                                                                 "Normalize by peak",
-                                                                                                                "Min max normalize"])
-        
-        # Outlier Removal
+                                                                                                                "Min max normalize",
+                                                                                                                "Normalize by mean"],
+                                                                    format_func={
+                                                                        "Normalize by area": "Normalize by area",
+                                                                        "Normalize by peak": "Normalize by peak",
+                                                                        "Min max normalize": "Min-max normalization",
+                                                                        "Normalize by mean": "Normalize by mean"
+                                                                    }.get)
+            if st.session_state.normalization_function == "Normalize by area":
+                st.number_input(
+                    label="Scale factor",
+                    help="After area normalization is applied, the spectra will be multiplied by this value. The value must be an integer between 1 and 100000.",
+                    min_value=1,
+                    max_value=100000,
+                    value=1,
+                    step=1,
+                    placeholder="Insert a number",
+                    key="normalization_act_scale_factor"
+                )
+
+        # Outlier removal
         if 'outlierremoval_act' not in st.session_state:
             outlierremoval_act = False
-        
-        outlierremoval_act = st.toggle("Outlier Removal", 
+
+        outlierremoval_act = st.toggle("Outlier removal",
                                         value=False, 
                                         help="The function removes outlier spectra from a dataframe based on single threshold, distance, and correlation criteria.", 
                                         key='outlierremoval_act')
         
         if outlierremoval_act:
             # Add more functions to this selectbox if needed
-            st.session_state.outlierremoval_act_single_threshold = st.number_input(label="Outlier Removal Single Threshold",
+            st.session_state.outlierremoval_act_single_threshold = st.number_input(label="Outlier removal single threshold",
                                                             min_value = 0.01, max_value = 20.00, value = 4.00,
                                                             step = 0.01, placeholder="Insert a number")
             
-            st.session_state.outlierremoval_act_distance_threshold = st.number_input(label="Outlier Removal Distance Threshold",
+            st.session_state.outlierremoval_act_distance_threshold = st.number_input(label="Outlier removal distance threshold",
                                                             min_value = 0.01, max_value = 20.00, value = 6.00,
                                                             step = 0.01, placeholder="Insert a number")
             
-            st.session_state.outlierremoval_act_correlation_threshold = st.number_input(label="Outlier Removal Correlation Threshold",
+            st.session_state.outlierremoval_act_correlation_threshold = st.number_input(label="Outlier removal correlation threshold",
                                                             min_value = 0.01, max_value = 20.00, value = 4.00,
                                                             step = 0.01, placeholder="Insert a number")
     with st.sidebar:
@@ -712,11 +1104,32 @@ else:
                         'window_length': step_entry["parameters"]["window_length"],
                         'polyorder': step_entry["parameters"]["polynomial_order"]
                     })
-                else:
+                elif step_entry["parameters"]["function"] == "1D Fast Fourier Transform filter":
                     log.log_function_call("Processing_Smoothing_FFT_Filter", f_params={
                         'FFT_threshold': step_entry["parameters"]["fft_threshold"],
                         'padding_method': step_entry["parameters"]["padding_method"]
                     })
+                elif step_entry["parameters"]["function"] == "Median filter":
+                    log.log_function_call("Processing_Smoothing_Median_Filter", f_params={
+                        'window_size': step_entry["parameters"]["window_size"],
+                        'padding_method': step_entry["parameters"]["padding_method"]
+                    })
+                elif step_entry["parameters"]["function"] == "Wavelet Denoising":
+                    wavelet_params = {
+                        'method': step_entry["parameters"]["method"],
+                        'wavelet': step_entry["parameters"]["wavelet"],
+                        'level': step_entry["parameters"]["level"]
+                    }
+                    if step_entry["parameters"]["method"] in ("Sardy Block Coordinate Relaxation(BCR)", "Sardy BCR"):
+                        wavelet_params.update({
+                            'n_iter': step_entry["parameters"]["n_iter"],
+                            'loss': step_entry["parameters"]["loss"]
+                        })
+                    else:
+                        wavelet_params.update({
+                            'mode': step_entry["parameters"]["mode"]
+                        })
+                    log.log_function_call("Processing_Smoothing_Wavelet_Denoising", f_params=wavelet_params)
             elif step_entry["step"] == "baseline_removal":
                 if step_entry["parameters"]["function"] == "airPLS":
                     log.log_function_call("Processing_Baseline_AirPLS", f_params={
@@ -729,17 +1142,40 @@ else:
                     log.log_function_call("Processing_Baseline_Mod_Poly", f_params={
                         'degree': step_entry["parameters"]["degree"]
                     })
-                else:
+                elif step_entry["parameters"]["function"] == "iModPoly":
+                    log.log_function_call("Processing_Baseline_iMod_Poly", f_params={
+                        'degree': step_entry["parameters"]["degree"],
+                        'max_iter': step_entry["parameters"]["max_iter"],
+                        'scale_factor1': step_entry["parameters"]["scale_factor1"],
+                        'scale_factor2': step_entry["parameters"]["scale_factor2"],
+                        'cutoff': step_entry["parameters"]["cutoff"]
+                    })
+                elif step_entry["parameters"]["function"] == "SNIP":
+                    log.log_function_call("Processing_Baseline_SNIP", f_params={
+                        'num_iterations': step_entry["parameters"]["num_iterations"]
+                    })
+                elif step_entry["parameters"]["function"] in ("Asymmetric Least Squares(ALS)", "ALS"):
+                    log.log_function_call("Processing_Baseline_ALS", f_params={
+                        'lambda': step_entry["parameters"]["lambda"],
+                        'p': step_entry["parameters"]["p"],
+                        'd': step_entry["parameters"]["d"],
+                        'max_iter': step_entry["parameters"]["max_iter"]
+                    })
+                elif step_entry["parameters"]["function"] == "Gaussian-Lorentzian Fitting":
                     log.log_function_call("Processing_Baseline_Gaussian_Lorentzian_Fitting", f_params={
                         'fitting_ranges': step_entry["parameters"]["fitting_ranges"]
                     })
             elif step_entry["step"] == "normalization":
                 if step_entry["parameters"]["function"] == "Normalize by area":
-                    log.log_function_call("Processing_Normalization_Area", f_params={})
+                    log.log_function_call("Processing_Normalization_Area", f_params={
+                        'scale_factor': step_entry["parameters"]["scale_factor"]
+                    })
                 elif step_entry["parameters"]["function"] == "Normalize by peak":
                     log.log_function_call("Processing_Normalization_Peak", f_params={})
-                else:
+                elif step_entry["parameters"]["function"] == "Min max normalize":
                     log.log_function_call("Processing_Normalization_Minmax", f_params={})
+                elif step_entry["parameters"]["function"] == "Normalize by mean":
+                    log.log_function_call("Processing_Normalization_Mean", f_params={})
             elif step_entry["step"] == "outlier_removal":
                 log.log_function_call("Processing_Remove_Outliers", f_params={
                     'single_thresh': step_entry["parameters"]["single_threshold"],
@@ -750,8 +1186,13 @@ else:
         if run_log_entries:
             candidate_log = st.session_state.preprocessing_log + run_log_entries
             try:
-                rebuild_dataframe_from_log(candidate_log)
+                failed_spectra = rebuild_dataframe_from_log(candidate_log)
                 st.session_state.preprocessing_log = candidate_log
+                for failure in failed_spectra:
+                    st.toast(
+                        f"{failure['spectrum_column']} failed during {failure['failed_step']}: {failure['error_message']}",
+                        icon="⚠️"
+                    )
             except Exception as e:
                 failed_step = run_log_entries[-1]["display_name"] if run_log_entries else "Preprocessing"
                 st.toast(f"{failed_step} could not be applied. Details: {e}", icon="⚠️")
@@ -771,9 +1212,28 @@ else:
     
     # Reset button and reaction
 
-    if st.sidebar.button("Reset", type='secondary', on_click=function.reset_processing, key = 'reset'):
-            # st.session_state.df = st.session_state.backup
-            pass
+    @st.dialog("Reset preprocessing?", width="small")
+    def confirm_reset():
+        st.markdown("⚠️ **Reset all preprocessing steps?** Your data will return to its original uploaded form. **This action cannot be undone.**")
+        cancel_col, reset_col = st.columns(2)
+        with cancel_col:
+            if st.button("Cancel"):
+                st.rerun()
+        with reset_col:
+            if st.button("Yes, reset", type="primary"):
+                function.reset_processing()
+                st.session_state.spectra_selected = [
+                    name for name in st.session_state.df.columns[1:]
+                    if name in st.session_state.get("spectra_selected", [])
+                    or name in st.session_state.get("selected_failed_spectra", [])
+                ]
+                st.session_state.pop("selected_failed_spectra", None)
+                st.session_state.pop("failed_spectra", None)
+                st.session_state.refresh_plot_pending = True
+                st.rerun()
+
+    if st.sidebar.button("Reset", type='secondary', key='reset'):
+        confirm_reset()
 
     # st.write(st.session_state.backup)
 """"""""
@@ -786,11 +1246,11 @@ else:
     
     preview_act = st.toggle("Preview Data")
     
-    if preview_act:
+    if preview_act and "temp" in st.session_state:
     
         st.write("**Preview**")
         
-        st.dataframe(st.session_state.df, hide_index=True)
+        st.dataframe(st.session_state.temp, hide_index=True)
         # st.table(st.session_state.df)
     
     # arr = np.random.normal(1, 1, size=100)
@@ -834,14 +1294,20 @@ else:
         st.session_state.spectra_selected = st.multiselect(
             label="**Select Spectra/s you want to visualize**",
             options=list(st.session_state.df.columns[1:]),
-            default=list(st.session_state.df.columns[1:])
+            default=[
+                column for column in st.session_state.get("spectra_selected", st.session_state.df.columns[1:])
+                if column in st.session_state.df.columns[1:]
+            ]
         )
 
         # Get cached selected data
         refresh_plot_pending = st.session_state.pop("refresh_plot_pending", False)
         plot_button_col, fast_mode_col, custom_axis_col = st.columns([0.16, 0.44, 0.40])
-        if plot_button_col.button("Plot", type="primary", key="plot") or st.session_state.get("process") or refresh_plot_pending or st.session_state.get("reset"):
-            st.session_state.temp = get_selected_columns(st.session_state.df, st.session_state.spectra_selected)
+        if plot_button_col.button("Plot", type="primary", key="plot") or st.session_state.get("process") or refresh_plot_pending:
+            if st.session_state.spectra_selected:
+                st.session_state.temp = get_selected_columns(st.session_state.df, st.session_state.spectra_selected)
+            else:
+                st.warning("Select at least one spectrum.")
 
     
     # st.write(st.session_state.temp)
@@ -850,11 +1316,11 @@ else:
     #     st.write("Test time (ms):")
     #     st.write(int(st.session_state.elapsed_time * 1000))
     # plot_row = row([0.1, 0.9])
-    mode_option = fast_mode_col.toggle(label='Activate Fast Mode Plotting', value=st.session_state['update_mode_option'], key='mode_option', help='Enable Fast Mode Plotting for faster plotting times by sacrificing interactive functions. If you upload more than 20 spectra, Fast Mode will be activated automatically.')
+    mode_option = fast_mode_col.toggle(label='Activate fast mode plotting', value=st.session_state['update_mode_option'], key='mode_option', help='Enable fast mode plotting for faster plotting times by sacrificing interactive functions. If you upload more than 20 spectra, fast mode will be activated automatically.')
     
     load_widget_value("custom_axis_titles_act")
     custom_axis_col.toggle(
-        label="Custom Axis Titles",
+        label="Custom axis titles",
         key="_custom_axis_titles_act",
         on_change=store_widget_value,
         args=("custom_axis_titles_act",),
@@ -886,10 +1352,12 @@ else:
     else:
         x_axis_title = DEFAULT_X_AXIS_TITLE
         y_axis_title = DEFAULT_Y_AXIS_TITLE
-        
-    if "temp" not in st.session_state:
-        st.success("Click **Plot** or **Process** to see the visualization.")
+
+    if not st.session_state.spectra_selected or "temp" not in st.session_state:
+        render_preprocessing_log(st.session_state.preprocessing_log)
+        render_failed_spectra()
         st.stop()
+        
     
     try:
         st.toast("Processing...", icon="📍")
@@ -1057,9 +1525,9 @@ else:
             cached_plot = generate_altair_plot(data_melted, x_axis, x_axis_title, y_axis_title)
             # st.write("yyyyy")
             # Display Plot
-            st.altair_chart(cached_plot, use_container_width=False)
+            st.altair_chart(cached_plot, width="content")
             # st.write("zzzzz")
-            # log.log_plot_generated_count()
+            log.log_plot_generated_count()
             
         elif mode_option == True:
                 
@@ -1095,9 +1563,9 @@ else:
             cached_plot = generate_altair_plot_fastmode(data_melted, x_axis, x_axis_title, y_axis_title)
             # st.write("1111")
             # Display Plot
-            st.altair_chart(cached_plot, use_container_width=False)
+            st.altair_chart(cached_plot, width="content")
             # st.write("2222")
-            # log.log_plot_generated_count()
+            log.log_plot_generated_count()
             # # Define the nearest selection
             # # click = alt.selection_single(nearest=True, on='click')
             # st.altair_chart(base, use_container_width=False)
@@ -1105,7 +1573,6 @@ else:
         
         
         # Download handlers
-        @st.cache_data
         def download_df(df, export_timestamp, preprocessing_summary):
             csv_data = df.to_csv(index=False)
             metadata = [
@@ -1119,18 +1586,11 @@ else:
         export_dt = datetime.now()
         export_timestamp = export_dt.isoformat(timespec="seconds")
         preprocessing_summary = build_preprocessing_log_line(st.session_state.preprocessing_log)
-        csv = download_df(st.session_state.df, export_timestamp, preprocessing_summary)
+        selected_data = st.session_state.temp
 
         current_time = export_dt.strftime("%Y%m%d_%H%M%S")
         download_file_name = f"data_{current_time}.csv"
         download_plot_name = f"spectra_plot_{current_time}.png"
-
-        png_bytes = function.make_matplotlib_png(
-            data_melted,
-            x_axis,
-            x_label=x_axis_title,
-            y_label=y_axis_title
-        )
 
         # Create a single row with two columns
         dcol1,dcol2, col_spacer  = st.columns([1, 1, 3])
@@ -1138,17 +1598,24 @@ else:
         with dcol1:
             st.download_button(
                 label="Data export (CSV)",
-                data=csv,
+                data=lambda: download_df(selected_data, export_timestamp, preprocessing_summary),
                 file_name=download_file_name,
-                mime="text/csv"
+                mime="text/csv",
+                on_click="ignore"
             )
 
         with dcol2:
             st.download_button(
                 label="Plot export (PNG, 600 dpi)",
-                data=png_bytes,
+                data=lambda: function.make_matplotlib_png(
+                    data_melted,
+                    x_axis,
+                    x_label=x_axis_title,
+                    y_label=y_axis_title
+                ),
                 file_name=download_plot_name,
-                mime="image/png"
+                mime="image/png",
+                on_click="ignore"
             )
 
         render_preprocessing_log(st.session_state.preprocessing_log)
@@ -1158,15 +1625,17 @@ else:
             st.write("**The following spectra have been detected and removed by the outlier removal function**")
             st.table(st.session_state.remove_outliers_log)
                 
-    except Exception as e:
+    except Exception as error:
         show_feedback(
-                message="Error generating visualization.",
-                severity="error",
-                suggestions=[
-                    "Click Plot after selecting spectra",
-                    "Try Reset if preprocessing parameters are invalid",
-                    "Check that preprocessing ranges were applied"
-                ],
-                details=str(e),
-                doc_link="https://fengboma.github.io/docs.spectraguru/docs/Processing_Page"
-            )
+            message="Error generating visualization.",
+            severity="error",
+            suggestions=[
+                "Click Plot after selecting spectra",
+                "Try Reset if preprocessing parameters are invalid",
+                "Check that preprocessing ranges were applied"
+            ],
+            details=str(error),
+            doc_link="https://fengboma.github.io/docs.spectraguru/docs/Processing_Page"
+        )
+
+    render_failed_spectra()

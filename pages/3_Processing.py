@@ -1085,7 +1085,14 @@ else:
             else:
                 raise e
         for step_entry in run_log_entries:
-            if step_entry["step"] == "despike":
+            if step_entry["step"] == "interpolation":
+                log.log_function_call("Processing_Interpolation", f_params={})
+            elif step_entry["step"] == "crop":
+                log.log_function_call("Processing_Crop", f_params={
+                    'min': step_entry["parameters"]["min"],
+                    'max': step_entry["parameters"]["max"]
+                })
+            elif step_entry["step"] == "despike":
                 if step_entry["parameters"]["function"] == "Auto despike method":
                     log.log_function_call("Processing_Despike_Auto", f_params={
                         'threshold': step_entry["parameters"]["threshold"],

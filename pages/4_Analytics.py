@@ -670,6 +670,7 @@ else:
                 file_name=download_file_name,
                 mime="text/csv",
             )
+            log.log_function_call("Analytics_Average_Plot", f_params={})
 
         elif st.session_state.stats_plot_select == "Confidence Interval Plot":
             
@@ -721,6 +722,7 @@ else:
             confidence_plot = function.style_altair_chart(confidence_plot)
             st.altair_chart(confidence_plot, width="content")
             log.log_plot_generated_count()
+            log.log_function_call("Analytics_Confidence_Interval", f_params={})
 
         elif st.session_state.stats_plot_select == "Spectral Derivation":
             with st.sidebar:

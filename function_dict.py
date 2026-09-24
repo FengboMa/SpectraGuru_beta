@@ -10,6 +10,8 @@
 #   In the Processing/Analytics page, make sure log.log_function_call(keyname, parameters) is invoked appropriately when your
 #   algorithm is called. This increments the function usage counter for your algorithm. Use the keyname from this list.
 names = {
+    'Processing_Interpolation':("Interpolation", "Interpolation"),
+    'Processing_Crop':("Crop", "Cropping"),
     'Processing_Despike_Auto':("Despike", "Automatic despike"),
     'Processing_Despike_Manual':("Despike", "Manual despike"),
     'Processing_Smoothing_Savgol_Filter':("Smoothing", "Savitzky-Golay filter"),
@@ -27,6 +29,8 @@ names = {
     'Processing_Normalization_Minmax':("Normalization", "Min-max normalization"),
     'Processing_Normalization_Mean':("Normalization", "Normalization by mean"),
     'Processing_Remove_Outliers':("Outlier removal", "Outlier removal"),
+    'Analytics_Average_Plot':("Average plot", "Average plot with original spectra"),
+    'Analytics_Confidence_Interval':("Confidence interval plot", "Confidence interval plot"),
     'Analytics_Spectral_Derivation':("Spectral derivation", "Spectral derivation"),
     'Analytics_FFT':("Fast Fourier Transform (FFT) analysis", "Fast Fourier Transform (FFT) analysis"),
     'Analytics_Spectrum_Calculation':("Spectrum calculation", "Spectrum calculation"),
@@ -90,7 +94,7 @@ references = {
     30:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/T-SNE/", "link":True, "doc_page":True, "notes":"t-SNE doc page"},
     31:{"text":"https://www.unige.ch/~sardy/Papers/robustIEEE.pdf", "link":True, "doc_page":False, "notes":"Robust Wavelet Denoising (Sardy, Tseng & Bruce 2001)"},
     32:{"text":"https://doi.org/10.1093/biomet/81.3.425", "link":True, "doc_page":False, "notes":"Ideal spatial adaptation by wavelet shrinkage (Donoho & Johnstone 1994)"},
-    33:{"text":"https://zanran_storage.s3.amazonaws.com/www.science.uva.nl/ContentPages/443199618.pdf", "link":True, "doc_page":False, "notes":"Eilers and Boelens (2005), Baseline Correction with Asymmetric Least Squares Smoothing"},
+    33:{"text":"https://www.researchgate.net/publication/228961729_Baseline_Correction_with_Asymmetric_Least_Squares_Smoothing", "link":True, "doc_page":False, "notes":"Eilers and Boelens (2005), Baseline Correction with Asymmetric Least Squares Smoothing"},
     34:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Processing_Page/Processing_Feature/Baseline_Removal/SNIP/", "link":True, "doc_page":True, "notes":"SNIP doc page"},
     35:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Processing_Page/Processing_Feature/Baseline_Removal/ALS_Baseline_Removal/", "link":True, "doc_page":True, "notes":"ALS doc page"},
     36:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Processing_Page/Processing_Feature/Smoothing/Median_Filter/", "link":True, "doc_page":True, "notes":"Median Filter doc page"},
@@ -108,6 +112,8 @@ references = {
     48:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Analytics_Page/Analytics_Features/Spectrum_Calculation/", "link":True, "doc_page":True, "notes":"Spectrum Calculation doc page"},
     49:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Processing_Page/Processing_Feature/Baseline_Removal/iModPoly/", "link":True, "doc_page":True, "notes":"iModPoly doc page"},
     50:{"text":"https://doi.org/10.1366/000370207782597003", "link":True, "doc_page":False, "notes":"iModPoly reference"},
+    51:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Processing_Page/Processing_Feature/Interpolation/", "link":True, "doc_page":True, "notes":"Interpolation doc page"},
+    52:{"text":"https://fengboma.github.io/docs.spectraguru/docs/Processing_Page/Processing_Feature/Cropping/", "link":True, "doc_page":True, "notes":"Cropping doc page"},
 }
 
 # This dictionary maps functions to their documentation and literature references. These links are displayed in the
@@ -116,6 +122,8 @@ references = {
 #   - Use the same keynames from the names dict.
 #   - Entries are ordered arrays of integers corresponding to rows of the references dict.
 reference_map = {
+    'Processing_Interpolation':[51],
+    'Processing_Crop':[52],
     'Processing_Despike_Auto':[12],
     'Processing_Despike_Manual':[12],
     'Processing_Smoothing_Savgol_Filter':[13,1,2],
@@ -133,6 +141,8 @@ reference_map = {
     'Processing_Normalization_Minmax':[20],
     'Processing_Normalization_Mean':[47],
     'Processing_Remove_Outliers':[21],
+    'Analytics_Average_Plot':[22],
+    'Analytics_Confidence_Interval':[23],
     'Analytics_Spectral_Derivation':[24,1,2],
     'Analytics_FFT':[43,45],
     'Analytics_Spectrum_Calculation':[48],

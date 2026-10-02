@@ -15,6 +15,14 @@ SpectraGuru is a spectral analysis application designed to provide user-friendly
 
 ![Demo](element/demo.gif)
 
+## Cite SpectraGuru
+
+If SpectraGuru contributes to your research, please cite our papers:
+
+1. Fengbo Ma, Jiaheng Cui, Amit Kumar, Yanjun Yang, Xianyan Chen, and Yiping Zhao. *Comprehensive Open-Source Ecosystem for Raman and SERS Spectroscopy: Introducing SpectraGuru*. *Analytical Chemistry* **2026**, *98* (15), 11186–11196. [Read online](https://doi.org/10.1021/acs.analchem.5c07799).
+
+2. Fengbo Ma, Jiaheng Cui, Amit Kumar, Yanjun Yang, Jessica McCabe Hutcheson, Xianyan Chen, Haijian Sun, and Yiping Zhao. *SpectraGuru: a community-guided path toward scalable Raman and SERS analysis*. *Proceedings of SPIE* **13846**, *Biomedical Vibrational Spectroscopy 2026: Advances in Research and Industry*, 1384608 (5 March 2026). [Read online](https://doi.org/10.1117/12.3086068).
+
 
 ---
 
@@ -71,7 +79,22 @@ streamlit run "SpectraGuru_beta/SpectraGuru Home.py"
 ---
 
 ### About this Project
-The project was started in Jun 2024 by Dr. Yiping Zhao and Dr. Xianyan Chen from the University of Georgia. See more [about us](https://www.zhao-nano-lab.com/)!
+
+SpectraGuru was started in June 2024 by Dr. Yiping Zhao and Dr. Xianyan Chen at the University of Georgia. It brings together open-source Raman and SERS data processing, visualization, and analysis in a browser-based application. Community feedback guides the development of accessible, reproducible workflows for research and education. Learn more about the team at [Zhao Nano Lab](https://www.zhao-nano-lab.com/).
+
+#### Funding and cloud infrastructure support
+
+SpectraGuru is supported by:
+
+- The **National Science Foundation (NSF)** through the [Pathways to Enable Open-Source Ecosystems (POSE) Program](https://www.nsf.gov/funding/initiatives/pathways-enable-open-source-ecosystems), award No. **2518273**.
+- **NSF CloudBank**, through **ACCESS**, for *Sustaining Cloud Infrastructure for SpectraGuru: An Open-Source Raman/SERS Data, AI, and Community Platform*, project ID **CHE260089**.
+- The **U.S. Department of Agriculture (USDA)** through Animal and Plant Health Inspection Service (**APHIS**) grant **AP230A000000C009** and National Institute of Food and Agriculture (**NIFA**) grant **2023-67015-39237**.
+
+<p>
+  <a href="https://www.nsf.gov/"><img src="element/nsf.png" alt="National Science Foundation" height="55"></a>
+  &nbsp;&nbsp;
+  <a href="https://www.usda.gov/"><img src="element/USDA.png" alt="U.S. Department of Agriculture" height="45"></a>
+</p>
 
 ---
 

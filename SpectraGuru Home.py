@@ -160,6 +160,19 @@ st.markdown(
 
 st.info("Check out our latest news and updates on SpectraGuru™!")
 
+st.markdown(
+    """
+    ### What's new in this release
+
+    - **Preprocessing:** iModPoly baseline removal, normalization by mean, and an adjustable scale factor for area normalization.
+    - **Spectrum calculations:** combine spectra or apply arithmetic operations with constants in Analytics.
+    - **Full-spectrum peak fitting:** fit individual spectra or a batch, and inspect fitted components, residuals, and peak tables.
+    - **PCA:** choose which principal-component loading curves to display.
+    - **Processing workflow:** choose spectra for plots and exports, confirm preprocessing resets, and generate downloads when requested.
+    - **Error reporting:** identify spectra that fail preprocessing so you can adjust the parameters before continuing.
+    """
+)
+
 # Add expander to show the flyer
 with st.expander("View SpectraGuru™ flyer"):
     st.image("element/Spectraguru flyer.png", caption="SpectraGuru™ flyer", width="stretch")
@@ -205,7 +218,7 @@ st.markdown(
         </div>
         <div style="padding: 0.9rem 1rem; background: rgba(255, 255, 255, 0.72); border-radius: 14px; border: 1px solid rgba(15, 23, 42, 0.08);">
             <p style="margin: 0;  line-height: 1.6;">
-                Fengbo Ma, Jiaheng Cui, Amit Kumar, Yanjun Yang, Jessica McCabe Hutcheson, Xianyan Chen, Haijian Sun, and Yiping Zhao. <em>SpectraGuru: a community-guided path toward scalable Raman and SERS analysis</em>. In <em>Biomedical Vibrational Spectroscopy 2026: Advances in Research and Industry</em>, vol. 13846, pp. 31-41. SPIE, 2026. <a href="https://www.spiedigitallibrary.org/conference-proceedings-of-spie/13846/1384608/SpectraGuru--a-community-guided-path-toward-scalable-Raman-and/10.1117/12.3086068.short" target="_blank">Read online</a>
+                Fengbo Ma, Jiaheng Cui, Amit Kumar, Yanjun Yang, Jessica McCabe Hutcheson, Xianyan Chen, Haijian Sun, and Yiping Zhao. <em>SpectraGuru: a community-guided path toward scalable Raman and SERS analysis</em>. <em>Proceedings of SPIE</em> 13846, <em>Biomedical Vibrational Spectroscopy 2026: Advances in Research and Industry</em>, 1384608 (5 March 2026). <a href="https://doi.org/10.1117/12.3086068" target="_blank">Read online</a>
             </p>
         </div>
     </div>
@@ -256,11 +269,13 @@ col1.markdown(
     - Baseline removal
         - AirPLS
         - ModPoly
+        - Improved modified polynomial (iModPoly)
         - Gaussian-Lorentzian Fitting
         - SNIP
         - Asymmetric least squares (ALS)
     - Normalization
-        - Normalize by area
+        - Normalize by area with an adjustable scale factor
+        - Normalize by mean
         - Normalize by peak
         - Min-max normalization
     - Outlier removal
@@ -294,6 +309,9 @@ col1.markdown(
     - Custom axis titles
     - CSV data export
     - PNG plot export
+    - Spectrum selection for plots and exports
+    - Downloads generated on request
+    - Preprocessing reset confirmation
     """)
 
 col3.image(r'element/SpectraGuru Welcome Page Flow Chart.png')
@@ -313,7 +331,9 @@ col1.markdown(
     - Correlation heatmap
     - Peak identification and stats
     - Hierarchically clustered heatmap
-    - Principal components analysis (PCA)
+    - Spectrum calculations with spectra and constants
+    - Full-spectrum peak fitting with batch fitting, component plots, residuals, and peak tables
+    - Principal components analysis (PCA) with selectable loading curves
     - t‑Distributed stochastic neighbor embedding (t‑SNE)
     - Random Forest (RF) classification
     - K-nearest neighbors (KNN) classification

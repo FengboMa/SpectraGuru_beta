@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-# import numpy as np
+import numpy as np
 import altair as alt
 # from streamlit_extras.chart_container import chart_container
 from streamlit_extras.row import row
@@ -9,9 +9,14 @@ from scipy.interpolate import interp1d
 from datetime import datetime
 
 import function
+from function import show_feedback
 import log_utils as log
+import auth_utils
 
 function.wide_space_default()
+
+if not auth_utils.LOCAL_DEPLOY:
+    auth_utils.force_login()
 
 if 'preprocessing_log' not in st.session_state:
     st.session_state.preprocessing_log = []
@@ -75,6 +80,22 @@ def render_preprocessing_log(log_entries):
     for idx, entry in enumerate(log_entries, start=1):
         params_text = format_preprocessing_parameters(entry["parameters"])
         st.write(f"{idx}. {entry['display_name']}, {params_text}")
+
+
+def render_failed_spectra():
+    if not st.session_state.get("failed_spectra"):
+        return
+
+    st.write("**Spectra excluded after processing errors**")
+    st.dataframe(pd.DataFrame([
+        {
+            "Index": index,
+            "Column name": f"⚠️ {failure['spectrum_column']}",
+            "Failed step": failure["failed_step"],
+            "Error message": failure["error_message"]
+        }
+        for index, failure in enumerate(st.session_state.failed_spectra, start=1)
+    ]), hide_index=True)
 
 
 def build_preprocessing_log_line(log_entries):
@@ -205,6 +226,19 @@ def collect_current_preprocessing_entries():
                     "degree": st.session_state.baselineremoval_ModPoly_degree
                 }
             })
+        if st.session_state.baselineremoval_function == "iModPoly":
+            run_log_entries.append({
+                "step": "baseline_removal",
+                "display_name": "Baseline Removal",
+                "parameters": {
+                    "function": "iModPoly",
+                    "degree": st.session_state.baselineremoval_iModPoly_degree,
+                    "max_iter": st.session_state.baselineremoval_iModPoly_max_iter,
+                    "scale_factor1": st.session_state.baselineremoval_iModPoly_scale_factor1,
+                    "scale_factor2": st.session_state.baselineremoval_iModPoly_scale_factor2,
+                    "cutoff": st.session_state.baselineremoval_iModPoly_cutoff
+                }
+            })
         if st.session_state.baselineremoval_function == "Gaussian-Lorentzian Fitting":
             if "fitting_ranges" not in st.session_state:
                 raise AttributeError("fitting_ranges")
@@ -240,14 +274,24 @@ def collect_current_preprocessing_entries():
 
 
     if st.session_state.normalization_act:
-        run_log_entries.append({
-            "step": "normalization",
-            "display_name": "Normalization",
-            "parameters": {
-                "function": st.session_state.normalization_function,
-                "parameter": "none"
-            }
-        })
+        if st.session_state.normalization_function == "Normalize by area":
+                run_log_entries.append({
+                    "step": "normalization",
+                    "display_name": "Normalization",
+                    "parameters": {
+                        "function": "Normalize by area",
+                        "scale_factor": st.session_state.normalization_act_scale_factor
+                    }
+                })
+        else:
+            run_log_entries.append({
+                "step": "normalization",
+                "display_name": "Normalization",
+                "parameters": {
+                    "function": st.session_state.normalization_function,
+                    "parameter": "none"
+                }
+            })
 
     if st.session_state.outlierremoval_act:
         run_log_entries.append({
@@ -270,7 +314,12 @@ def apply_preprocessing_step(df, step_entry):
     remove_outliers_log = None
 
     if step == "interpolation":
-        interpolated_df = pd.DataFrame(result_df.iloc[:, 0].round(), columns=[result_df.columns[0]])
+        integer_x = np.arange(
+            np.ceil(result_df.iloc[:, 0].min()),
+            np.floor(result_df.iloc[:, 0].max()) + 1,
+            dtype=int
+        )
+        interpolated_df = pd.DataFrame(integer_x, columns=[result_df.columns[0]])
         for col in result_df.columns[1:]:
             interpolator = interp1d(
                 result_df.iloc[:, 0],
@@ -279,8 +328,8 @@ def apply_preprocessing_step(df, step_entry):
                 bounds_error=False,
                 fill_value="extrapolate"
             )
-            interpolated_df[col] = interpolator(result_df.iloc[:, 0].round())
-        return interpolated_df.drop_duplicates(), remove_outliers_log
+            interpolated_df[col] = interpolator(integer_x)
+        return interpolated_df, remove_outliers_log
 
     if step == "crop":
         return result_df[
@@ -369,6 +418,17 @@ def apply_preprocessing_step(df, step_entry):
             result_df.iloc[:, 1:] = result_df.iloc[:, 1:] - result_df.iloc[:, 1:].apply(
                 lambda col: function.ModPoly(col.values, degree=params["degree"])
             )
+        elif params["function"] == "iModPoly":
+            result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
+                lambda col: function.imodified_polyfit(
+                    np.column_stack((result_df.iloc[:, 0].values, col.values)),
+                    nth=params["degree"],
+                    iter_max=params["max_iter"],
+                    scale_factor1=params["scale_factor1"],
+                    scale_factor2=params["scale_factor2"],
+                    cutoff=params["cutoff"]
+                )[:, 1]
+            )
         elif params["function"] == "Gaussian-Lorentzian Fitting":
             result_df.iloc[:, 1:] = result_df.iloc[:, 1:] - result_df.iloc[:, 1:].apply(
                 lambda col: function.GLF(
@@ -403,14 +463,18 @@ def apply_preprocessing_step(df, step_entry):
     if step == "normalization":
         if params["function"] == "Normalize by area":
             result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(
-                function.normalize_by_area,
-                ramanshift=result_df.iloc[:, 0],
-                axis=0
+                lambda col: function.normalize_by_area(
+                    col,
+                    ramanshift=result_df.iloc[:, 0],
+                    scale_factor=params["scale_factor"]
+                )
             )
         elif params["function"] == "Normalize by peak":
             result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(function.normalize_by_peak, axis=0)
         elif params["function"] == "Min max normalize":
             result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(function.min_max_normalize, axis=0)
+        elif params["function"] == "Normalize by mean":
+            result_df.iloc[:, 1:] = result_df.iloc[:, 1:].apply(function.normalize_by_mean, axis=0)
         return result_df, remove_outliers_log
 
     if step == "outlier_removal":
@@ -429,19 +493,57 @@ def rebuild_dataframe_from_log(log_entries=None):
     if log_entries is None:
         log_entries = st.session_state.preprocessing_log
 
+    previous_selection = st.session_state.get("spectra_selected", list(st.session_state.backup.columns[1:]))
+    selected_failed_spectra = st.session_state.get("selected_failed_spectra", [])
     rebuilt_df = st.session_state.backup.copy()
     latest_remove_outliers_log = None
+    failed_spectra = []
 
     for step_entry in log_entries:
-        rebuilt_df, step_remove_outliers_log = apply_preprocessing_step(rebuilt_df, step_entry)
+        try:
+            rebuilt_df, step_remove_outliers_log = apply_preprocessing_step(rebuilt_df, step_entry)
+        except Exception:
+            if step_entry["step"] not in ("interpolation", "despike", "smoothening", "baseline_removal", "normalization"):
+                raise
+            failed_columns = []
+            step_name = step_entry["parameters"].get("function", step_entry["display_name"])
+            for column_name in rebuilt_df.columns[1:]:
+                try:
+                    apply_preprocessing_step(rebuilt_df[[rebuilt_df.columns[0], column_name]], step_entry)
+                except Exception as error:
+                    failed_columns.append(column_name)
+                    failed_spectra.append({
+                        "spectrum_column": column_name,
+                        "failed_step": step_name,
+                        "error_message": str(error)
+                    })
+            if not failed_columns or len(failed_columns) == rebuilt_df.shape[1] - 1:
+                raise
+            rebuilt_df = rebuilt_df.drop(columns=failed_columns)
+            if rebuilt_df.shape[1] == 1:
+                break
+            rebuilt_df, step_remove_outliers_log = apply_preprocessing_step(rebuilt_df, step_entry)
         if step_remove_outliers_log is not None:
             latest_remove_outliers_log = step_remove_outliers_log
 
     st.session_state.df = rebuilt_df
+    st.session_state.pop("temp", None)
+    st.session_state.failed_spectra = failed_spectra
+    failed_names = {failure["spectrum_column"] for failure in failed_spectra}
+    st.session_state.spectra_selected = [
+        name for name in st.session_state.backup.columns[1:]
+        if name in rebuilt_df.columns and (name in previous_selection or name in selected_failed_spectra)
+    ]
+    st.session_state.selected_failed_spectra = [
+        name for name in st.session_state.backup.columns[1:]
+        if name in failed_names and (name in previous_selection or name in selected_failed_spectra)
+    ]
     if latest_remove_outliers_log is None:
         st.session_state.pop("remove_outliers_log", None)
     else:
         st.session_state.remove_outliers_log = latest_remove_outliers_log
+
+    return failed_spectra
 
 
 if st.session_state.pop("undo_pending", False):
@@ -494,7 +596,7 @@ else:
         if 'interpolation_act' not in st.session_state:
             st.session_state.interpolation_act = False
 
-        interpolation_act = st.toggle("Interpolation", value=False, help="Round each Raman shift value to the closest integer.", key='interpolation_act')
+        interpolation_act = st.toggle("Interpolation", value=False, help="Interpolate intensity values at each integer Raman shift.", key='interpolation_act')
         # st.sidebar.write(interpolation_ref_x)
         
         # crop
@@ -739,13 +841,14 @@ else:
         
         if baselineremoval_act:
             # Add more functions to this selectbox if needed
-            baselineremoval_functions = ["airPLS", "ModPoly","Gaussian-Lorentzian Fitting", "SNIP", "ALS"]
+            baselineremoval_functions = ["airPLS", "ModPoly","Gaussian-Lorentzian Fitting", "SNIP", "ALS", "iModPoly"]
             st.session_state.baselineremoval_function = st.selectbox(
                 label="Select baseline removal function",
                 options=baselineremoval_functions,
                 format_func={
                     "airPLS": "AirPLS",
                     "ModPoly": "ModPoly",
+                    "iModPoly": "iModPoly",
                     "Gaussian-Lorentzian Fitting": "Gaussian-Lorentzian fitting",
                     "SNIP": "SNIP",
                     "ALS": "ALS"
@@ -773,6 +876,27 @@ else:
                 st.session_state.baselineremoval_ModPoly_degree = st.number_input(label="ModPoly polynomial degree",
                                                                         min_value=1, max_value = 20, value = 5, 
                                                                         step = 1, placeholder="Insert a number") 
+
+            elif st.session_state.baselineremoval_function == "iModPoly":
+                st.session_state.baselineremoval_iModPoly_degree = st.number_input(label="iModPoly polynomial degree",
+                                                                        min_value=1, max_value = 20, value = 5, 
+                                                                        step = 1, placeholder="Insert a number") 
+                st.session_state.baselineremoval_iModPoly_max_iter = st.number_input(label="Number of peak removal procedures",
+                                                                        help = "Determines how many times the peak-removal step repeats before the baseline is fit. Higher values strip out more of the spectrum's peaks across successive passes, leaving a cleaner, more peak-free reference for the fit.",
+                                                                        min_value=0, max_value = 7, value = 1, 
+                                                                        step = 1, placeholder="Insert a number")
+                st.session_state.baselineremoval_iModPoly_scale_factor1 = st.number_input(label="Scaling factor for peak removal",
+                                                                        help = "Determines how far above the fitted curve, in standard deviations of the noise, a point must rise before it's discarded as a peak. Higher values are more forgiving, keeping more of the spectrum and removing only the most prominent peaks.",
+                                                                        min_value=0.0, max_value = 2.0, value = 1.0, 
+                                                                        step = 0.1, placeholder="Insert a number",format="%.1f")
+                st.session_state.baselineremoval_iModPoly_scale_factor2 = st.number_input(label="Scaling factor for polyfit",
+                                                                        help = "Determines how far above the fitted curve, in standard deviations of the noise, a point is allowed to sit before it's clamped down during baseline refitting. Higher values let the baseline rise closer to the peaks, producing a baseline that hugs the signal less tightly.",
+                                                                        min_value=0.0, max_value = 2.0, value = 0.0, 
+                                                                        step = 0.1, placeholder="Insert a number",format="%.1f")
+                st.session_state.baselineremoval_iModPoly_cutoff = st.number_input(label="Termination criteria for polynomial fitting",
+                                                                        help ="Determines when the iterative baseline fit stops: fitting continues only while each pass reduces the residual noise by more than this fraction. Higher values require a smaller improvement to keep going, allowing more refinement iterations before the fit is considered converged.",
+                                                                        min_value=0.95, max_value = 0.99, value = 0.95, 
+                                                                        step = 0.01, placeholder="Insert a number",format="%.2f")
             elif st.session_state.baselineremoval_function == "Gaussian-Lorentzian Fitting":
                 st.session_state.baselineremoval_GLF_num_range = st.number_input(label="Number of fitting ranges",
                                                                         min_value=2, max_value = 10, value = 2, 
@@ -901,12 +1025,25 @@ else:
             # Add more functions to this selectbox if needed
             st.session_state.normalization_function = st.selectbox(label="Select normalization function",  options=["Normalize by area",
                                                                                                                 "Normalize by peak",
-                                                                                                                "Min max normalize"],
+                                                                                                                "Min max normalize",
+                                                                                                                "Normalize by mean"],
                                                                     format_func={
                                                                         "Normalize by area": "Normalize by area",
                                                                         "Normalize by peak": "Normalize by peak",
-                                                                        "Min max normalize": "Min-max normalization"
+                                                                        "Min max normalize": "Min-max normalization",
+                                                                        "Normalize by mean": "Normalize by mean"
                                                                     }.get)
+            if st.session_state.normalization_function == "Normalize by area":
+                st.number_input(
+                    label="Scale factor",
+                    help="After area normalization is applied, the spectra will be multiplied by this value. The value must be an integer between 1 and 100000.",
+                    min_value=1,
+                    max_value=100000,
+                    value=1,
+                    step=1,
+                    placeholder="Insert a number",
+                    key="normalization_act_scale_factor"
+                )
 
         # Outlier removal
         if 'outlierremoval_act' not in st.session_state:
@@ -948,7 +1085,14 @@ else:
             else:
                 raise e
         for step_entry in run_log_entries:
-            if step_entry["step"] == "despike":
+            if step_entry["step"] == "interpolation":
+                log.log_function_call("Processing_Interpolation", f_params={})
+            elif step_entry["step"] == "crop":
+                log.log_function_call("Processing_Crop", f_params={
+                    'min': step_entry["parameters"]["min"],
+                    'max': step_entry["parameters"]["max"]
+                })
+            elif step_entry["step"] == "despike":
                 if step_entry["parameters"]["function"] == "Auto despike method":
                     log.log_function_call("Processing_Despike_Auto", f_params={
                         'threshold': step_entry["parameters"]["threshold"],
@@ -1005,6 +1149,14 @@ else:
                     log.log_function_call("Processing_Baseline_Mod_Poly", f_params={
                         'degree': step_entry["parameters"]["degree"]
                     })
+                elif step_entry["parameters"]["function"] == "iModPoly":
+                    log.log_function_call("Processing_Baseline_iMod_Poly", f_params={
+                        'degree': step_entry["parameters"]["degree"],
+                        'max_iter': step_entry["parameters"]["max_iter"],
+                        'scale_factor1': step_entry["parameters"]["scale_factor1"],
+                        'scale_factor2': step_entry["parameters"]["scale_factor2"],
+                        'cutoff': step_entry["parameters"]["cutoff"]
+                    })
                 elif step_entry["parameters"]["function"] == "SNIP":
                     log.log_function_call("Processing_Baseline_SNIP", f_params={
                         'num_iterations': step_entry["parameters"]["num_iterations"]
@@ -1016,17 +1168,21 @@ else:
                         'd': step_entry["parameters"]["d"],
                         'max_iter': step_entry["parameters"]["max_iter"]
                     })
-                else:
+                elif step_entry["parameters"]["function"] == "Gaussian-Lorentzian Fitting":
                     log.log_function_call("Processing_Baseline_Gaussian_Lorentzian_Fitting", f_params={
                         'fitting_ranges': step_entry["parameters"]["fitting_ranges"]
                     })
             elif step_entry["step"] == "normalization":
                 if step_entry["parameters"]["function"] == "Normalize by area":
-                    log.log_function_call("Processing_Normalization_Area", f_params={})
+                    log.log_function_call("Processing_Normalization_Area", f_params={
+                        'scale_factor': step_entry["parameters"]["scale_factor"]
+                    })
                 elif step_entry["parameters"]["function"] == "Normalize by peak":
                     log.log_function_call("Processing_Normalization_Peak", f_params={})
-                else:
+                elif step_entry["parameters"]["function"] == "Min max normalize":
                     log.log_function_call("Processing_Normalization_Minmax", f_params={})
+                elif step_entry["parameters"]["function"] == "Normalize by mean":
+                    log.log_function_call("Processing_Normalization_Mean", f_params={})
             elif step_entry["step"] == "outlier_removal":
                 log.log_function_call("Processing_Remove_Outliers", f_params={
                     'single_thresh': step_entry["parameters"]["single_threshold"],
@@ -1037,8 +1193,13 @@ else:
         if run_log_entries:
             candidate_log = st.session_state.preprocessing_log + run_log_entries
             try:
-                rebuild_dataframe_from_log(candidate_log)
+                failed_spectra = rebuild_dataframe_from_log(candidate_log)
                 st.session_state.preprocessing_log = candidate_log
+                for failure in failed_spectra:
+                    st.toast(
+                        f"{failure['spectrum_column']} failed during {failure['failed_step']}: {failure['error_message']}",
+                        icon="⚠️"
+                    )
             except Exception as e:
                 failed_step = run_log_entries[-1]["display_name"] if run_log_entries else "Preprocessing"
                 st.toast(f"{failed_step} could not be applied. Details: {e}", icon="⚠️")
@@ -1058,9 +1219,28 @@ else:
     
     # Reset button and reaction
 
-    if st.sidebar.button("Reset", type='secondary', on_click=function.reset_processing, key = 'reset'):
-            # st.session_state.df = st.session_state.backup
-            pass
+    @st.dialog("Reset preprocessing?", width="small")
+    def confirm_reset():
+        st.markdown("⚠️ **Reset all preprocessing steps?** Your data will return to its original uploaded form. **This action cannot be undone.**")
+        cancel_col, reset_col = st.columns(2)
+        with cancel_col:
+            if st.button("Cancel"):
+                st.rerun()
+        with reset_col:
+            if st.button("Yes, reset", type="primary"):
+                function.reset_processing()
+                st.session_state.spectra_selected = [
+                    name for name in st.session_state.df.columns[1:]
+                    if name in st.session_state.get("spectra_selected", [])
+                    or name in st.session_state.get("selected_failed_spectra", [])
+                ]
+                st.session_state.pop("selected_failed_spectra", None)
+                st.session_state.pop("failed_spectra", None)
+                st.session_state.refresh_plot_pending = True
+                st.rerun()
+
+    if st.sidebar.button("Reset", type='secondary', key='reset'):
+        confirm_reset()
 
     # st.write(st.session_state.backup)
 """"""""
@@ -1073,11 +1253,11 @@ else:
     
     preview_act = st.toggle("Preview Data")
     
-    if preview_act:
+    if preview_act and "temp" in st.session_state:
     
         st.write("**Preview**")
         
-        st.dataframe(st.session_state.df, hide_index=True)
+        st.dataframe(st.session_state.temp, hide_index=True)
         # st.table(st.session_state.df)
     
     # arr = np.random.normal(1, 1, size=100)
@@ -1121,14 +1301,20 @@ else:
         st.session_state.spectra_selected = st.multiselect(
             label="**Select Spectra/s you want to visualize**",
             options=list(st.session_state.df.columns[1:]),
-            default=list(st.session_state.df.columns[1:])
+            default=[
+                column for column in st.session_state.get("spectra_selected", st.session_state.df.columns[1:])
+                if column in st.session_state.df.columns[1:]
+            ]
         )
 
         # Get cached selected data
         refresh_plot_pending = st.session_state.pop("refresh_plot_pending", False)
         plot_button_col, fast_mode_col, custom_axis_col = st.columns([0.16, 0.44, 0.40])
-        if plot_button_col.button("Plot", type="primary", key="plot") or st.session_state.get("process") or refresh_plot_pending or st.session_state.get("reset"):
-            st.session_state.temp = get_selected_columns(st.session_state.df, st.session_state.spectra_selected)
+        if plot_button_col.button("Plot", type="primary", key="plot") or st.session_state.get("process") or refresh_plot_pending:
+            if st.session_state.spectra_selected:
+                st.session_state.temp = get_selected_columns(st.session_state.df, st.session_state.spectra_selected)
+            else:
+                st.warning("Select at least one spectrum.")
 
     
     # st.write(st.session_state.temp)
@@ -1173,6 +1359,11 @@ else:
     else:
         x_axis_title = DEFAULT_X_AXIS_TITLE
         y_axis_title = DEFAULT_Y_AXIS_TITLE
+
+    if not st.session_state.spectra_selected or "temp" not in st.session_state:
+        render_preprocessing_log(st.session_state.preprocessing_log)
+        render_failed_spectra()
+        st.stop()
         
     
     try:
@@ -1341,7 +1532,7 @@ else:
             cached_plot = generate_altair_plot(data_melted, x_axis, x_axis_title, y_axis_title)
             # st.write("yyyyy")
             # Display Plot
-            st.altair_chart(cached_plot, use_container_width=False)
+            st.altair_chart(cached_plot, width="content")
             # st.write("zzzzz")
             log.log_plot_generated_count()
             
@@ -1379,7 +1570,7 @@ else:
             cached_plot = generate_altair_plot_fastmode(data_melted, x_axis, x_axis_title, y_axis_title)
             # st.write("1111")
             # Display Plot
-            st.altair_chart(cached_plot, use_container_width=False)
+            st.altair_chart(cached_plot, width="content")
             # st.write("2222")
             log.log_plot_generated_count()
             # # Define the nearest selection
@@ -1389,7 +1580,6 @@ else:
         
         
         # Download handlers
-        @st.cache_data
         def download_df(df, export_timestamp, preprocessing_summary):
             csv_data = df.to_csv(index=False)
             metadata = [
@@ -1403,18 +1593,11 @@ else:
         export_dt = datetime.now()
         export_timestamp = export_dt.isoformat(timespec="seconds")
         preprocessing_summary = build_preprocessing_log_line(st.session_state.preprocessing_log)
-        csv = download_df(st.session_state.df, export_timestamp, preprocessing_summary)
+        selected_data = st.session_state.temp
 
         current_time = export_dt.strftime("%Y%m%d_%H%M%S")
         download_file_name = f"data_{current_time}.csv"
         download_plot_name = f"spectra_plot_{current_time}.png"
-
-        png_bytes = function.make_matplotlib_png(
-            data_melted,
-            x_axis,
-            x_label=x_axis_title,
-            y_label=y_axis_title
-        )
 
         # Create a single row with two columns
         dcol1,dcol2, col_spacer  = st.columns([1, 1, 3])
@@ -1422,17 +1605,24 @@ else:
         with dcol1:
             st.download_button(
                 label="Data export (CSV)",
-                data=csv,
+                data=lambda: download_df(selected_data, export_timestamp, preprocessing_summary),
                 file_name=download_file_name,
-                mime="text/csv"
+                mime="text/csv",
+                on_click="ignore"
             )
 
         with dcol2:
             st.download_button(
                 label="Plot export (PNG, 600 dpi)",
-                data=png_bytes,
+                data=lambda: function.make_matplotlib_png(
+                    data_melted,
+                    x_axis,
+                    x_label=x_axis_title,
+                    y_label=y_axis_title
+                ),
                 file_name=download_plot_name,
-                mime="image/png"
+                mime="image/png",
+                on_click="ignore"
             )
 
         render_preprocessing_log(st.session_state.preprocessing_log)
@@ -1442,5 +1632,17 @@ else:
             st.write("**The following spectra have been detected and removed by the outlier removal function**")
             st.table(st.session_state.remove_outliers_log)
                 
-    except:
-        pass
+    except Exception as error:
+        show_feedback(
+            message="Error generating visualization.",
+            severity="error",
+            suggestions=[
+                "Click Plot after selecting spectra",
+                "Try Reset if preprocessing parameters are invalid",
+                "Check that preprocessing ranges were applied"
+            ],
+            details=str(error),
+            doc_link="https://fengboma.github.io/docs.spectraguru/docs/Processing_Page"
+        )
+
+    render_failed_spectra()

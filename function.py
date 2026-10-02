@@ -37,6 +37,22 @@ def reset_processing():
     st.session_state.preprocessing_log = []
     st.session_state.pop("remove_outliers_log", None)
 
+def show_feedback(message, severity="error", details=None, suggestions=None, doc_link="https://fengboma.github.io/docs.spectraguru/"):
+    import streamlit as st
+
+    display_func = {
+        "error": st.error,
+        "warning": st.warning,
+        "info": st.info,
+        "success": st.success
+    }.get(severity, st.error)
+    content = f"### {message}\n\n📖 Documentation: [SpectraGuru Docs]({doc_link})\n\n"
+    if suggestions:
+        content += "##### 💡 Suggestions\n" + "".join(f"- {suggestion}\n" for suggestion in suggestions) + "\n"
+    if details:
+        content += f"##### 🔧 Technical Details\n```text\n{details}\n```\n"
+    display_func(content)
+
 # airPLS function
 '''
 airPLS.py Copyright 2014 Renato Lombardo - renato.lombardo@unipa.it
@@ -82,7 +98,7 @@ def WhittakerSmooth(x,w,lambda_,differences=1):
     output
         the fitted background vector
     '''
-    X=np.matrix(x)
+    X=np.asarray(x).reshape(1, -1)
     m=X.size
     E=eye(m,format='csc')
     for i in range(differences):
@@ -123,11 +139,12 @@ def airPLS(x, lambda_=100, porder=1, itermax=15, tau = 0.001):
 
 # Normalization functions
 # Normalize by area
-def normalize_by_area(spectra, ramanshift):
+def normalize_by_area(spectra, ramanshift, scale_factor=1):
     import numpy as np
-    area = np.trapz(y = spectra, x = ramanshift)
+    area = np.trapezoid(y = spectra, x = ramanshift)
     normalized_spectra = spectra / abs(area)  # Ensure the area is always positive
-    return normalized_spectra
+    scaled_normalized_spectra = normalized_spectra * scale_factor
+    return scaled_normalized_spectra
 
 # Normalize by peak
 def normalize_by_peak(spectra):
@@ -143,6 +160,12 @@ def min_max_normalize(spectra):
     max_val = np.max(spectra)
     normalized_spectra = (spectra - min_val) / (max_val - min_val)  # Normalize the single series (column)
     return normalized_spectra
+
+# Normalize by mean
+def normalize_by_mean(spectra):
+    import numpy as np
+    spectra_arr = np.array(spectra, dtype=float)
+    return spectra_arr / spectra_arr.mean()
 
 # Despike
 def despikeSpec(spectra, ramanshift, threshold=100, zap_length=11):
@@ -538,6 +561,126 @@ def build_fft_plots(
         "real_imaginary": style_altair_chart(real_imag_plot),
         "power": style_altair_chart(power_plot)
     }
+
+# Spectrum calculation (Analytics)
+SPECTRUM_CALC_Y_OPERATIONS = {
+    "Add": lambda a, b: a + b,
+    "Subtract": lambda a, b: a - b,
+    "Multiply": lambda a, b: a * b,
+    "Divide": lambda a, b: a / b,
+}
+SPECTRUM_CALC_X_OPERATIONS = {
+    "Add": lambda x, shift: x + shift,
+    "Subtract": lambda x, shift: x - shift,
+}
+
+def _validate_spectrum_calculation_inputs(operator, valid_operators, scalar=None, target=None,
+                                          reference=None, x_target=None, x_reference=None,
+                                          allow_negative_scalar=False):
+    """Validate one spectrum calculation before it runs."""
+    import numpy as np
+
+    if operator not in valid_operators:
+        raise ValueError(f"Operator must be one of {tuple(valid_operators)}; got {operator!r}.")
+    if scalar is not None:
+        try:
+            scalar = float(scalar)
+        except (TypeError, ValueError):
+            raise ValueError(f"Value must be numeric; got {scalar!r}.")
+        if not np.isfinite(scalar):
+            raise ValueError(f"Value must be finite; got {scalar!r}.")
+        if not allow_negative_scalar and scalar < 0:
+            raise ValueError("Value must be 0 or greater.")
+        if operator == "Divide" and np.isclose(scalar, 0.0):
+            raise ValueError("Division by zero is not allowed.")
+    for name, arr in (("target", target), ("reference", reference)):
+        if arr is not None and not np.isfinite(np.asarray(arr, dtype=float)).all():
+            raise ValueError(f"The {name} spectrum contains missing or non-numeric values.")
+    if operator == "Divide" and reference is not None and np.any(
+            np.isclose(np.asarray(reference, dtype=float), 0.0)):
+        raise ValueError("Division by zero is not allowed (the reference spectrum contains zeros).")
+    if x_target is not None and x_reference is not None and not np.array_equal(
+            np.asarray(x_target, dtype=float), np.asarray(x_reference, dtype=float)):
+        raise ValueError("The target and reference spectra do not share the same wavenumber axis. "
+                         "Interpolation is not enabled.")
+
+def calculate_spectrum_with_constant(intensity, constant, operator="Add"):
+    """Return a calculated intensity copy using a non-negative constant."""
+    import numpy as np
+    _validate_spectrum_calculation_inputs(operator, SPECTRUM_CALC_Y_OPERATIONS,
+                                          scalar=constant, target=intensity)
+    return SPECTRUM_CALC_Y_OPERATIONS[operator](np.asarray(intensity, dtype=float), float(constant))
+
+def calculate_spectrum_with_reference(target_intensity, reference_intensity, operator="Add",
+                                      target_axis=None, reference_axis=None):
+    """Return a point-by-point calculation between two aligned spectra."""
+    import numpy as np
+    _validate_spectrum_calculation_inputs(operator, SPECTRUM_CALC_Y_OPERATIONS,
+                                          target=target_intensity, reference=reference_intensity,
+                                          x_target=target_axis, x_reference=reference_axis)
+    return SPECTRUM_CALC_Y_OPERATIONS[operator](np.asarray(target_intensity, dtype=float),
+                                                np.asarray(reference_intensity, dtype=float))
+
+def shift_spectrum_axis(axis_values, shift, operator="Add"):
+    """Return a shifted axis copy; negative shifts are allowed."""
+    import numpy as np
+    _validate_spectrum_calculation_inputs(
+        operator, SPECTRUM_CALC_X_OPERATIONS, scalar=shift, allow_negative_scalar=True
+    )
+    return SPECTRUM_CALC_X_OPERATIONS[operator](np.asarray(axis_values, dtype=float), float(shift))
+
+def build_spectrum_calc_result_df(axis_values, target_intensity, calculated_values,
+                                  reference_intensity=None, original_axis=None):
+    """Build a new dataframe for previewing or exporting one result."""
+    import numpy as np
+    import pandas as pd
+
+    data = {"Ramanshift": np.asarray(axis_values, dtype=float)}
+    if original_axis is not None:
+        data["Original Ramanshift"] = np.asarray(original_axis, dtype=float)
+    data["Original Target Intensity"] = np.asarray(target_intensity, dtype=float)
+    if reference_intensity is not None:
+        data["Reference Intensity"] = np.asarray(reference_intensity, dtype=float)
+    data["Calculated Intensity"] = np.asarray(calculated_values, dtype=float)
+    return pd.DataFrame(data)
+
+def apply_spectrum_calculation_to_dataframe(df, calculation_type, operator, constant=None,
+                                            reference_intensity=None, shift=None):
+    """Apply one calculation to every source spectrum and return a new dataframe."""
+    import numpy as np
+    import pandas as pd
+
+    if not isinstance(df, pd.DataFrame) or "Ramanshift" not in df.columns or df.shape[1] < 2:
+        raise ValueError("Input must be a wide dataframe with a Ramanshift column and at least one intensity column.")
+
+    source = df.copy(deep=True)
+    intensity_columns = [column for column in source.columns
+                         if column not in ("Ramanshift", "Average", "Standard Deviation")]
+    if not intensity_columns:
+        raise ValueError("No intensity columns are available to calculate on.")
+
+    axis_values = pd.to_numeric(source["Ramanshift"], errors="coerce").to_numpy(dtype=float)
+    if not np.isfinite(axis_values).all():
+        raise ValueError("The wavenumber axis contains missing or non-numeric values.")
+
+    if calculation_type == "X-axis shift":
+        result = {"Ramanshift": shift_spectrum_axis(axis_values, shift, operator)}
+        for column in intensity_columns:
+            result[column] = pd.to_numeric(source[column], errors="coerce").to_numpy(dtype=float)
+        return pd.DataFrame(result)
+
+    if calculation_type == "Y-axis with constant":
+        calculate = lambda values: calculate_spectrum_with_constant(values, constant, operator)
+    elif calculation_type == "Y-axis with another spectrum":
+        calculate = lambda values: calculate_spectrum_with_reference(values, reference_intensity, operator)
+    else:
+        raise ValueError(f"Unknown calculation type: {calculation_type!r}.")
+
+    result = {"Ramanshift": axis_values}
+    for column in intensity_columns:
+        values = pd.to_numeric(source[column], errors="coerce").to_numpy(dtype=float)
+        result[f"{column}_calculated"] = calculate(values)
+    return pd.DataFrame(result)
 
 def remove_outliers(df, single_thresh=4, distance_thresh=6, coeff_thresh=4):
     import numpy as np
@@ -1064,7 +1207,7 @@ def hierarchical_clustering_tree(df):
 #     # Return PCA-transformed data and the plots
 #     return pca_df, pc1_vs_pc2_plot, cumulative_variance_plot, loading_plot
 
-def pca(df, label_df=None, is_label=False, horizontal_pc='PC1', vertical_pc='PC2'):
+def pca(df, label_df=None, is_label=False, horizontal_pc='PC1', vertical_pc='PC2', loading_pcs=('PC1', 'PC2', 'PC3')):
     import altair as alt
     from sklearn.preprocessing import StandardScaler
     from sklearn.decomposition import PCA
@@ -1126,28 +1269,24 @@ def pca(df, label_df=None, is_label=False, horizontal_pc='PC1', vertical_pc='PC2
         height=500
     )
 
-    # Step 8: Loading Plot for PC1, PC2, and PC3
-    loadings = pca.components_[:3]
-    feature_names = df_transposed.columns  # Original feature names
+    # Step 8: Loading Plot
+    loading_plot = None
+    if loading_pcs:
+        loading_df = pd.DataFrame({'Feature': df_transposed.columns})
+        for pc in loading_pcs:
+            loading_df[pc] = pca.components_[int(pc[2:]) - 1]
 
-    loading_df = pd.DataFrame({
-        'Feature': feature_names,
-        'PC1': loadings[0],
-        'PC2': loadings[1],
-        'PC3': loadings[2]
-    })
+        loading_df_melted = loading_df.melt(id_vars='Feature', var_name='Principal Component', value_name='Loading')
 
-    loading_df_melted = loading_df.melt(id_vars='Feature', var_name='Principal Component', value_name='Loading')
-
-    loading_plot = alt.Chart(loading_df_melted).mark_line(point=False).encode(
-        x=alt.X('Feature', title='Original Features'),
-        y=alt.Y('Loading', title='Loading Value'),
-        color='Principal Component'
-    ).properties(
-        title='Loadings on Principal Components 1, 2, and 3',
-        width=1000,
-        height=500
-    )
+        loading_plot = alt.Chart(loading_df_melted).mark_line(point=False).encode(
+            x=alt.X('Feature', title='Original Features'),
+            y=alt.Y('Loading', title='Loading Value'),
+            color='Principal Component'
+        ).properties(
+            title=f"Loadings on {', '.join(loading_pcs)}",
+            width=1000,
+            height=500
+        )
 
     # Return PCA-transformed data and the plots
     return pca_df, pc1_vs_pc2_plot, cumulative_variance_plot, loading_plot
@@ -2141,7 +2280,7 @@ def make_matplotlib_png(data, x_col,
     old_rc = plt.rcParams.copy()
     try:
         plt.rcParams.update({
-            "font.family": "Times New Roman",
+            # "font.family": "Times New Roman",
             "font.size": 14,
             "axes.labelsize": 18,
             "xtick.labelsize": 16,
@@ -2649,3 +2788,549 @@ def als_baseline_removal(spectra, lam=1e7, p=0.001, d=2, max_iter=50, return_bas
     if return_baseline:
         return baseline
     return y - baseline
+
+# Core local fitting method for full spectrum fitting
+def _fit_local(x, y, x_local, y_local, target, cofits,
+               tolerance=12.0,
+               peak_shape="Gaussian",
+               default_fwhm_cm1=12.0,
+               min_fwhm_cm1=4.0,
+               max_fwhm_cm1=40.0,
+               pseudovoigt_eta_default=0.5,
+               pseudovoigt_eta_min=0.0,
+               pseudovoigt_eta_max=1.0,
+              ):
+    import numpy as np
+    from scipy.optimize import curve_fit
+
+    def _fwhm_to_sigma(fwhm):
+        return float(fwhm) / 2.35482
+
+    # Mathematical definitions for each of the three supported curve shapes.
+
+    def _gaussian(x, amp, cen, fwhm):
+        sig = max(_fwhm_to_sigma(fwhm), 1e-12)
+        return amp * np.exp(-((x-cen)**2)/(2*sig**2))
+
+    def _lorentzian(x, amp, cen, fwhm):
+        half = 0.5 * max(float(fwhm), 1e-12)
+        return amp * (half**2) / ((x-cen)**2 + half**2)
+
+    def _pseudovoigt(x, amp, cen, fwhm, eta):
+        eta = float(np.clip(eta, 0, 1))
+        return (1-eta)*_gaussian(x, amp, cen, fwhm) + eta*_lorentzian(x, amp, cen, fwhm)
+
+    # Wrapper for mathematical curve definitions. For pseudovoigt curves, `eta` must be specified.
+    def _component_curve(x, amp, cen, fwhm, shape, eta=None):
+        if shape == "Gaussian":
+            return _gaussian(x, amp, cen, fwhm)
+        if shape == "Lorentzian":
+            return _lorentzian(x, amp, cen, fwhm)
+        if shape == "Pseudovoigt":
+            return _pseudovoigt(x, amp, cen, fwhm, 0.5 if eta is None or np.isnan(eta) else eta)
+        else:
+            raise ValueError(f"Peak shape '{shape}' not recognized.")
+    
+    # Constructs a function `model` which returns the sum of `ncomp` curves of a given `shape` provided a set of parameters.
+    # Parameters passed to `model` should cycle: [amplitude, center, FWHM, ...] for Gaussian and Lorentzian curves; [amplitude, center, FWHM, eta, ...]
+    # for Pseudovoigt curves.
+    def _build_sum_model(ncomp: int, shape: str):
+        uses_eta = shape == "Pseudovoigt"
+        def model(x, *params):
+            y = np.zeros_like(x, dtype=float)
+            k = 0
+            for _ in range(ncomp):
+                amp, cen, fwhm = params[k], params[k+1], params[k+2]
+                k += 3
+                eta = None
+                if uses_eta:
+                    eta = params[k]
+                    k += 1
+                y += _component_curve(x, amp, cen, fwhm, shape, eta)
+            return y
+        return model, uses_eta
+
+    # Formulates a guess at the full width at half maximum (FWHM) of a peak in data at `center`.
+    def _initial_fwhm_guess(x, y, center, default_fwhm_cm1, min_fwhm_cm1, max_fwhm_cm1):
+        ii = int(np.argmin(abs(x-center)))
+        left, right = max(0, ii-6), min(len(x), ii+7)
+        yw, xw = y[left:right], x[left:right]
+        if len(yw) < 5:
+            return float(np.clip(default_fwhm_cm1, min_fwhm_cm1, max_fwhm_cm1))
+        peak_idx = int(np.argmax(yw))
+        half = 0.5 * float(np.max(yw))
+        li = peak_idx
+        ri = peak_idx
+        while li > 0 and yw[li] > half:
+            li -= 1
+        while ri < len(yw)-1 and yw[ri] > half:
+            ri += 1
+        if li == peak_idx or ri == peak_idx:
+            return float(np.clip(default_fwhm_cm1, min_fwhm_cm1, max_fwhm_cm1))
+        return float(np.clip(abs(xw[ri]-xw[li]), min_fwhm_cm1, max_fwhm_cm1))
+
+    centers = [target]+cofits
+
+    model, uses_eta = _build_sum_model(len(centers), peak_shape)
+    p0, lb, ub = [], [], [] # Initial guesses, lower and upper bounds for curve parameters
+    for i, c in enumerate(centers):
+        amp_guess = max(float(y[int(np.argmin(abs(x-c)))]), float(np.max(y))*(0.7 if i==0 else 0.35), 1e-9)
+        fwhm_guess = _initial_fwhm_guess(x_local, y_local, c, default_fwhm_cm1, min_fwhm_cm1, max_fwhm_cm1)
+        local_tol = tolerance
+        p0.extend([amp_guess, c, fwhm_guess])
+        lb.extend([0.0, c-local_tol, min_fwhm_cm1])
+        ub.extend([np.inf, c+local_tol, max_fwhm_cm1])
+        if uses_eta:
+            p0.append(pseudovoigt_eta_default)
+            lb.append(pseudovoigt_eta_min)
+            ub.append(pseudovoigt_eta_max)
+    # Use `scipy.optimize.curve_fit` to optimize curve parameters
+    popt, _ = curve_fit(model, x_local, y_local, p0=np.asarray(p0), bounds=(np.asarray(lb), np.asarray(ub)), maxfev=50000)
+
+    # Organize results
+    local_comps = []
+    k = 0
+    for i, seed in enumerate(centers):
+        amp, cen, fwhm = float(popt[k]), float(popt[k+1]), float(popt[k+2])
+        k += 3
+        eta = np.nan
+        if uses_eta:
+            eta = float(popt[k])
+            k += 1
+        curve = _component_curve(x, amp, cen, fwhm, peak_shape, eta)
+        local_comps.append({"parameters":{"seed_center": seed, "fitted_center": cen, "amplitude": amp, "fwhm": fwhm, "eta": eta}, "curve": curve})
+    
+    return local_comps
+
+# Fits a set of curves to a spectrum by repeatedly checking the residual and locating its most prominent peak. The next peak
+# in the iteration is placed there. In this sense, this function behaves like a greedy algorithm to find the most efficient
+# distribution of curves.
+#
+# To further optimize performance, only peaks which are nearby to the target peak are calculated each iteration. The range of
+# this window can be controlled by `cofit_range_multiplier`. It is recommended that this value stay between 0.5 and 1.0; higher values
+# result in better fit quality, while lower values result in better performance.
+def fit_full_spectrum_v2(x, y, num_peaks, 
+                         cofit_range_multiplier=0.7,
+                         tolerance=5.0,
+                         peak_shape="Gaussian",
+                         default_fwhm_cm1=12.0,
+                         min_fwhm_cm1=4.0,
+                         max_fwhm_cm1=40.0,
+                         pseudovoigt_eta_default=0.5,
+                         pseudovoigt_eta_min=0.0,
+                         pseudovoigt_eta_max=1.0,
+                         min_peak_distance=2.0,
+                         min_window_width=10.0,
+                         max_cofits=9):
+    import numpy as np
+    from scipy.signal import find_peaks
+
+    total = np.zeros_like(y)
+    residual = y
+
+    centers, comps = [], []
+    for iter in range(num_peaks):
+        idx, props = find_peaks(np.maximum(residual, 0.0), prominence=0, width=0, rel_height=0.5)
+
+        def _collides_with_known_peak(cand):
+            for c in centers:
+                if np.abs(c - cand) < min_peak_distance:
+                    return True
+            return False
+
+        # Isolate the peak with the greatest prominence.
+        order = np.argsort(props['prominences'])
+        n = len(idx)
+        target = float(x[idx[order][n-1]])
+        i = 0
+        while _collides_with_known_peak(target) and i+1 < n:
+            i += 1
+            target = float(x[idx[order][n-1-i]])
+        if i+1 >= n:
+            print("Exhausted all peaks. Try relaxing the minimum distance between peaks.")
+            break
+        width = props['widths'][order][n-1-i]
+
+        # Determine the appropriate window to use.
+        local_crm = cofit_range_multiplier
+        cofit_idcs, cofits, window_min, window_max = [], [], 0, np.inf
+        try_runtime_reduction = True
+        while try_runtime_reduction:
+            half_window_width = max(local_crm * width, 0.5*min_window_width)
+            window_min, window_max = target - half_window_width, target + half_window_width
+            # Extend the window to include neighboring peaks
+            look_for_peaks = True
+            while look_for_peaks:
+                look_for_peaks = False
+                for comp in comps:
+                    # For each known peak, determine whether it intersects with the window range
+                    fitted_center, half_subwindow_width = comp['parameters']['fitted_center'], local_crm * 2 * comp['parameters']['fwhm']
+                    lower_bound, upper_bound = fitted_center - half_subwindow_width, fitted_center + half_subwindow_width
+                    if lower_bound < window_min and upper_bound > window_min:
+                        window_min = lower_bound
+                        look_for_peaks = True
+                    if upper_bound > window_max and lower_bound < window_max:
+                        window_max = upper_bound
+                        look_for_peaks = True
+            # Determine cofits
+            cofit_idcs = [j for j, c in enumerate(centers) if (c > window_min and c < window_max)]
+            try_runtime_reduction = False
+            if len(cofit_idcs) > max_cofits:
+                cofit_idcs = []
+                local_crm *= 0.9
+                try_runtime_reduction = True # Triggers another peak search attempt
+            else:
+                cofits = [centers[j] for j in cofit_idcs]
+
+        start = int(np.searchsorted(x, window_min, side="left"))
+        stop = int(np.searchsorted(x, window_max, side="right"))
+        x_local, y_local = x[start:stop], y[start:stop]
+
+        #print(f"Iteration {iter+1}/{num_peaks} ({np.around(100*(iter+1)/num_peaks,2)}%) ...", [target] + cofits)
+
+        # Perform subfit
+        local_comps = _fit_local(x, y, x_local, y_local, target, cofits,
+                                 tolerance=tolerance,
+                                 peak_shape=peak_shape,
+                                 default_fwhm_cm1=default_fwhm_cm1,
+                                 min_fwhm_cm1=min_fwhm_cm1,
+                                 max_fwhm_cm1=max_fwhm_cm1,
+                                 pseudovoigt_eta_default=pseudovoigt_eta_default,
+                                 pseudovoigt_eta_min=pseudovoigt_eta_min,
+                                 pseudovoigt_eta_max=pseudovoigt_eta_max)
+
+        # Update centers and components
+        for k, l in enumerate(local_comps):
+            if k == 0:
+                comps.append(l)
+                centers.append(l['parameters']['fitted_center'])
+            else:
+                comps[cofit_idcs[k-1]] = l
+                centers[cofit_idcs[k-1]] = l['parameters']['fitted_center']
+            
+        # Update residual based on new components
+        total = np.zeros_like(y)
+        for comp in comps:
+            total += comp['curve']
+        residual = y - total
+    
+    rmse = float(np.sqrt(np.mean(residual**2)))
+
+    return total, residual, comps, rmse
+
+# Fits a set of curves to a spectrum based on the locations of the most prominent peaks. Improves on the performance of version 2 by
+# processing multiple unfitted peaks at once, based on the results of `find_peaks`.
+#
+# The user will specify a `min_prominence`. The algorithm ends once all valid peaks more prominent than `min_prominence` are fitted. This includes
+# prominent peaks in the residual after each iteration.
+def fit_full_spectrum_v3(x, y, prominence_rank_threshold, 
+                         cofit_range_multiplier=0.7,
+                         tolerance=5.0,
+                         peak_shape="Gaussian",
+                         default_fwhm_cm1=12.0,
+                         min_fwhm_cm1=4.0,
+                         max_fwhm_cm1=40.0,
+                         pseudovoigt_eta_default=0.5,
+                         pseudovoigt_eta_min=0.0,
+                         pseudovoigt_eta_max=1.0,
+                         min_peak_distance=2.0,
+                         max_iterations=50,
+                         min_window_width=10.0,
+                         max_cofits=9):
+    import numpy as np
+    from scipy.signal import find_peaks
+
+    total = np.zeros_like(y)
+    residual = y
+
+    # Determine the prominence threshold
+    idx, props = find_peaks(np.maximum(residual, 0.0), prominence=0, rel_height=0.5)
+    order = np.argsort(props['prominences'])
+    if len(idx) >= prominence_rank_threshold:
+        min_prominence = props['prominences'][order][::-1][prominence_rank_threshold-1]
+    else:
+        min_prominence = props['prominences'][order][0]
+
+    comps = []
+    prominent_peaks_exist, iter = True, 0
+    while prominent_peaks_exist and iter < max_iterations:
+        idx, props = find_peaks(np.maximum(residual, 0.0), prominence=min_prominence, width=0, distance=min_peak_distance, rel_height=0.5)
+        order = np.argsort(props['prominences'])
+        centers = x[idx[order]]
+        widths = props['widths'][order]
+
+        def collides_with_known_peak(cand):
+            for comp in comps:
+                if np.abs(comp['parameters']['fitted_center'] - cand) < min_peak_distance:
+                    return True
+            return False
+        
+        centers_filtered, widths_filtered = [], []
+        for k, c in enumerate(centers):
+            if not collides_with_known_peak(c):
+                centers_filtered.append(c)
+                widths_filtered.append(widths[k])
+
+        n = len(centers_filtered)
+        if n > 0:
+            
+            target = centers_filtered[n-1]
+            target_width = widths_filtered[n-1]
+
+            # Append fitted centers to the list of known centers
+            all_centers, all_widths, n_comps = [], [], len(comps)
+            for comp in comps:
+                all_centers.append(comp['parameters']['fitted_center'])
+                all_widths.append(comp['parameters']['fwhm'])
+            for k, c in enumerate(centers_filtered):
+                if k < n-1:
+                    all_centers.append(c)
+                    all_widths.append(widths[k])
+            
+            
+            # Determine the appropriate window to use.
+            local_crm = cofit_range_multiplier
+            cofit_idcs, cofits, window_min, window_max = [], [], 0, np.inf
+            try_runtime_reduction = True
+            while try_runtime_reduction:
+                half_window_width = max(local_crm * target_width, 0.5*min_window_width)
+                window_min, window_max = target - half_window_width, target + half_window_width
+                # Extend the window to include neighboring peaks
+                look_for_peaks = True
+                while look_for_peaks:
+                    look_for_peaks = False
+                    for k, comp_or_peak_center in enumerate(all_centers):
+                        # For each known peak, determine whether it intersects with the window range
+                        fitted_center, half_subwindow_width = comp_or_peak_center, local_crm * 2 * all_widths[k]
+                        lower_bound, upper_bound = fitted_center - half_subwindow_width, fitted_center + half_subwindow_width
+                        if lower_bound < window_min and upper_bound > window_min:
+                            window_min = lower_bound
+                            look_for_peaks = True
+                        if upper_bound > window_max and lower_bound < window_max:
+                            window_max = upper_bound
+                            look_for_peaks = True
+                # Determine cofits
+                cofit_idcs = [j for j, c in enumerate(all_centers) if (c > window_min and c < window_max)]
+                try_runtime_reduction = False
+                if len(cofit_idcs) > max_cofits:
+                    cofit_idcs = []
+                    local_crm *= 0.9
+                    try_runtime_reduction = True # Triggers another peak search attempt
+                else:
+                    cofits = [all_centers[j] for j in cofit_idcs]
+
+            start = int(np.searchsorted(x, window_min, side="left"))
+            stop = int(np.searchsorted(x, window_max, side="right"))
+            x_local, y_local = x[start:stop], y[start:stop]
+
+            # Perform subfit
+            local_comps = _fit_local(x, y, x_local, y_local, target, cofits,
+                                 tolerance=tolerance,
+                                 peak_shape=peak_shape,
+                                 default_fwhm_cm1=default_fwhm_cm1,
+                                 min_fwhm_cm1=min_fwhm_cm1,
+                                 max_fwhm_cm1=max_fwhm_cm1,
+                                 pseudovoigt_eta_default=pseudovoigt_eta_default,
+                                 pseudovoigt_eta_min=pseudovoigt_eta_min,
+                                 pseudovoigt_eta_max=pseudovoigt_eta_max)
+            
+            for k, l in enumerate(local_comps):
+                if k == 0 or cofit_idcs[k-1] >= n_comps:
+                    comps.append(l)
+                else:
+                    comps[cofit_idcs[k-1]] = l
+                
+            # Update residual based on new components
+            total = np.zeros_like(y)
+            for comp in comps:
+                total += comp['curve']
+            residual = y - total
+            iter += 1
+        else:
+            prominent_peaks_exist = False # end loop
+
+    rmse = float(np.sqrt(np.mean(residual**2)))
+
+    return total, residual, comps, rmse
+
+# ── iModPoly  baseline correction ──────────────────────────────────────────────────
+"""
+# This program implements fluorescence background removal based on Vancouver Raman Algorithm
+# Ref: Zhao, Lui, McLean and Zeng, "Automated autofluorescence background subtraction algorithm
+#      for biomedical Raman spectroscopy", Applied Spectroscopy; Vol 61, No 11, 1225-1232 (2007)
+#
+# Slightly modified to provide the users more flexibility to choose the number of peak removal
+# procedures and the range of baseline correction. Once the parameters were optimized, these factors 
+# should not be changed during study.
+#
+# It contains the following functions:
+#     peak_removal       - peak removal procedure
+#     modified_polyfit   - polynomial fitting procedure
+#     imodified_polyfit  - combines peak removal and polynomial fitting
+#     spec_boxcar_smooth - used for noise reduction (sliding window averaging) 
+#     spec_interpolation - for data interpolation in case of need
+#
+# Edited by Kyla Tsuyuki, Jianhua Zhao and Haishan Zeng
+# 2026-06-10
+# Implemented by Nayeong Kweon (UGA)
+# 2026-08-07
+"""
+
+#-------------------PEAK REMOVAL--------------------
+def peak_removal(spec_in, nth = 5, iter_max=1, scale_factor =1.0):
+    """
+    Implementing Peak Removal procedure for Vancouver Raman Algorithm
+    Arg:
+        spec_in:   Input array of spectra
+                   spec_in([:,0]) = wavenumber
+                   spec_in([:,1]) = Raman intensity
+        nth:       Order of polynomial to be used in peak removal, default = 5
+        iter_max:  number of peak removal procedures (0-7), default = 1, Max = 7
+        scale_factor: scaling factor for peak removal (0-2), default = 1
+    Returns:
+        spec_out:  Output array of peak-removed spectra
+                   spec_out([:,0]) = wavenumber without peak region
+                   spec_out([:,1]) = Raman intensity without peak region
+    """
+    import numpy as np
+
+    #Initialization
+    wvnum = spec_in[:,0]
+    spec = spec_in[:,1]
+    iter = 0             # iteration counter
+    if iter_max >= 7:    # check max iterations, default = 1, max = 7
+       iter_max = 7
+
+    # Peak removal
+    while iter < iter_max:
+        # Polynomial fitting, p - coeff
+        p = np.polyfit(wvnum, spec, nth)    #nth order polynomial fitting
+        y1 = np.polyval(p, wvnum)           #fitted spec
+        res = spec - y1                     #residual 
+        error = np.std(res, ddof=1)         #estimate error (std)
+        iter += 1                           #increase iteration count
+
+        # Remove peaks
+        diff_spec = spec - y1 - error * scale_factor
+        spec2 = spec[diff_spec < 0]            # intensity without peak region
+        wvnum2 = wvnum[diff_spec < 0]          # wavenumber without peak region
+
+        # Replace spec and wvnum for subsequent iterations
+        spec = spec2
+        wvnum = wvnum2
+
+    # Combine final wavenumber and intensity columns into one output array
+    spec_out = np.column_stack((wvnum, spec))
+
+    # Plotting removed
+
+    return spec_out
+
+# ------------- MODIFIED POLYFIT----------------
+def modified_polyfit(spec_in, nth = 5, scale_factor = 0.0, cutoff= 0.95):
+    """
+    Implements polynomial fitting after peak-removal
+    Arg:
+        spec_in: Input array of peak-removed spectra
+                spec_in([:,0]) = wavenumber
+                spec_in([:,1]) = Raman intensity
+        nth:    Order of polynomial to be used, default = 5
+        scale_factor: scaling factor for baseline correction (0-2), default = 0
+        cutoff: cutoff value for termination of polynomial fitting (0.95-0.99), default = 0.95
+    Returns:
+        spec_out: Output array with background fitted to the last iteration
+                 spec_out([:,0]) = wavenumber
+                 spec_out([:,1]) = Fitted background
+    """
+    import numpy as np
+
+    # check spectra size
+    nx, ny = spec_in.shape  # nx = spectrum length (size), ny = 2
+
+    # Initialization
+    wvnum = spec_in[:,0]  # wavenumber after peak removal
+    spec = spec_in[:, 1]  # Intensity after peak removal
+    error_max = 1e10      # error of previous iteration
+    error = 1e8           # error of current iteration.
+                          # initial value should be less than errorMax, but grater than future errors
+
+    # Polynomial fitting procedure
+    while error < cutoff * error_max:
+        error_max = error
+
+        # Polynomial fitting, p - coeff
+        p = np.polyfit(wvnum, spec, nth)    # nth order polynomial fitting
+        y1 = np.polyval(p, wvnum)           # fitted spec
+        res = spec - y1                     # residual
+        error = np.std(res, ddof=1)         # estimated error (std)
+
+        # replace spec values with either old spec values OR y1 + error * scale_factor
+        # whichever is smaller
+        diff_spec = spec - y1 - error * scale_factor
+
+        # create empty list for spec
+        s = [] 
+        for i in range(nx):
+            if diff_spec[i] > 0:
+                s.append(y1[i]+ error * scale_factor)
+            else:
+                s.append(spec[i])
+        #convert list back into array
+        spec = np.array(s)
+
+        #output fitted background from latest iteration 
+        spec_out = np.column_stack((wvnum, y1))
+
+    # Plotting removed
+
+    return spec_out
+
+
+#-----------------IMPROVED MODIFIED POLYFIT------------------------------------
+# This calls all previous functions and plots final spectrum
+def imodified_polyfit(spec_raw, nth = 5, iter_max = 1, scale_factor1 = 1.0, scale_factor2 = 0.0, cutoff = 0.95, return_baseline=False):
+    """
+    Implements fluorescence background removal using the Vancouver Raman Algorithm.
+    Arg:
+        spec_raw: raw input spectrum within ROI and post smoothing
+                 spec_raw([:,0]) = wavenumber
+                 spec_raw([:,1]) = Raw Raman intensity
+        nth:            Order of polynomial fitting, default = 5
+        iter_max:       Number of peak removal procedure (0-7), default = 1
+        scale_factor1:  Scaling factor for peak removal (0-2), default = 1
+        scale_factor2:  Scaling factor for polyfit (0-2), default = 0
+        cutoff:         Termination criteria for polynomial fitting(0.95-0.99), default = 0.95
+        return_baseline: If True, returns the estimated fluorescence background
+    Returns:
+        ram_spec:       Raman spectrum without fluorescence background
+        fluo_spec:      Fluorescence background
+    """
+    import numpy as np
+
+    # Peak Removal
+    # 1st column of output array is wavenumber
+    spec_peak_removed = peak_removal(spec_raw, nth, iter_max, scale_factor1)
+
+    # Polynomial Fitting after peak removal
+    # 1st column of output array is wavenumber
+    spec_peak_removed_fitted = modified_polyfit(spec_peak_removed, nth, scale_factor2, cutoff)
+
+    # Polynomial Fitting coefficient of last iteration
+    p = np.polyfit(spec_peak_removed_fitted[:,0], spec_peak_removed_fitted[:,1], nth)
+
+    # Calculating fluorescence background based on original Raman Shift
+    fluo_background = np.polyval(p, spec_raw[:,0])
+
+    # Calculating Raman by subtracting fluorescence background
+    ram_intensity = spec_raw[:, 1]- fluo_background
+
+    #Combine Wavenumber with Raman spectrum and fluorescence background
+    ram_spec = np.column_stack((spec_raw[:, 0], ram_intensity))
+    fluo_spec = np.column_stack((spec_raw[:,0], fluo_background))
+
+    # Plotting removed
+
+    if return_baseline:
+        return fluo_spec
+    else:
+        return ram_spec

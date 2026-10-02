@@ -5,12 +5,17 @@ import matplotlib.pyplot as plt
 import altair as alt
 # from streamlit_extras.chart_container import chart_container
 from streamlit_extras.row import row
+import threading
 from datetime import datetime
 import pandas as pd
 import function
 import log_utils as log
+import auth_utils
 
 function.wide_space_default()
+
+if not auth_utils.LOCAL_DEPLOY:
+    auth_utils.force_login()
 
 DEFAULT_X_AXIS_TITLE = "Raman shift/cm⁻¹"
 DEFAULT_Y_AXIS_TITLE = "Intensity/a.u."
@@ -33,6 +38,7 @@ if 'df' in st.session_state:
                                 "Confidence Interval Plot",
                                 "Spectral Derivation",
                                 "Fast Fourier Transform (FFT) analysis",
+                                "Spectrum Calculation",
                                 "Correlation Heatmap",
                                 "Peak Identification and Stats",
                                 "Hierarchically-clustered Heatmap",
@@ -40,7 +46,10 @@ if 'df' in st.session_state:
                                 "T-SNE Dimensionality Reduction",
                                 "Random Forest(RF) Classification",
                                 "K-Nearest Neighbors(KNN) Classification",
-                                "Support Vector Machine(SVM) Classification"),
+                                "Support Vector Machine(SVM) Classification",
+                                "Full Spectrum Fitting"),
+                        index=None,
+                        placeholder="Please select...",
                         key="stats_plot_select")
 
     if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
@@ -118,6 +127,97 @@ if 'df' in st.session_state:
             value=False,
             key="fft_subtract_average"
         )
+    elif st.session_state.stats_plot_select == "Spectrum Calculation":
+        spectrum_calc_target_options = ["Average"] + [
+            column for column in st.session_state.temp.columns
+            if column not in ("Ramanshift", "Average", "Standard Deviation")
+        ]
+        st.sidebar.selectbox(
+            label="Select target spectrum",
+            options=spectrum_calc_target_options,
+            index=0,
+            key="spectrum_calc_target",
+            help="Spectrum the calculation is applied to. Defaults to the Average spectrum."
+        )
+        st.sidebar.radio(
+            label="Calculation type",
+            options=("Y-axis with constant", "Y-axis with another spectrum", "X-axis shift"),
+            index=0,
+            key="spectrum_calc_type",
+            help=(
+                "Y-axis calculations change intensity values only.\n\n"
+                "X-axis shift moves the spectrum left or right along the wavenumber axis "
+                "without changing intensity values."
+            )
+        )
+
+        if st.session_state.spectrum_calc_type == "Y-axis with constant":
+            st.sidebar.selectbox(
+                label="Y-axis operator",
+                options=("Add", "Subtract", "Multiply", "Divide"),
+                index=0,
+                key="spectrum_calc_y_operator"
+            )
+            if st.session_state.spectrum_calc_y_operator in ("Multiply", "Divide"):
+                spectrum_calc_constant = st.sidebar.number_input(
+                    label="Constant value",
+                    min_value=0.0,
+                    max_value=1_000_000.0,
+                    value=1.0,
+                    step=0.1,
+                    format="%.4f",
+                    key="spectrum_calc_constant_scale",
+                    help="Constant used to scale intensity values (0 to 1,000,000). "
+                         "Negative values are not allowed because intensities stay non-negative. "
+                         "Division by zero is not allowed."
+                )
+                if st.session_state.spectrum_calc_y_operator == "Divide" and spectrum_calc_constant == 0:
+                    st.sidebar.error("Division by zero is not allowed.")
+            else:
+                spectrum_calc_constant = st.sidebar.number_input(
+                    label="Constant value",
+                    min_value=0.0,
+                    max_value=1_000_000.0,
+                    value=None,
+                    step=1.0,
+                    format="%.4f",
+                    key="spectrum_calc_constant_offset",
+                    help="Constant added to or subtracted from intensity values (0 to 1,000,000). "
+                         "Negative values are not allowed: for a downward shift use the Subtract operator."
+                )
+        elif st.session_state.spectrum_calc_type == "Y-axis with another spectrum":
+            st.sidebar.selectbox(
+                label="Y-axis operator",
+                options=("Add", "Subtract", "Multiply", "Divide"),
+                index=0,
+                key="spectrum_calc_y_operator"
+            )
+            spectrum_calc_reference_options = [
+                option for option in spectrum_calc_target_options
+                if option != st.session_state.spectrum_calc_target
+            ]
+            st.sidebar.selectbox(
+                label="Reference spectrum",
+                options=spectrum_calc_reference_options,
+                index=0,
+                key="spectrum_calc_reference",
+                help="Second spectrum used as the operand. It must share the target's wavenumber axis."
+            )
+        else:
+            st.sidebar.radio(
+                label="X-axis operator",
+                options=("Add", "Subtract"),
+                index=0,
+                key="spectrum_calc_x_operator"
+            )
+            st.sidebar.number_input(
+                label="Shift value",
+                value=0.0,
+                step=1.0,
+                format="%.2f",
+                key="spectrum_calc_shift",
+                help="Wavenumber shift amount. Intensity values are not changed."
+            )
     elif st.session_state.stats_plot_select == "Correlation Heatmap":
 
         st.sidebar.selectbox(
@@ -199,11 +299,13 @@ if 'df' in st.session_state:
     elif st.session_state.stats_plot_select == "Hierarchically-clustered Heatmap":
         st.sidebar.toggle(label="Show clustered heatmap", value=True, key="HCA_heatmap")
     elif st.session_state.stats_plot_select == "Principal Components Analysis (PCA)":
-        num_rows = st.session_state.df.shape[1] - 1
+        num_rows = st.session_state.temp.drop(columns=['Average'], errors='ignore').shape[1] - 1
         pc_list = [f"PC{i+1}" for i in range(num_rows)] 
         st.sidebar.selectbox(label="Select horizontal PC", options=pc_list, index=0,key="PCA_horizontal")
         st.sidebar.selectbox(label="Select vertical PC", options=pc_list, index=1,key="PCA_vertical")
-        st.sidebar.toggle(label="Color by labels", value=True, key="PCA_label")
+        for pc in pc_list[:3]:
+            st.sidebar.checkbox(f"{pc} loading curve", value=True, key=f"PCA_loading_{pc}",
+                                help=f"Show the {pc} loading curve in the plot.")
     elif st.session_state.stats_plot_select == "T-SNE Dimensionality Reduction":
         max_perplexity = st.session_state.df.shape[1] - 1
         st.sidebar.select_slider(label="t-SNE Perplexity", options=list(range(1,max_perplexity)),value=2, key="tSNE_perplexity")
@@ -334,6 +436,91 @@ if 'df' in st.session_state:
             )
             svm_run = st.form_submit_button("Run SVM")
 
+    elif st.session_state.stats_plot_select == "Full Spectrum Fitting":
+        st.sidebar.info("Note: Your data should be baseline-removed when performing peak fitting.")
+        st.sidebar.selectbox(
+            label="Algorithm Version",
+            options=(
+                "Discrete",
+                "Prominence-Based"
+            ),
+            help="Select the fitting algorithm version you would like to use. The Discrete implementation allows you to specify an exact number of components, while the Prominence-Based implementation uses a prominence threshold to determine which peaks to include in the fit.",
+            key="fsf_algorithm_version"
+        )
+        with st.sidebar.form("fsf_form"):
+
+            all_spectra = [
+                column for column in st.session_state.temp.columns
+                if column not in ["Ramanshift", "Average", "Standard Deviation", "All"]
+            ]
+
+            spectrum_select_options = ["Average"] + ["All"] + all_spectra
+            st.selectbox(
+                label="Select Spectrum for Fit",
+                options=spectrum_select_options,
+                key="fsf_spectrum_select"
+            )
+
+            if st.session_state.fsf_algorithm_version == "Discrete":
+                st.number_input(
+                    label="Number of Peaks (Components) to Fit",
+                    value=20,
+                    min_value=1,
+                    max_value=40,
+                    step=1,
+                    help="The number of peaks (components) to fit to your data.",
+                    key="fsf_num_peaks"
+                )
+            if st.session_state.fsf_algorithm_version == "Prominence-Based":
+                st.number_input(
+                    label="Peak Ranking Threshold",
+                    value=15,
+                    min_value=1,
+                    max_value=30,
+                    step=1,
+                    help="Gives an approximate number of components `n` for the fit. Any components more prominent than the `nth` most prominent peak will be included.",
+                    key="fsf_prominence_rank_threshold"
+                )
+            
+            st.selectbox(
+                label="Peak Shape",
+                options=(
+                    "Gaussian",
+                    "Lorentzian",
+                    "Pseudovoigt",
+                ),
+                help="The mathematical definition of the component curves.",
+                key="fsf_peak_shape"
+            )
+
+            if st.session_state.fsf_algorithm_version == "Discrete":
+                st.number_input(
+                    label="Cofit Range Multiplier",
+                    value=0.7,
+                    min_value=0.4,
+                    max_value=1.0,
+                    step=0.01,
+                    format="%0.2f",
+                    help="The distance, relative to the width of any given peak, at which other peaks must be cofit together with this peak. Higher values may improve fit quality with a sacrifice in performance.",
+                    key="fsf_cofit_range_multiplier"
+                )
+
+                st.selectbox(
+                    label="Runtime Control Option",
+                    options=(
+                        "Quick (m=6)",
+                        "Standard (m=9)",
+                        "Slow (m=12)",
+                        "Thorough (m=15)"
+                    ),
+                    index=1,
+                    help="Controls the worst case runtime by limiting the number of peaks `m` which may be cofit together. Quicker runtimes may result in reduced fit quality.",
+                    key="fsf_runtime_control"
+                )
+
+            fsf_run = st.form_submit_button("Run Fit")
+
+
 # Stats section layout
 """"""""""""
 # Main Page
@@ -349,6 +536,10 @@ else:
     if 'temp' not in st.session_state:
         st.error('Please process your data, and select Spectra you would like to use.')
     else:
+        if st.session_state.stats_plot_select is None:
+            st.warning("Please select an analytics plot from the sidebar.")
+            st.stop()
+
         if st.session_state.get("custom_axis_titles_act", False):
             analytics_x_axis_title = st.session_state.get("custom_x_axis_title", DEFAULT_X_AXIS_TITLE)
             analytics_y_axis_title = st.session_state.get("custom_y_axis_title", DEFAULT_Y_AXIS_TITLE)
@@ -364,7 +555,7 @@ else:
         stats_data_melted = st.session_state.df_stats.melt(id_vars=['Ramanshift'], var_name='Sample ID', value_name='Intensity')
         
         # st.write(stats_data_melted)
-
+        
         if st.session_state.stats_plot_select == "Average Plot with Original Spectra":
             average_plot_key_suffix = f"{st.session_state.stats_avg_act}_{st.session_state.stats_avg_std_act}"
             average_plot_height = 600
@@ -389,7 +580,7 @@ else:
                             title='Spectra Data Plot'
                         )
                 # avg_stats_base = function.style_altair_chart(avg_stats_base)
-                # st.altair_chart(avg_stats_base, use_container_width=False)
+                # st.altair_chart(avg_stats_base, use_container_width=False)  
                 show_plot = avg_stats_base
                 log.log_plot_generated_count()
                 
@@ -405,15 +596,15 @@ else:
                             height=average_plot_height,
                             title='Spectra Average Data Plot'
                         )
-
-                # st.altair_chart(avg_stats_base2, use_container_width=False)
+                
+                # st.altair_chart(avg_stats_base2, use_container_width=False)   
                 show_plot = avg_stats_base2
                 log.log_plot_generated_count()
-
+            
             show_plot = function.style_altair_chart(show_plot)
             st.altair_chart(
                 show_plot,
-                use_container_width=True,
+                width="stretch",
                 key=f"analytics_average_plot_main_{average_plot_key_suffix}"
             )
 
@@ -441,15 +632,15 @@ else:
                 ).properties(
                             height=average_plot_height,
                 )
-
+                
                 std_plot = function.style_altair_chart(std_plot)
                 st.altair_chart(
                     std_plot,
-                    use_container_width=True,
+                    width="stretch",
                     key=f"analytics_average_plot_std_{average_plot_key_suffix}"
                 )
                 log.log_plot_generated_count()
-
+            
             stats_download_df = st.session_state.df_stats
             if 'Average' in stats_download_df:
                 stats_download_df = stats_download_df.drop('Average', axis=1)
@@ -479,6 +670,7 @@ else:
                 file_name=download_file_name,
                 mime="text/csv",
             )
+            log.log_function_call("Analytics_Average_Plot", f_params={})
 
         elif st.session_state.stats_plot_select == "Confidence Interval Plot":
             
@@ -528,8 +720,9 @@ else:
             # Combine the plots
             confidence_plot = confidence_interval + mean_line
             confidence_plot = function.style_altair_chart(confidence_plot)
-            st.altair_chart(confidence_plot, use_container_width=False)
+            st.altair_chart(confidence_plot, width="content")
             log.log_plot_generated_count()
+            log.log_function_call("Analytics_Confidence_Interval", f_params={})
 
         elif st.session_state.stats_plot_select == "Spectral Derivation":
             with st.sidebar:
@@ -603,7 +796,7 @@ else:
 
                 show_plot = first_deriv & second_deriv  # vertical concat
                 show_plot = function.style_altair_chart(show_plot)
-                st.altair_chart(show_plot, use_container_width=False)
+                st.altair_chart(show_plot, width="content")
 
                 # --- Build tidy DataFrames for export ---
                 # y1_df = (
@@ -696,21 +889,21 @@ else:
 
                 row1_col1, row1_col2 = st.columns(2)
                 with row1_col1:
-                    st.altair_chart(fft_plots["amplitude"], use_container_width=True)
+                    st.altair_chart(fft_plots["amplitude"], width="stretch")
                 with row1_col2:
-                    st.altair_chart(fft_plots["phase"], use_container_width=True)
+                    st.altair_chart(fft_plots["phase"], width="stretch")
 
                 row2_col1, row2_col2 = st.columns(2)
                 with row2_col1:
-                    st.altair_chart(fft_plots["power"], use_container_width=True)
+                    st.altair_chart(fft_plots["power"], width="stretch")
                 with row2_col2:
-                    st.altair_chart(fft_plots["real_imaginary"], use_container_width=True)
+                    st.altair_chart(fft_plots["real_imaginary"], width="stretch")
 
                 row3_col1, row3_col2 = st.columns(2)
                 with row3_col1:
-                    st.altair_chart(fft_plots["real"], use_container_width=True)
+                    st.altair_chart(fft_plots["real"], width="stretch")
                 with row3_col2:
-                    st.altair_chart(fft_plots["imaginary"], use_container_width=True)
+                    st.altair_chart(fft_plots["imaginary"], width="stretch")
 
                 for _ in range(6):
                     log.log_plot_generated_count()
@@ -738,6 +931,185 @@ else:
                 )
             except Exception as e:
                 st.error(f"Error during FFT processing: {e}")
+
+        elif st.session_state.stats_plot_select == "Spectrum Calculation":
+            selected_calc_target = st.session_state.get("spectrum_calc_target", "Average")
+            selected_calc_type = st.session_state.get("spectrum_calc_type", "Y-axis with constant")
+            try:
+                calc_ramanshift = pd.to_numeric(st.session_state.df_stats["Ramanshift"], errors="coerce").to_numpy(dtype=float)
+                calc_target_intensity = pd.to_numeric(st.session_state.df_stats[selected_calc_target], errors="coerce").to_numpy(dtype=float)
+
+                calc_reference_intensity = None
+                calc_logged_params = {"target_spectrum": selected_calc_target, "calculation_type": selected_calc_type}
+                calculation_ready = not (
+                    selected_calc_type == "Y-axis with constant"
+                    and spectrum_calc_constant is None
+                )
+
+                # Preview only: nothing below mutates st.session_state.df or st.session_state.temp.
+                if selected_calc_type == "Y-axis with constant":
+                    calc_operator = st.session_state.spectrum_calc_y_operator
+                    calc_result_x = calc_ramanshift
+                    if calculation_ready:
+                        calc_result_values = function.calculate_spectrum_with_constant(
+                            calc_target_intensity, spectrum_calc_constant, calc_operator)
+                        calc_operation_text = f"{selected_calc_target} {calc_operator} {spectrum_calc_constant:g}"
+                        calc_logged_params.update({"operator": calc_operator, "constant": spectrum_calc_constant})
+                    else:
+                        calc_result_values = calc_target_intensity
+                        calc_operation_text = f"Original: {selected_calc_target}"
+                    calc_result_df = function.build_spectrum_calc_result_df(
+                        calc_ramanshift, calc_target_intensity, calc_result_values)
+                elif selected_calc_type == "Y-axis with another spectrum":
+                    calc_operator = st.session_state.spectrum_calc_y_operator
+                    selected_calc_reference = st.session_state.spectrum_calc_reference
+                    calc_reference_intensity = pd.to_numeric(
+                        st.session_state.df_stats[selected_calc_reference], errors="coerce").to_numpy(dtype=float)
+                    calc_result_values = function.calculate_spectrum_with_reference(
+                        calc_target_intensity, calc_reference_intensity, calc_operator,
+                        target_axis=calc_ramanshift, reference_axis=calc_ramanshift)
+                    calc_result_df = function.build_spectrum_calc_result_df(
+                        calc_ramanshift, calc_target_intensity, calc_result_values,
+                        reference_intensity=calc_reference_intensity)
+                    calc_result_x = calc_ramanshift
+                    calc_operation_text = f"{selected_calc_target} {calc_operator} {selected_calc_reference}"
+                    calc_logged_params.update({"operator": calc_operator, "reference_spectrum": selected_calc_reference})
+                else:
+                    calc_operator = st.session_state.spectrum_calc_x_operator
+                    calc_shift = st.session_state.spectrum_calc_shift
+                    calc_result_x = function.shift_spectrum_axis(calc_ramanshift, calc_shift, calc_operator)
+                    calc_result_values = calc_target_intensity
+                    calc_result_df = function.build_spectrum_calc_result_df(
+                        calc_result_x, calc_target_intensity, calc_result_values,
+                        original_axis=calc_ramanshift)
+                    calc_operation_text = f"{selected_calc_target} x-axis {calc_operator} {calc_shift:g}"
+                    calc_logged_params.update({"operator": calc_operator, "shift": calc_shift})
+
+                calc_plot_frames = [pd.DataFrame({
+                    "Ramanshift": calc_ramanshift,
+                    "Intensity": calc_target_intensity,
+                    "Trace": f"Original: {selected_calc_target}"
+                })]
+                if calc_reference_intensity is not None:
+                    calc_plot_frames.append(pd.DataFrame({
+                        "Ramanshift": calc_ramanshift,
+                        "Intensity": calc_reference_intensity,
+                        "Trace": f"Reference: {st.session_state.spectrum_calc_reference}"
+                    }))
+                if calculation_ready:
+                    calc_plot_frames.append(pd.DataFrame({
+                        "Ramanshift": calc_result_x,
+                        "Intensity": calc_result_values,
+                        "Trace": "Calculated result"
+                    }))
+                calc_plot_df = pd.concat(calc_plot_frames, ignore_index=True)
+
+                calc_plot = alt.Chart(calc_plot_df).mark_line().encode(
+                    x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
+                    y=alt.Y(
+                        'Intensity',
+                        title=analytics_y_axis_title,
+                        type='quantitative',
+                        scale=alt.Scale(zero=False)
+                    ),
+                    color=alt.Color(
+                        'Trace:N',
+                        legend=alt.Legend(title='Spectrum')
+                    ),
+                    tooltip=alt.value(None)
+                ).properties(
+                    height=600,
+                    title=f'Spectrum Calculation: {calc_operation_text}'
+                )
+                calc_plot = function.style_altair_chart(calc_plot)
+                st.altair_chart(
+                    calc_plot,
+                    width="stretch",
+                    key=f"spectrum_calculation_preview_{calc_operation_text}"
+                )
+                if calculation_ready:
+                    log.log_plot_generated_count()
+                    log.log_function_call("Analytics_Spectrum_Calculation", f_params=calc_logged_params)
+                else:
+                    st.info("Enter a constant value to add the calculated result to the plot.")
+
+                @st.cache_data
+                def download_calc_df(df):
+                    return df.to_csv(index=False, float_format="%.4f").encode("utf-8")
+
+                st.write("### Apply to all data")
+                st.caption(
+                    "Applies the selected operation to every spectrum column from the current session data. "
+                    "The preview above never modifies the session data; applying creates a new calculated dataframe."
+                )
+                if st.button(
+                    "Apply calculation to all spectra",
+                    key="spectrum_calc_apply_all",
+                    disabled=not calculation_ready
+                ):
+                    if selected_calc_type == "Y-axis with constant":
+                        calc_applied_df = function.apply_spectrum_calculation_to_dataframe(
+                            st.session_state.temp, selected_calc_type, calc_operator,
+                            constant=spectrum_calc_constant)
+                        calc_applied_text = f"all spectra {calc_operator} {spectrum_calc_constant:g}"
+                    elif selected_calc_type == "Y-axis with another spectrum":
+                        calc_applied_df = function.apply_spectrum_calculation_to_dataframe(
+                            st.session_state.temp, selected_calc_type, calc_operator,
+                            reference_intensity=calc_reference_intensity)
+                        calc_applied_text = f"all spectra {calc_operator} {st.session_state.spectrum_calc_reference}"
+                    else:
+                        calc_applied_df = function.apply_spectrum_calculation_to_dataframe(
+                            st.session_state.temp, selected_calc_type, calc_operator,
+                            shift=st.session_state.spectrum_calc_shift)
+                        calc_applied_text = f"all spectra x-axis {calc_operator} {st.session_state.spectrum_calc_shift:g}"
+                    # Apply-to-all results live under dedicated session keys so the upstream
+                    # df/temp dataframes from Data Upload and Processing are never overwritten.
+                    st.session_state.spectrum_calc_applied_df = calc_applied_df
+                    st.session_state.spectrum_calc_applied_text = calc_applied_text
+                    log.log_function_call("Analytics_Spectrum_Calculation",
+                                          f_params={**calc_logged_params, "apply_to_all": True})
+
+                calc_applied_df = st.session_state.get("spectrum_calc_applied_df")
+                if calc_applied_df is not None:
+                    st.caption(f"Applied operation: {st.session_state.spectrum_calc_applied_text}")
+
+                current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+                preview_file_name = f"data_SpectrumCalc_{selected_calc_target}_{current_time}.csv"
+                apply_all_file_name = f"data_SpectrumCalc_all_{current_time}.csv"
+                preview_download_col, apply_all_download_col = st.columns(2)
+                with preview_download_col:
+                    st.download_button(
+                        label="Download preview result as CSV",
+                        data=download_calc_df(calc_result_df),
+                        file_name=preview_file_name,
+                        mime="text/csv",
+                        disabled=not calculation_ready,
+                        width="stretch",
+                    )
+                with apply_all_download_col:
+                    st.download_button(
+                        label="Download apply-to-all calculated data as CSV",
+                        data=download_calc_df(calc_applied_df) if calc_applied_df is not None else b"",
+                        file_name=apply_all_file_name,
+                        mime="text/csv",
+                        disabled=calc_applied_df is None,
+                        width="stretch",
+                    )
+
+                show_calc_data = st.toggle(
+                    "Preview calculated data",
+                    value=False,
+                    key="spectrum_calc_show_data",
+                    disabled=not calculation_ready
+                )
+                if show_calc_data:
+                    st.write("**Preview calculation result**")
+                    st.dataframe(calc_result_df, width="stretch")
+                    if calc_applied_df is not None:
+                        st.write("**Apply-to-all calculated data**")
+                        st.dataframe(calc_applied_df, width="stretch")
+            except Exception as e:
+                st.error(f"Error during spectrum calculation: {e}")
 
         elif st.session_state.stats_plot_select == "Correlation Heatmap":
             # Select only the columns we need for correlation calculation
@@ -887,7 +1259,7 @@ else:
 
             # Display the heatmap
             combined = function.style_altair_chart(combined)
-            st.altair_chart(combined, use_container_width=False)
+            st.altair_chart(combined, width="content")
             log.log_plot_generated_count()
             log.log_function_call("Analytics_Correlation_Heatmap",
                                     f_params={
@@ -1082,7 +1454,7 @@ else:
             interactive_plot = function.style_altair_chart(interactive_plot)
 
             # Display the plot in Streamlit (if using Streamlit)
-            st.altair_chart(interactive_plot, use_container_width=False)
+            st.altair_chart(interactive_plot, width="content")
             
             
             st.write("**Peak property**")
@@ -1120,6 +1492,7 @@ else:
             
             temp = st.session_state.temp.drop(columns=['Average'], errors='ignore')
             label_df = st.session_state.get('label_df')
+            loading_pcs = [pc for pc in pc_list[:3] if st.session_state[f"PCA_loading_{pc}"]]
 
             if label_df is None:
                 st.warning(
@@ -1147,7 +1520,8 @@ else:
                     is_label=True,                 # always True now – we supply label_df
                     label_df=label_df,
                     horizontal_pc=st.session_state.PCA_horizontal,
-                    vertical_pc=st.session_state.PCA_vertical
+                    vertical_pc=st.session_state.PCA_vertical,
+                    loading_pcs=loading_pcs
                 )
             )
             # Re‑order columns for display
@@ -1162,18 +1536,19 @@ else:
             # ------------------------------------------------------------------
             # 3.  Display results
             # ------------------------------------------------------------------
-            st.altair_chart(function.style_altair_chart(pc1_vs_pc2_plot), use_container_width=False)
+            st.altair_chart(function.style_altair_chart(pc1_vs_pc2_plot), width="content")
             log.log_plot_generated_count()
 
-            st.altair_chart(function.style_altair_chart(cumulative_variance_plot), use_container_width=False)
+            st.altair_chart(function.style_altair_chart(cumulative_variance_plot), width="content")
             log.log_plot_generated_count()
 
-            st.altair_chart(function.style_altair_chart(loading_plot), use_container_width=False)
-            log.log_plot_generated_count()
+            if loading_plot is not None:
+                st.altair_chart(function.style_altair_chart(loading_plot), width="content")
+                log.log_plot_generated_count()
 
             log.log_function_call("Analytics_PCA", f_params={})
 
-            st.write("### PCA scores table")
+            st.write("### PCA Scores by Spectrum")
             st.write(pca_result_df)
 
         elif st.session_state.stats_plot_select == "T-SNE Dimensionality Reduction":
@@ -1190,7 +1565,7 @@ else:
                 n_iter=st.session_state.tSNE_n_iter,
                 label_df=label_df
             )
-            st.altair_chart(function.style_altair_chart(tsne_plot), use_container_width=False)
+            st.altair_chart(function.style_altair_chart(tsne_plot), width="content")
 
             log.log_plot_generated_count()
             log.log_function_call("Analytics_TSNE",
@@ -1230,11 +1605,11 @@ else:
                         class_counts_df = eda["class_counts"].copy()
                         for percent_column in [col for col in class_counts_df.columns if "Percent" in col]:
                             class_counts_df[percent_column] = class_counts_df[percent_column].map(lambda value: f"{value:.1%}")
-                        st.dataframe(class_counts_df, use_container_width=True)
+                        st.dataframe(class_counts_df, width="stretch")
 
                         st.write("### Class Balance")
                         st.caption("Compares class-frequency distributions across the exact samples used for model fitting and evaluation.")
-                        st.altair_chart(eda["class_count_chart"], use_container_width=False)
+                        st.altair_chart(eda["class_count_chart"], width="content")
                         log.log_plot_generated_count()
 
                         spectra_envelopes = eda.get("spectra_envelopes", [])
@@ -1243,16 +1618,16 @@ else:
                             st.caption("Class mean spectra are shown as lines; shaded envelopes span the class-wise minimum-to-maximum intensity range.")
                             train_eda_col, test_eda_col = st.columns(2)
                             with train_eda_col:
-                                st.altair_chart(spectra_envelopes[0]["chart"], use_container_width=False)
+                                st.altair_chart(spectra_envelopes[0]["chart"], width="content")
                                 log.log_plot_generated_count()
                             with test_eda_col:
-                                st.altair_chart(spectra_envelopes[1]["chart"], use_container_width=False)
+                                st.altair_chart(spectra_envelopes[1]["chart"], width="content")
                                 log.log_plot_generated_count()
                         else:
                             st.write("### Full Dataset Class Spectra Visualization")
                             st.caption("Class mean spectra are shown as lines; shaded envelopes span the class-wise minimum-to-maximum intensity range.")
                             for envelope in spectra_envelopes:
-                                st.altair_chart(envelope["chart"], use_container_width=False)
+                                st.altair_chart(envelope["chart"], width="content")
                                 log.log_plot_generated_count()
 
                     if rf_result.get("mode") == "train_test_split" and len(rf_result["sections"]) == 2:
@@ -1262,44 +1637,44 @@ else:
                         with train_col:
                             section = rf_result["sections"][0]
                             st.write("#### Training Performance")
-                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.dataframe(section["metrics"], width="content")
                         with test_col:
                             section = rf_result["sections"][1]
                             st.write("#### Test Performance")
-                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.dataframe(section["metrics"], width="content")
 
                         st.write("### Confusion Matrix")
                         st.caption("Rows encode observed classes and columns encode predicted classes; diagonal counts are correct predictions.")
                         train_col, test_col = st.columns(2)
                         with train_col:
-                            st.altair_chart(rf_result["sections"][0]["confusion_matrix"], use_container_width=False)
+                            st.altair_chart(rf_result["sections"][0]["confusion_matrix"], width="content")
                             log.log_plot_generated_count()
                         with test_col:
-                            st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                            st.altair_chart(section["confusion_matrix"], width="content")
                             log.log_plot_generated_count()
 
                         st.write("### ROC Curve")
                         st.caption("One-vs-rest ROC curves quantify class separability; larger AUC values indicate stronger discrimination.")
                         train_col, test_col = st.columns(2)
                         with train_col:
-                            st.altair_chart(rf_result["sections"][0]["roc_curve"], use_container_width=False)
+                            st.altair_chart(rf_result["sections"][0]["roc_curve"], width="content")
                             log.log_plot_generated_count()
                         with test_col:
-                            st.altair_chart(section["roc_curve"], use_container_width=False)
+                            st.altair_chart(section["roc_curve"], width="content")
                             log.log_plot_generated_count()
                     else:
                         st.write("### Performance Table")
                         st.caption("Macro-averaged metrics summarize model discrimination on the full selected dataset.")
                         for section in rf_result["sections"]:
                             st.write("#### Full Dataset Performance")
-                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.dataframe(section["metrics"], width="content")
                             st.write("### Full Dataset Confusion Matrix")
                             st.caption("Rows encode observed classes and columns encode predicted classes; diagonal counts are correct predictions.")
-                            st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                            st.altair_chart(section["confusion_matrix"], width="content")
                             log.log_plot_generated_count()
                             st.write("### Full Dataset ROC Curve")
                             st.caption("One-vs-rest ROC curves quantify class separability; larger AUC values indicate stronger discrimination.")
-                            st.altair_chart(section["roc_curve"], use_container_width=False)
+                            st.altair_chart(section["roc_curve"], width="content")
                             log.log_plot_generated_count()
 
                     # Model-specific extra plots are intentionally hidden for now.
@@ -1349,11 +1724,11 @@ else:
                         class_counts_df = eda["class_counts"].copy()
                         for percent_column in [col for col in class_counts_df.columns if "Percent" in col]:
                             class_counts_df[percent_column] = class_counts_df[percent_column].map(lambda value: f"{value:.1%}")
-                        st.dataframe(class_counts_df, use_container_width=True)
+                        st.dataframe(class_counts_df, width="stretch")
 
                         st.write("### Class Balance")
                         st.caption("Compares class-frequency distributions across the exact samples used for model fitting and evaluation.")
-                        st.altair_chart(eda["class_count_chart"], use_container_width=False)
+                        st.altair_chart(eda["class_count_chart"], width="content")
                         log.log_plot_generated_count()
 
                         spectra_envelopes = eda.get("spectra_envelopes", [])
@@ -1362,16 +1737,16 @@ else:
                             st.caption("Class mean spectra are shown as lines; shaded envelopes span the class-wise minimum-to-maximum intensity range.")
                             train_eda_col, test_eda_col = st.columns(2)
                             with train_eda_col:
-                                st.altair_chart(spectra_envelopes[0]["chart"], use_container_width=False)
+                                st.altair_chart(spectra_envelopes[0]["chart"], width="content")
                                 log.log_plot_generated_count()
                             with test_eda_col:
-                                st.altair_chart(spectra_envelopes[1]["chart"], use_container_width=False)
+                                st.altair_chart(spectra_envelopes[1]["chart"], width="content")
                                 log.log_plot_generated_count()
                         else:
                             st.write("### Full Dataset Class Spectra Visualization")
                             st.caption("Class mean spectra are shown as lines; shaded envelopes span the class-wise minimum-to-maximum intensity range.")
                             for envelope in spectra_envelopes:
-                                st.altair_chart(envelope["chart"], use_container_width=False)
+                                st.altair_chart(envelope["chart"], width="content")
                                 log.log_plot_generated_count()
 
                     if knn_result.get("mode") == "train_test_split" and len(knn_result["sections"]) == 2:
@@ -1381,44 +1756,44 @@ else:
                         with train_col:
                             section = knn_result["sections"][0]
                             st.write("#### Training Performance")
-                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.dataframe(section["metrics"], width="content")
                         with test_col:
                             section = knn_result["sections"][1]
                             st.write("#### Test Performance")
-                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.dataframe(section["metrics"], width="content")
 
                         st.write("### Confusion Matrix")
                         st.caption("Rows encode observed classes and columns encode predicted classes; diagonal counts are correct predictions.")
                         train_col, test_col = st.columns(2)
                         with train_col:
-                            st.altair_chart(knn_result["sections"][0]["confusion_matrix"], use_container_width=False)
+                            st.altair_chart(knn_result["sections"][0]["confusion_matrix"], width="content")
                             log.log_plot_generated_count()
                         with test_col:
-                            st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                            st.altair_chart(section["confusion_matrix"], width="content")
                             log.log_plot_generated_count()
 
                         st.write("### ROC Curve")
                         st.caption("One-vs-rest ROC curves quantify class separability; larger AUC values indicate stronger discrimination.")
                         train_col, test_col = st.columns(2)
                         with train_col:
-                            st.altair_chart(knn_result["sections"][0]["roc_curve"], use_container_width=False)
+                            st.altair_chart(knn_result["sections"][0]["roc_curve"], width="content")
                             log.log_plot_generated_count()
                         with test_col:
-                            st.altair_chart(section["roc_curve"], use_container_width=False)
+                            st.altair_chart(section["roc_curve"], width="content")
                             log.log_plot_generated_count()
                     else:
                         st.write("### Performance Table")
                         st.caption("Macro-averaged metrics summarize model discrimination on the full selected dataset.")
                         for section in knn_result["sections"]:
                             st.write("#### Full Dataset Performance")
-                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.dataframe(section["metrics"], width="content")
                             st.write("### Full Dataset Confusion Matrix")
                             st.caption("Rows encode observed classes and columns encode predicted classes; diagonal counts are correct predictions.")
-                            st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                            st.altair_chart(section["confusion_matrix"], width="content")
                             log.log_plot_generated_count()
                             st.write("### Full Dataset ROC Curve")
                             st.caption("One-vs-rest ROC curves quantify class separability; larger AUC values indicate stronger discrimination.")
-                            st.altair_chart(section["roc_curve"], use_container_width=False)
+                            st.altair_chart(section["roc_curve"], width="content")
                             log.log_plot_generated_count()
 
                     log.log_function_call(
@@ -1464,11 +1839,11 @@ else:
                         class_counts_df = eda["class_counts"].copy()
                         for percent_column in [col for col in class_counts_df.columns if "Percent" in col]:
                             class_counts_df[percent_column] = class_counts_df[percent_column].map(lambda value: f"{value:.1%}")
-                        st.dataframe(class_counts_df, use_container_width=True)
+                        st.dataframe(class_counts_df, width="stretch")
 
                         st.write("### Class Balance")
                         st.caption("Compares class-frequency distributions across the exact samples used for model fitting and evaluation.")
-                        st.altair_chart(eda["class_count_chart"], use_container_width=False)
+                        st.altair_chart(eda["class_count_chart"], width="content")
                         log.log_plot_generated_count()
 
                         spectra_envelopes = eda.get("spectra_envelopes", [])
@@ -1477,16 +1852,16 @@ else:
                             st.caption("Class mean spectra are shown as lines; shaded envelopes span the class-wise minimum-to-maximum intensity range.")
                             train_eda_col, test_eda_col = st.columns(2)
                             with train_eda_col:
-                                st.altair_chart(spectra_envelopes[0]["chart"], use_container_width=False)
+                                st.altair_chart(spectra_envelopes[0]["chart"], width="content")
                                 log.log_plot_generated_count()
                             with test_eda_col:
-                                st.altair_chart(spectra_envelopes[1]["chart"], use_container_width=False)
+                                st.altair_chart(spectra_envelopes[1]["chart"], width="content")
                                 log.log_plot_generated_count()
                         else:
                             st.write("### Full Dataset Class Spectra Visualization")
                             st.caption("Class mean spectra are shown as lines; shaded envelopes span the class-wise minimum-to-maximum intensity range.")
                             for envelope in spectra_envelopes:
-                                st.altair_chart(envelope["chart"], use_container_width=False)
+                                st.altair_chart(envelope["chart"], width="content")
                                 log.log_plot_generated_count()
 
                     if svm_result.get("mode") == "train_test_split" and len(svm_result["sections"]) == 2:
@@ -1496,44 +1871,44 @@ else:
                         with train_col:
                             section = svm_result["sections"][0]
                             st.write("#### Training Performance")
-                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.dataframe(section["metrics"], width="content")
                         with test_col:
                             section = svm_result["sections"][1]
                             st.write("#### Test Performance")
-                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.dataframe(section["metrics"], width="content")
 
                         st.write("### Confusion Matrix")
                         st.caption("Rows encode observed classes and columns encode predicted classes; diagonal counts are correct predictions.")
                         train_col, test_col = st.columns(2)
                         with train_col:
-                            st.altair_chart(svm_result["sections"][0]["confusion_matrix"], use_container_width=False)
+                            st.altair_chart(svm_result["sections"][0]["confusion_matrix"], width="content")
                             log.log_plot_generated_count()
                         with test_col:
-                            st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                            st.altair_chart(section["confusion_matrix"], width="content")
                             log.log_plot_generated_count()
 
                         st.write("### ROC Curve")
                         st.caption("One-vs-rest ROC curves quantify class separability; larger AUC values indicate stronger discrimination.")
                         train_col, test_col = st.columns(2)
                         with train_col:
-                            st.altair_chart(svm_result["sections"][0]["roc_curve"], use_container_width=False)
+                            st.altair_chart(svm_result["sections"][0]["roc_curve"], width="content")
                             log.log_plot_generated_count()
                         with test_col:
-                            st.altair_chart(section["roc_curve"], use_container_width=False)
+                            st.altair_chart(section["roc_curve"], width="content")
                             log.log_plot_generated_count()
                     else:
                         st.write("### Performance Table")
                         st.caption("Macro-averaged metrics summarize model discrimination on the full selected dataset.")
                         for section in svm_result["sections"]:
                             st.write("#### Full Dataset Performance")
-                            st.dataframe(section["metrics"], use_container_width=False)
+                            st.dataframe(section["metrics"], width="content")
                             st.write("### Full Dataset Confusion Matrix")
                             st.caption("Rows encode observed classes and columns encode predicted classes; diagonal counts are correct predictions.")
-                            st.altair_chart(section["confusion_matrix"], use_container_width=False)
+                            st.altair_chart(section["confusion_matrix"], width="content")
                             log.log_plot_generated_count()
                             st.write("### Full Dataset ROC Curve")
                             st.caption("One-vs-rest ROC curves quantify class separability; larger AUC values indicate stronger discrimination.")
-                            st.altair_chart(section["roc_curve"], use_container_width=False)
+                            st.altair_chart(section["roc_curve"], width="content")
                             log.log_plot_generated_count()
 
                     # Model-specific extra plots are intentionally hidden for now.
@@ -1555,3 +1930,196 @@ else:
                     )
                 except Exception as e:
                     st.error(f"Error running SVM classification: {e}")
+
+        elif st.session_state.stats_plot_select == "Full Spectrum Fitting":
+            import numpy as np
+            import time
+            st.write("**Full Spectrum Fitting**")
+            if not fsf_run and 'fsf_results' not in st.session_state:
+                st.info("Set up fit parameters, then click 'Run Fit.'")
+            else:
+                if st.session_state.fsf_spectrum_select == "All":
+                    spectrum_select = [
+                        column for column in st.session_state.temp.columns
+                        if column not in ["Ramanshift", "Average", "Standard Deviation", "All"]
+                    ]
+                else:
+                    spectrum_select = [st.session_state.fsf_spectrum_select]
+
+                if fsf_run:
+
+                    results = {}
+                    num_spectra = len(spectrum_select)
+                    if num_spectra > 1:
+                        progress_bar = st.progress(0.0, text=f"Fits completed {0}/{num_spectra} ({0}%)")
+
+                    def display_progress(start_time, iteration, num_spectra):
+                        TIME_WARN_THRESHOLD = 30 # Streamlit should display a warning if the estimated time remaining exceeds this value.
+                        end_estimate = time.perf_counter()
+                        estimate = int((end_estimate - start_time) * (num_spectra / (iteration+1.0) - 1))
+                        progress_text = f"Fits completed {iteration+1}/{num_spectra} ({100 * (iteration+1) / float(num_spectra):.1f}%)."
+                        if iteration+1 < num_spectra:
+                            estimate_minutes, estimate_seconds = int(estimate / 60), estimate % 60
+                            minute_string = f"{estimate_minutes}m " if estimate_minutes > 0 else ""
+                            progress_text += f" Estimated time remaining: {minute_string}{estimate_seconds}s."
+                        progress_bar.progress((iteration+1) / float(num_spectra), text=progress_text)
+                        if iteration == 0 and estimate > TIME_WARN_THRESHOLD:
+                            st.warning(f"Warning: Based on your parameters and the server speed, it may take a while to process all spectra.")
+
+                    if st.session_state.fsf_algorithm_version == "Discrete":
+                        max_cofits = {
+                            "Quick (m=6)": 6,
+                            "Standard (m=9)": 9,
+                            "Slow (m=12)": 12,
+                            "Thorough (m=15)": 15
+                        }[st.session_state.fsf_runtime_control]
+
+                        start = time.perf_counter()
+
+                        for i, column in enumerate(spectrum_select):
+                            filtered_fsf_df = stats_data_melted[stats_data_melted['Sample ID'] == column]
+                            x, y = filtered_fsf_df['Ramanshift'].to_numpy(), filtered_fsf_df['Intensity'].to_numpy()
+
+                            fit, residual, components, rmse = function.fit_full_spectrum_v2(x, y, 
+                                                                            num_peaks=st.session_state.fsf_num_peaks,
+                                                                            cofit_range_multiplier=st.session_state.fsf_cofit_range_multiplier,
+                                                                            peak_shape=st.session_state.fsf_peak_shape,
+                                                                            max_cofits=max_cofits
+                                                                        )
+                            results[column] = {
+                                "x": x,
+                                "y": y,
+                                "fit": fit,
+                                "residual": residual,
+                                "components": components,
+                                "rmse": rmse
+                            }
+
+                            # Display estimated time remaining
+                            if num_spectra > 1:
+                                display_progress(start, i, num_spectra)
+
+                        end = time.perf_counter()
+                        st.session_state.fsf_time = end - start # fit runtime
+
+                        f_params={
+                            "algorithm":"discrete",
+                            "num_spectra":num_spectra,
+                            "num_peaks":st.session_state.fsf_num_peaks,
+                            "peak_shape":st.session_state.fsf_peak_shape,
+                            "cofit_range_multiplier":st.session_state.fsf_cofit_range_multiplier,
+                            "runtime":st.session_state.fsf_time,
+                            "runtime_option":st.session_state.fsf_runtime_control,
+                        }
+
+                    elif st.session_state.fsf_algorithm_version == "Prominence-Based":
+                        start = time.perf_counter()
+                        for i, column in enumerate(spectrum_select):
+                            filtered_fsf_df = stats_data_melted[stats_data_melted['Sample ID'] == column]
+                            x, y = filtered_fsf_df['Ramanshift'].to_numpy(), filtered_fsf_df['Intensity'].to_numpy()
+
+                            
+                            fit, residual, components, rmse = function.fit_full_spectrum_v3(x, y, 
+                                                                            prominence_rank_threshold=st.session_state.fsf_prominence_rank_threshold,
+                                                                            peak_shape=st.session_state.fsf_peak_shape,
+                                                                        )
+                            results[column] = {
+                                "x": x,
+                                "y": y,
+                                "fit": fit,
+                                "residual": residual,
+                                "components": components,
+                                "rmse": rmse
+                            }
+
+                            # Display estimated time remaining
+                            if num_spectra > 1:
+                                display_progress(start, i, num_spectra)
+
+                        end = time.perf_counter()
+                        st.session_state.fsf_time = end - start # fit runtime
+
+                        f_params={
+                            "algorithm":"prominence_based",
+                            "num_spectra":num_spectra,
+                            "peak_ranking_threshold":st.session_state.fsf_prominence_rank_threshold,
+                            "peak_shape":st.session_state.fsf_peak_shape,
+                            "runtime":st.session_state.fsf_time,
+                        }
+
+                    log.log_function_call("Analytics_Peak_Fitting_Full_Spectrum",
+                                          f_params=f_params)
+
+                    st.session_state.fsf_results = results
+                    st.session_state.fsf_results_peak_shape = st.session_state.fsf_peak_shape
+                    st.rerun()
+                
+                spectrum_view_options = list(st.session_state.fsf_results.keys())
+                num_spectra = len(spectrum_view_options)
+                
+                if num_spectra > 1:
+                    st.success(f"{num_spectra} fits completed successfully.")
+                    #st.success(f"{num_spectra} fits completed in {st.session_state.fsf_time:.3f} seconds ({st.session_state.fsf_time/num_spectra:.3f} seconds per fit).")
+                    spectrum_view = st.selectbox(
+                        label="Select Spectrum to View",
+                        options=spectrum_view_options,
+                    )
+                else:
+                    st.success(f"Fit completed successfully.")
+                    #st.success(f"Fit completed in {st.session_state.fsf_time:.3f} seconds.")
+                    spectrum_view = spectrum_view_options[0]
+
+                x, y, fit, residual, components, rmse = st.session_state.fsf_results[spectrum_view].values()
+                scale_factor = np.max(y)
+                round_to = max(7-int(np.log10(scale_factor)), 1)
+                num_components = len(components)
+                results_df = pd.DataFrame(np.array([x, y]+[c['curve'] for c in components]+[fit]).T, columns=['Ramanshift', spectrum_view]+[f"Component {i}" for i in range(num_components)]+['Total Fit']) #if st.session_state.fsf_plot_components else st.session_state.fsf_results_df
+                results_df_melted = results_df.melt(id_vars=['Ramanshift'], var_name='Sample ID', value_name='Intensity').round(round_to)
+
+                # Plot results
+
+                component_base_filter = ({
+                    "Gaussian":0.1,
+                    "Lorentzian":5.0,
+                    "Pseudovoigt":1.0,
+                }[st.session_state.fsf_results_peak_shape] * scale_factor / 4000.0).round(max(round_to - 2, 1))
+
+                #print(scale_factor, round_to, component_base_filter)
+
+                fsf_plot = (alt.Chart(results_df_melted)
+                    .transform_filter((alt.datum['Intensity'] >= float(component_base_filter)) | (alt.datum['Sample ID'] == spectrum_view) | (alt.datum['Sample ID'] == "Total Fit"))
+                    .mark_line()
+                    .encode(
+                        x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
+                        y=alt.Y('Intensity', title=analytics_y_axis_title, type='quantitative'),
+                        tooltip=alt.value(None),
+                        color=alt.Color("Sample ID:N", title="Sample", sort=[spectrum_view, "Total Fit"]),
+                        size=alt.value(3)
+                    ).properties(width=1300, height=400, title="Fit Spectrum - Total Fit")
+                    .interactive()
+                )
+
+                residual_df = pd.DataFrame(np.array([x, residual]).T, columns=['Ramanshift', 'Residual'])
+
+                residual_plot = (alt.Chart(residual_df)
+                    .mark_line()
+                    .encode(
+                        x=alt.X('Ramanshift', title=analytics_x_axis_title, type='quantitative'),
+                        y=alt.Y('Residual', title=analytics_y_axis_title, type='quantitative'),
+                        tooltip=alt.value(None),
+                        color=alt.value('red'),
+                        size=alt.value(3)
+                    ).properties(width=1300, height=300, title=f"Fit Spectrum - Residual / (RMSE = {np.round(rmse, round_to)})")
+                )
+                st.altair_chart(function.style_altair_chart(fsf_plot), width="content")
+                log.log_plot_generated_count()
+                st.altair_chart(function.style_altair_chart(residual_plot), width="content")
+                log.log_plot_generated_count()
+
+                component_params_df = pd.DataFrame([c['parameters'] for c in components])
+
+                st.write("Component Parameters")
+                st.dataframe(component_params_df.round(round_to))
+
+                st.write("Component Curves")
+                st.dataframe(results_df.round(round_to)[['Ramanshift', spectrum_view, 'Total Fit']+[f"Component {i}" for i in range(num_components)]])

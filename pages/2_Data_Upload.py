@@ -5,6 +5,7 @@ import psycopg2
 import numpy as np
 from scipy.interpolate import interp1d
 import auth_utils
+import instrument_readers
 from function import show_feedback
 import traceback
 
@@ -95,6 +96,11 @@ def load_multi_data(file_paths):
     df.insert(0, 'RamanShift', reference_column)
     df.columns = ['RamanShift'] + file_names
     return df
+
+@st.cache_data(max_entries=8)
+def load_instrument_data(kind, files):
+    """Read instrument files into the working dataframe plus user notices."""
+    return instrument_readers.read_files(kind, [(f.name, f.getvalue()) for f in files])
 
 def show_label_editor(temp_df, default_labels):
     """
@@ -244,8 +250,13 @@ FORMAT_OPTIONS = {
     "Single TSV (.tsv / tab-separated)":     {"kind": "single_tsv", "multi": False, "types": ["csv"]},
     "Single CSV (comma-separated)":          {"kind": "single_csv", "multi": False, "types": ["csv"]},
 }
+# Instrument-vendor formats come from the reader registry.
+for _kind, _reader in instrument_readers.READERS.items():
+    FORMAT_OPTIONS[_reader["label"]] = {"kind": _kind, "multi": True, "types": _reader["types"]}
 
-def process_upload(kind, uploaded):
+MAX_TOTAL_SPECTRA = 1000
+
+def process_upload(kind, uploaded, remaining=None, notes=None):
     if not uploaded:
         show_feedback(
             message="No file uploaded.",
@@ -264,6 +275,34 @@ def process_upload(kind, uploaded):
 
         elif kind == "single_csv":
             df = load_data(uploaded)
+
+        elif kind in instrument_readers.READERS:
+            # Count from the file headers first, so an over-limit upload is
+            # refused before anything is parsed or cached for this class.
+            counts = [instrument_readers.count_spectra(kind, f.name, f.getvalue()) for f in uploaded]
+            if remaining is not None and sum(counts) > remaining:
+                if len(uploaded) == 1:
+                    held = f"{uploaded[0].name} holds {counts[0]} spectra"
+                    suggestions = []
+                else:
+                    held = f"The {len(uploaded)} selected files hold {sum(counts)} spectra"
+                    suggestions = [f"{f.name}: {n} spectra" for f, n in zip(uploaded, counts)][:10]
+                if remaining < MAX_TOTAL_SPECTRA:
+                    suggestions.append(
+                        f"Other classes already hold {MAX_TOTAL_SPECTRA - remaining} spectra, "
+                        f"leaving room for {max(remaining, 0)}."
+                    )
+                suggestions.append("Load fewer files, or save a smaller selection of spectra from the instrument software.")
+                show_feedback(
+                    message=f"{held}, but SpectraGuru accepts {MAX_TOTAL_SPECTRA} in total. Nothing was loaded.",
+                    severity="error",
+                    suggestions=suggestions,
+                    doc_link="https://fengboma.github.io/docs.spectraguru/docs/Data-Upload.html"
+                )
+                return None
+            df, file_notes = load_instrument_data(kind, uploaded)
+            if notes is not None:
+                notes.extend(file_notes)
 
         else:
             show_feedback(
@@ -300,6 +339,15 @@ def process_upload(kind, uploaded):
         )
         return None
 
+    except instrument_readers.InstrumentFileError as e:
+        show_feedback(
+            message=str(e),
+            severity="error",
+            suggestions=e.suggestions,
+            doc_link="https://fengboma.github.io/docs.spectraguru/docs/Data-Upload.html"
+        )
+        return None
+
     except Exception:
         show_feedback(
             message="Something went wrong while loading your file.",
@@ -322,6 +370,14 @@ def describe_loaded_spectra(class_label, df, status="loaded"):
     if spectrum_count == 1:
         return f"{class_label} {status} with 1 spectrum containing {point_count} data {point_word}."
     return f"{class_label} {status} with {spectrum_count} spectra, each containing {point_count} data {point_word}."
+
+def show_class_notes(notes):
+    """Show the notices a reader attached to a loaded class."""
+    for severity, text in notes:
+        if severity == "warning":
+            st.warning(text)
+        else:
+            st.info(text)
 
 if n_classes > 1:
     st.warning(
@@ -351,6 +407,7 @@ for idx in range(int(n_classes)):
         df_cached = st.session_state.get(cache_key)
         if df_cached is not None:
             st.success(describe_loaded_spectra(class_label, df_cached, status="is already loaded"))
+            show_class_notes(st.session_state.get(pkey(f"class_notes_{idx}"), []))
             if preview_data:
                 st.dataframe(df_cached, hide_index=True)
 
@@ -374,6 +431,11 @@ for idx in range(int(n_classes)):
             }.get
         )
         df_this = None
+        class_notes = []
+        # Room left under the total limit once the other classes are counted.
+        remaining = MAX_TOTAL_SPECTRA - sum(
+            n for k, n in st.session_state.selected_counts.items() if k != idx
+        )
 
         # ======================= 2-A. MANUAL UPLOAD ======================
         if source == "Manual Upload":
@@ -395,7 +457,7 @@ for idx in range(int(n_classes)):
                     )
                     if uploads:
                         try:
-                            df_this = process_upload(cfg["kind"], uploads)
+                            df_this = process_upload(cfg["kind"], uploads, remaining, class_notes)
                         except Exception as e:
                             st.error(f"Error loading {class_label}: {e}")
                             all_ready = False
@@ -442,9 +504,11 @@ for idx in range(int(n_classes)):
 
             if df_this is not None:
                 st.success(describe_loaded_spectra(class_label, df_this, status="loaded"))
+                show_class_notes(class_notes)
                 if preview_data:
                     st.dataframe(df_this, hide_index=True)
                 st.session_state[cache_key] = df_this
+                st.session_state[pkey(f"class_notes_{idx}")] = class_notes
 
                 # NEW: manual uploads contribute to the global total
                 manual_count = max(0, df_this.shape[1] - 1)  # minus RamanShift

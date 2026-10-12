@@ -7,10 +7,13 @@ module can be run from plain Python.
 
 Renishaw WDF was checked (2026-10) against 36 WiRE text exports of two inVia
 map files, and against Renishaw's own reader (renishaw-wdf 1.4.0) on those two
-files and 14 public sample files.
+files and 14 public sample files. Renishaw WXD was checked against the WDF
+files of the same two measurements: identical once rounded to 32-bit floats.
 """
 import os
+import re
 import struct
+import zlib
 
 import numpy as np
 import pandas as pd
@@ -38,9 +41,11 @@ class AxisMismatchError(InstrumentFileError):
 
 
 # --- Limits ------------------------------------------------------------------
-MAX_CELLS = 20_000_000      # spectra x points accepted in one upload
-MAX_BLOCKS = 4096           # blocks walked in one WDF file
-AXIS_TOLERANCE = 1e-3       # cm-1; axes closer than this are the same axis
+MAX_CELLS = 20_000_000          # spectra x points accepted in one upload
+MAX_BLOCKS = 4096               # blocks walked in one WDF file
+MAX_STREAMS = 100_000           # rows accepted in one table of a WXD file
+MAX_STREAM_BYTES = 64 << 20     # size accepted for one unpacked WXD stream
+AXIS_TOLERANCE = 1e-3           # cm-1; axes closer than this are the same axis
 RESERVED_LABELS = ("ramanshift", "average", "standard deviation", "all")
 
 DAMAGED_HINTS = [
@@ -48,6 +53,7 @@ DAMAGED_HINTS = [
     "Copy the file from the instrument again; the transfer may have been cut short.",
 ]
 TEXT_EXPORT_HINT = "Export the spectra as text from the instrument software and use a text format instead."
+RAMAN_SHIFT_HINT = "SpectraGuru works on Raman-shift axes. Convert the data to Raman shift in the instrument software first."
 
 
 # --- Shared helpers ----------------------------------------------------------
@@ -76,6 +82,20 @@ def _ascending(name, x, Y):
             [TEXT_EXPORT_HINT],
         )
     return np.ascontiguousarray(x), np.ascontiguousarray(Y)
+
+
+def _too_large(name, count, points):
+    return UnsupportedFileError(
+        f"{name} is too large to load: {count} spectra of {points} points.",
+        ["Split the measurement or export a subset from the instrument software."],
+    )
+
+
+def _unfinished_note(name, count, planned):
+    return ("info", (
+        f"{name} is an unfinished measurement: {count} of {planned} "
+        f"planned spectra were collected, and those were loaded."
+    ))
 
 
 def _spectrum_labels(stem, indices):
@@ -208,10 +228,7 @@ def _wdf_layout(name, data):
     if count > capacity or points < 2 or x_length != points:
         raise CorruptFileError(f"{name} has an inconsistent header.", DAMAGED_HINTS)
     if count * points > MAX_CELLS:
-        raise UnsupportedFileError(
-            f"{name} is too large to load: {count} spectra of {points} points.",
-            ["Split the measurement or export a subset from the instrument software."],
-        )
+        raise _too_large(name, count, points)
 
     x_start, x_size = blocks[b"XLST"]
     data_start, data_size = blocks[b"DATA"]
@@ -221,7 +238,7 @@ def _wdf_layout(name, data):
     if unit != WDF_UNIT_RAMAN_SHIFT:
         raise UnsupportedFileError(
             f"{name} has its x-axis in {WDF_UNIT_NAMES.get(unit, 'an unknown unit')}, not Raman shift.",
-            ["SpectraGuru works on Raman-shift axes. Convert the data to Raman shift in the instrument software first."],
+            [RAMAN_SHIFT_HINT],
         )
     return {
         "points": points, "count": count, "capacity": capacity, "complete": complete,
@@ -244,28 +261,322 @@ def _wdf_read(name, data):
         Y = Y.astype(np.float64).reshape(count, points)
     notes = []
     if count < lay["capacity"]:
-        notes.append(("info", (
-            f"{name} is an unfinished measurement: {count} of {lay['capacity']} "
-            f"planned spectra were collected, and those were loaded."
-        )))
+        notes.append(_unfinished_note(name, count, lay["capacity"]))
     if not lay["complete"]:
         notes.append(("warning", f"{name} is damaged after its spectra; the spectra themselves were read in full."))
     return x, Y, list(range(count)), notes
+
+
+# --- Metakit container -------------------------------------------------------
+# WXD files keep their streams in a Metakit datafile (Metakit is MIT-licensed,
+# Copyright (c) 1996-2007 Jean-Claude Wippler). Only the one storage layout
+# WiRE writes is read; MK_SMALL_WIDTHS is Metakit's table for short columns.
+MK_SCHEMA = (
+    b"dirs[name:S,parent:I,ctime:I,atime:I,mtime:I,clsid:S,state:I,"
+    b"files[_B[name:S,size:I,date:I,state:I,contents:B]]]"
+)
+MK_SMALL_WIDTHS = (
+    (8, 16, 1, 32, 2, 4),
+    (4, 8, 1, 16, 2, 0),
+    (2, 4, 8, 1, 0, 16),
+    (2, 4, 0, 8, 1, 0),
+    (1, 2, 4, 0, 8, 0),
+    (1, 2, 4, 0, 0, 8),
+    (1, 2, 0, 4, 0, 0),
+)
+MK_INT_CODES = {8: "b", 16: "h", 32: "i", 64: "q"}
+
+
+def _mk_take(mk, start, size):
+    """Bytes [start, start + size) of the datafile, or fail if out of range."""
+    if start < 0 or size < 0 or start + size > len(mk):
+        raise ValueError("reference outside the file")
+    return mk[start:start + size]
+
+
+def _mk_varint(buf, pos):
+    """Read one variable-length number; returns (value, next position)."""
+    if buf[pos] == 0:
+        raise ValueError("negative number")
+    value = 0
+    for _ in range(6):
+        byte = buf[pos]
+        pos += 1
+        value = (value << 7) + byte
+        if byte & 0x80:
+            return value - 0x80, pos
+    raise ValueError("number too long")
+
+
+def _mk_colref(buf, pos):
+    """Read a column reference; returns ((start, size), next position)."""
+    size, pos = _mk_varint(buf, pos)
+    start = 0
+    if size > 0:
+        start, pos = _mk_varint(buf, pos)
+    return (start, size), pos
+
+
+def _mk_rows(buf, pos):
+    """Read the start of a table: its reserved zero, then its row count."""
+    reserved, pos = _mk_varint(buf, pos)
+    rows, pos = _mk_varint(buf, pos)
+    if reserved != 0 or rows > MAX_STREAMS:
+        raise ValueError("bad table header")
+    return rows, pos
+
+
+def _mk_ints(mk, ref, rows):
+    """Decode a column of adaptive-width integers."""
+    start, size = ref
+    if size == 0 or rows == 0:
+        return [0] * rows
+    width = (size << 3) // rows
+    if rows <= 7 and size <= 6:
+        width = MK_SMALL_WIDTHS[rows - 1][size - 1]
+    raw = _mk_take(mk, start, size)
+    if width in (1, 2, 4):
+        per_byte, mask = 8 // width, (1 << width) - 1
+        return [(raw[i // per_byte] >> ((i % per_byte) * width)) & mask for i in range(rows)]
+    if width in MK_INT_CODES:
+        return list(struct.unpack_from(f"<{rows}{MK_INT_CODES[width]}", raw))
+    raise ValueError("bad integer width")
+
+
+def _mk_items(mk, buf, pos, rows):
+    """Decode a string or bytes column; returns (items, next position)."""
+    data_ref, pos = _mk_colref(buf, pos)
+    sizes_ref = (0, 0)
+    if data_ref[1] > 0:
+        sizes_ref, pos = _mk_colref(buf, pos)
+    memo_ref, pos = _mk_colref(buf, pos)
+
+    sizes = _mk_ints(mk, sizes_ref, rows)
+    data = _mk_take(mk, *data_ref)
+    if any(n < 0 for n in sizes) or sum(sizes) != len(data):
+        raise ValueError("item sizes do not match the column")
+    items, offset = [], 0
+    for n in sizes:
+        items.append(data[offset:offset + n])
+        offset += n
+
+    # Large items are stored on their own and listed here by row.
+    memo = _mk_take(mk, *memo_ref)
+    at, row = 0, 0
+    while at < len(memo):
+        skip, at = _mk_varint(memo, at)
+        row += skip
+        ref, at = _mk_colref(memo, at)
+        items[row] = _mk_take(mk, *ref)
+        row += 1
+    return items, pos
+
+
+def _mk_directory(name, data):
+    """Streams of the storage's root folder: {name: (size, stored bytes)}."""
+    skip_mark = data[-16:-12]
+    if len(data) < 24 or data[-8] != 0x80 or not (skip_mark == b"\x80\0\0\0" or skip_mark[0] & 0xF0 == 0x90):
+        raise ValueError("no datafile tail")
+    base = len(data) - 16 - int.from_bytes(data[-12:-8], "big")
+    if base < 0 or data[base:base + 3] != b"JL\x1a":
+        raise ValueError("no datafile header")
+    mk = memoryview(data)[base:]
+    walk = _mk_take(mk, int.from_bytes(data[-4:], "big"), int.from_bytes(data[-7:-4], "big"))
+
+    reserved, at = _mk_varint(walk, 0)
+    length, at = _mk_varint(walk, at)
+    if reserved != 0 or bytes(walk[at:at + length]) != MK_SCHEMA:
+        raise UnsupportedFileError(
+            f"{name} uses a WXD layout that is not supported yet.",
+            ["Save the measurement as .wdf in WiRE, or export the spectra as text."],
+        )
+    rows, at = _mk_varint(walk, at + length)
+    if rows != 1:
+        raise ValueError("bad root table")
+    dirs_ref, at = _mk_colref(walk, at)
+
+    # dirs: name, parent, ctime, atime, mtime, clsid, state, files
+    dirs = _mk_take(mk, *dirs_ref)
+    n_dirs, at = _mk_rows(dirs, 0)
+    _, at = _mk_items(mk, dirs, at, n_dirs)
+    parent_ref, at = _mk_colref(dirs, at)
+    for _ in range(3):
+        _, at = _mk_colref(dirs, at)
+    _, at = _mk_items(mk, dirs, at, n_dirs)
+    _, at = _mk_colref(dirs, at)
+    files_ref, at = _mk_colref(dirs, at)
+    root = _mk_ints(mk, parent_ref, n_dirs).index(-1)
+
+    # files is one table per folder, split into blocks; every block row,
+    # including those of the trailing separator block, is a real file.
+    files = _mk_take(mk, *files_ref)
+    streams, at = {}, 0
+    for folder in range(n_dirs):
+        n_blocks, at = _mk_rows(files, at)
+        if n_blocks == 0:
+            continue
+        blocks_ref, at = _mk_colref(files, at)
+        if folder != root:
+            continue
+        blocks, pos = _mk_take(mk, *blocks_ref), 0
+        for _ in range(n_blocks):
+            n_files, pos = _mk_rows(blocks, pos)
+            if n_files == 0:
+                continue
+            names, pos = _mk_items(mk, blocks, pos, n_files)
+            sizes_ref, pos = _mk_colref(blocks, pos)
+            for _ in range(2):
+                _, pos = _mk_colref(blocks, pos)
+            contents, pos = _mk_items(mk, blocks, pos, n_files)
+            sizes = _mk_ints(mk, sizes_ref, n_files)
+            for stream, size, stored in zip(names, sizes, contents):
+                streams[bytes(stream).rstrip(b"\0").decode("utf-8")] = (size, stored)
+    return streams
+
+
+def _mk_inflate(stored, size, limit):
+    """A stream's bytes; contents are zlib-packed when shorter than size."""
+    if size < 0 or size > limit:
+        raise ValueError("stream too large")
+    if len(stored) == size:
+        return bytes(stored)
+    engine = zlib.decompressobj()
+    out = engine.decompress(stored, size + 1)
+    if len(out) != size or not engine.eof:
+        raise ValueError("stream does not unpack to its stated size")
+    return out
+
+
+# --- Renishaw WXD ------------------------------------------------------------
+# No description of this format is published. The layout was worked out from
+# files saved by WiRE and checked against WDF files of the same measurements.
+# A stream holds named entries (uint32 name size, UTF-16 name, COM VARIANT
+# type, value); a list holds a count, tagged numbers and an end mark. Axis
+# types and units use the same codes as WDF.
+WXD_LIST_END = b"\xc0\xff\xee\x01"
+WXD_LIST_NAME = "DataList".encode("utf-16-le")
+WXD_NUMBER_TYPES = {2: "<i2", 3: "<i4", 4: "<f4", 5: "<f8"}    # VARIANT type -> dtype
+WXD_INT = b"\x03\x00"          # VARIANT type 3, a 32-bit integer
+WXD_OBJECT = b"\x0d\x00"       # VARIANT type 13, then a 16-byte class id
+WXD_TYPE_SPECTRAL = (1, 19)
+
+
+def _wxd_sniff(data):
+    return data[:4] == b"#WXD"
+
+
+def _wxd_stream(streams, key, limit=MAX_STREAM_BYTES):
+    size, stored = streams[key]
+    return _mk_inflate(stored, size, limit)
+
+
+def _wxd_int(stream, key):
+    """Value of a named 32-bit integer entry, or None if the stream lacks it."""
+    raw = key.encode("utf-16-le") + b"\0\0"
+    at = stream.find(raw)
+    while at >= 0:
+        end = at + len(raw)
+        if at >= 4 and struct.unpack_from("<I", stream, at - 4)[0] == len(raw) and stream[end:end + 2] == WXD_INT:
+            return struct.unpack_from("<i", stream, end + 2)[0]
+        at = stream.find(raw, at + 2)
+    return None
+
+
+def _wxd_list(stream, at):
+    """Decode the list of numbers that starts at offset at."""
+    count = struct.unpack_from("<Q", stream, at)[0]
+    if not 0 < count <= MAX_CELLS:
+        raise ValueError("bad list length")
+    number = WXD_NUMBER_TYPES[struct.unpack_from("<H", stream, at + 8)[0]]
+    records = np.frombuffer(stream, dtype=[("type", "<u2"), ("value", number)], count=count, offset=at + 8)
+    end = at + 8 + records.nbytes
+    if np.any(records["type"] != records["type"][0]) or stream[end:end + 4] != WXD_LIST_END:
+        raise ValueError("bad list")
+    return records["value"].astype(np.float64)
+
+
+def _wxd_spectrum(stream):
+    """The intensity list embedded in one DataSet stream, found by its name."""
+    at = stream.find(WXD_LIST_NAME)
+    while at >= 0:
+        size = struct.unpack_from("<I", stream, at - 4)[0] if at >= 4 else 0
+        if 0 < size <= 64:
+            entry = stream[at:at + size].decode("utf-16-le", "replace")
+            if re.fullmatch(r"DataList\d+\0", entry) and stream[at + size:at + size + 2] == WXD_OBJECT:
+                return _wxd_list(stream, at + size + 18)
+        at = stream.find(WXD_LIST_NAME, at + 2)
+    raise ValueError("no spectrum in dataset")
+
+
+def _wxd_layout(name, data):
+    """Check a WXD file's structure and return its streams and spectrum order."""
+    streams = _mk_directory(name, data)
+    datasets = sorted(int(n[7:]) for n in streams if re.fullmatch(r"DataSet\d+", n))
+    if not datasets:
+        raise UnsupportedFileError(f"{name} contains no collected spectra.")
+    properties = _wxd_stream(streams, "Properties")
+
+    axes = []
+    for stream_name in streams:
+        match = re.fullmatch(r"DataList(\d+)", stream_name)
+        if match and _wxd_int(properties, "dataListType" + match.group(1)) in WXD_TYPE_SPECTRAL:
+            axes.append((stream_name, _wxd_int(properties, "dataListUnits" + match.group(1))))
+    if len(axes) != 1:
+        raise UnsupportedFileError(
+            f"{name} does not describe a single spectral axis, so it cannot be loaded.",
+            [TEXT_EXPORT_HINT],
+        )
+    x_stream, unit = axes[0]
+    if unit != WDF_UNIT_RAMAN_SHIFT:
+        raise UnsupportedFileError(
+            f"{name} has its x-axis in {WDF_UNIT_NAMES.get(unit, 'an unknown unit')}, not Raman shift.",
+            [RAMAN_SHIFT_HINT],
+        )
+
+    collected = _wxd_int(properties, "nCollectedDatasets")
+    if collected is None or not 0 < collected <= len(datasets):
+        collected = len(datasets)
+    return {"streams": streams, "x_stream": x_stream, "datasets": datasets[:collected], "planned": len(datasets)}
+
+
+def _wxd_count(name, data):
+    return len(_wxd_layout(name, data)["datasets"])
+
+
+def _wxd_read(name, data):
+    """Return (x, Y, indices, notes) for one WXD file, in file order."""
+    lay = _wxd_layout(name, data)
+    streams, datasets = lay["streams"], lay["datasets"]
+    x = _wxd_list(_wxd_stream(streams, lay["x_stream"]), 0)
+    if len(datasets) * x.size > MAX_CELLS:
+        raise _too_large(name, len(datasets), x.size)
+    Y = np.empty((len(datasets), x.size), dtype=np.float64)
+    limit = 12 * x.size + 65536     # ten bytes a point, plus the dataset's few properties
+    for row, index in enumerate(datasets):
+        values = _wxd_spectrum(_wxd_stream(streams, f"DataSet{index}", limit))
+        if values.size != x.size:
+            raise ValueError("spectrum length differs from the axis")
+        Y[row] = values
+    notes = []
+    if len(datasets) < lay["planned"]:
+        notes.append(_unfinished_note(name, len(datasets), lay["planned"]))
+    return x, Y, datasets, notes
 
 
 # --- Registry and public API -------------------------------------------------
 READERS = {
     "renishaw": {
         "vendor": "Renishaw WiRE",
-        "label": "Renishaw WiRE (.wdf)",
-        "types": ["wdf"],
+        "label": "Renishaw WiRE (.wdf / .wxd)",
+        "types": ["wdf", "wxd"],
         "formats": [
             {"name": "WDF", "ext": "wdf", "sniff": _wdf_sniff, "count": _wdf_count, "read": _wdf_read},
+            {"name": "WXD", "ext": "wxd", "sniff": _wxd_sniff, "count": _wxd_count, "read": _wxd_read},
         ],
     },
 }
 
-LOW_LEVEL_ERRORS = (struct.error, IndexError, KeyError, ValueError, OverflowError)
+LOW_LEVEL_ERRORS = (struct.error, zlib.error, IndexError, KeyError, ValueError, OverflowError)
 
 
 def _format_for(kind, name, data):

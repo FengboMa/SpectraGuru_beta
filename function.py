@@ -4043,6 +4043,140 @@ class SpcFiles(SpectrumFileFormat):
         return fractions * 2.0 ** (exponent - 32)
 
 
+class JcampFiles(SpectrumFileFormat):
+    """Read JCAMP-DX files, following the JCAMP-DX specifications published by IUPAC."""
+
+    DATA_TYPES = ("JCAMP-DX",)
+    SPECTRUM_LABELS = ("XYDATA", "XYPOINTS", "PEAKTABLE")
+    LEADING_DIGITS = ["0"] + [str(digit) for digit in range(1, 10)] + [f"-{digit}" for digit in range(1, 10)]
+    SQUEEZED_DIGITS = dict(zip("@ABCDEFGHIabcdefghi", LEADING_DIGITS))
+    DIFFERENCE_DIGITS = dict(zip("%JKLMNOPQRjklmnopqr", LEADING_DIGITS))
+    REPEAT_DIGITS = dict(zip("STUVWXYZs", "123456789"))
+
+    def data_type(self, file_name, file_bytes):
+        text = self._text(file_bytes[:4096])
+        for line in (text or "").splitlines():
+            line = line.strip()
+            if line and not line.startswith("$$"):
+                return self.DATA_TYPES[0] if self._label(line) == "TITLE" else None
+        return None
+
+    def count_spectra(self, file_name, file_bytes, data_type):
+        return sum(label in self.SPECTRUM_LABELS for label, _ in self._records(file_bytes))
+
+    def read(self, file_name, file_bytes, data_type):
+        import numpy as np
+
+        header, axes, intensities = {}, [], []
+        for label, record_lines in self._records(file_bytes):
+            if label == "TITLE":
+                header = {}
+            elif label in self.SPECTRUM_LABELS:
+                x_values, y_values = self._spectrum(file_name, header, record_lines)
+                axes.append(x_values)
+                intensities.append(y_values)
+            elif label == "DATATABLE":
+                raise SpectrumFileError(f"{file_name} stores its data as JCAMP-DX NTUPLES, which cannot be loaded.",
+                                        [self.TEXT_EXPORT_SUGGESTION])
+            else:
+                header[label] = record_lines[0]
+        if not intensities:
+            raise SpectrumFileError(f"{file_name} contains no spectra.")
+        x_values = self._shared_axis(file_name, axes)
+        return x_values, np.array(intensities), self._numbered_names(file_name, len(intensities)), []
+
+    def _label(self, line):
+        """Return the label of a labelled data record without case, spaces or punctuation, or None for other lines."""
+        import re
+
+        if not line.startswith("##"):
+            return None
+        return re.sub(r"[\s\-/_]", "", line[2:].split("=")[0]).upper()
+
+    def _records(self, file_bytes):
+        """Yield every labelled data record as its label and its lines, the first being the text after the label."""
+        label, record_lines = None, []
+        for line in self._text(file_bytes).splitlines():
+            line = line.split("$$")[0].strip()
+            line_label = self._label(line)
+            if line_label is not None:
+                if label is not None:
+                    yield label, record_lines
+                label, record_lines = line_label, [line.partition("=")[2].strip()]
+            elif line and label is not None:
+                record_lines.append(line)
+        if label is not None:
+            yield label, record_lines
+
+    def _number(self, header, label, default=None):
+        """Return a header record as a number."""
+        if label not in header and default is not None:
+            return default
+        return float(header[label].split()[0])
+
+    def _spectrum(self, file_name, header, record_lines):
+        """Return the x and y values of one data table, scaled by the factors in its block's header."""
+        import re
+        import numpy as np
+
+        x_factor, y_factor = self._number(header, "XFACTOR", 1.0), self._number(header, "YFACTOR", 1.0)
+        if "++" in record_lines[0]:
+            line_x_values, y_values = self._packed_ordinates(record_lines[1:])
+            if "LASTX" in header:
+                x_values = np.linspace(self._number(header, "FIRSTX"), self._number(header, "LASTX"), len(y_values))
+            elif "DELTAX" in header:
+                x_values = self._number(header, "FIRSTX") + self._number(header, "DELTAX") * np.arange(len(y_values))
+            elif len(line_x_values) == len(y_values):
+                x_values = np.array(line_x_values) * x_factor
+            else:
+                raise ValueError("no x range is given")
+            return x_values, np.array(y_values) * y_factor
+        values_per_point = len(re.findall(r"[A-Za-z]", record_lines[0].split("..")[0]))
+        points = np.array([float(number) for line in record_lines[1:] for number in re.split(r"[\s,;]+", line) if number])
+        points = self._sorted_points(file_name, points.reshape(-1, values_per_point)[:, :2])
+        return points[:, 0] * x_factor, points[:, 1] * y_factor
+
+    def _packed_ordinates(self, data_lines):
+        """Decode (X++(Y..Y)) lines; return the x value that leads each line and all y values.
+
+        Lines may be plain numbers or use the JCAMP-DX compression forms: squeezed, difference and repeat.
+        """
+        import re
+
+        if not any(re.search(r"[@A-DF-Za-df-s%]", line) for line in data_lines):
+            line_x_values, y_values = [], []
+            for line in data_lines:
+                numbers = re.findall(r"[+-]?(?:\d+\.?\d*|\.\d+)(?:[Ee][+-]?\d+)?", line)
+                if len(numbers) > 1:
+                    line_x_values.append(float(numbers[0]))
+                    y_values.extend(float(number) for number in numbers[1:])
+            return line_x_values, y_values
+
+        line_x_values, y_values, check_first_value = [], [], False
+        for line in data_lines:
+            tokens = re.findall(r"[@A-Ia-i%J-Rj-rS-Zs]\d*\.?\d*|[+-]?(?:\d+\.?\d*|\.\d+)", line)
+            line_values, difference = [], None
+            for token in tokens[1:]:
+                if token[0] in self.DIFFERENCE_DIGITS:
+                    difference = float(self.DIFFERENCE_DIGITS[token[0]] + token[1:])
+                    line_values.append(line_values[-1] + difference)
+                elif token[0] in self.REPEAT_DIGITS:
+                    for _ in range(int(self.REPEAT_DIGITS[token[0]] + token[1:]) - 1):
+                        line_values.append(line_values[-1] + (difference or 0.0))
+                else:
+                    difference = None
+                    line_values.append(float(self.SQUEEZED_DIGITS.get(token[0], token[0]) + token[1:]))
+            # A line that ends in a difference is followed by a line that repeats its last value as a check.
+            if check_first_value:
+                line_values = line_values[1:]
+            if tokens:
+                check_first_value = difference is not None
+            if line_values:
+                line_x_values.append(float(tokens[0]))
+                y_values.extend(line_values)
+        return line_x_values, y_values
+
+
 class TextFiles(SpectrumFileFormat):
     """Read delimited text: one two-column spectrum per file, or one table holding several spectra."""
 
@@ -4146,7 +4280,7 @@ class TextFiles(SpectrumFileFormat):
 class SpectrumFileReader:
     """Detect the data type of uploaded spectrum files and read them into the wide dataframe used by Data Upload."""
 
-    FORMATS = (RenishawFiles, SpcFiles, TextFiles)
+    FORMATS = (RenishawFiles, SpcFiles, JcampFiles, TextFiles)
     AXIS_TOLERANCE = 1e-3
     RESERVED_COLUMN_NAMES = ("ramanshift", "average", "standard deviation", "all")
     EXPERIMENTAL_WARNING = ("This is an **experimental feature**. Data might be **linearly interpolated** "

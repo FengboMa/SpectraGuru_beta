@@ -4268,6 +4268,7 @@ class JascoFiles(SpectrumFileFormat):
     DATA_TYPES = ("JASCO JWS",)
     SINGLE_BLOCK_SIGNATURE = b"L~S "
     SINGLE_BLOCK_VALUES_POSITION = 1856
+    UNMEASURABLE_POINT = -1.1754943508222875e-38
 
     def data_type(self, file_name, file_bytes):
         if file_bytes[:4] == self.SINGLE_BLOCK_SIGNATURE:
@@ -4301,6 +4302,10 @@ class JascoFiles(SpectrumFileFormat):
         notes = []
         if layout["channel_count"] > 1:
             notes.append(("info", f"{file_name} holds {layout['channel_count']} channels; only the first was loaded."))
+        unmeasurable_count = int(np.count_nonzero(intensities == self.UNMEASURABLE_POINT))
+        if unmeasurable_count:
+            notes.append(("info", f"{file_name} has {unmeasurable_count} point(s) that the instrument marked as not "
+                                  f"measurable. They are kept as stored, which is close to zero."))
         return (x_values, intensities.reshape(spectrum_count, point_count),
                 self._numbered_names(file_name, spectrum_count), notes)
 

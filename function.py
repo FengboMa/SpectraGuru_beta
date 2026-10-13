@@ -4382,8 +4382,9 @@ class JascoFiles(SpectrumFileFormat):
 class TextFiles(SpectrumFileFormat):
     """Read delimited text: one two-column spectrum per file, or one table holding several spectra."""
 
-    DATA_TYPES = ("Two-column text spectrum", "Text table of spectra")
+    DATA_TYPES = ("Two-column text spectrum", "Text table of spectra", "SpectraGuru export")
     EXPERIMENTAL = False
+    SPECTRAGURU_EXPORT_HEADING = "# Data processed with SpectraGuru"
     DELIMITERS = ("\t", ",", ";", None)
     DELIMITER_NAMES = {"\t": "tab-separated (TSV)", ",": "comma-separated (CSV)", ";": "semicolon-separated",
                        None: "space-separated"}
@@ -4396,6 +4397,8 @@ class TextFiles(SpectrumFileFormat):
         table = self._table(file_name, file_bytes)
         if table is None:
             return None
+        if table["is_spectraguru_export"]:
+            return self.DATA_TYPES[2]
         return self.DATA_TYPES[0] if table["values"].shape[1] == 2 else self.DATA_TYPES[1]
 
     def count_spectra(self, file_name, file_bytes, data_type):
@@ -4405,7 +4408,7 @@ class TextFiles(SpectrumFileFormat):
         table = self._table(file_name, file_bytes)
         values = self._sorted_points(file_name, table["values"])
         spectrum_count = values.shape[1] - 1
-        if spectrum_count > 1 and table["column_names"]:
+        if (spectrum_count > 1 or table["is_spectraguru_export"]) and table["column_names"]:
             spectrum_names = table["column_names"]
         else:
             spectrum_names = self._numbered_names(file_name, spectrum_count)
@@ -4414,7 +4417,7 @@ class TextFiles(SpectrumFileFormat):
     def describe(self, file_name, file_bytes, data_type):
         table = self._table(file_name, file_bytes)
         delimiter_name = self.DELIMITER_NAMES[table["delimiter"]] + (", decimal comma" if table["decimal_comma"] else "")
-        return f"{data_type}, {delimiter_name}", None, None
+        return f"{data_type}, {delimiter_name}", None, table["export_year"]
 
     def _table(self, file_name, file_bytes):
         """Parse the file once; return its numeric values and column names, or None if it is not a table."""
@@ -4456,11 +4459,14 @@ class TextFiles(SpectrumFileFormat):
         return best_choice
 
     def _parse_table(self, file_name, file_bytes):
+        import re
         import numpy as np
 
         text = self._text(file_bytes)
         if text is None:
             return None
+        is_spectraguru_export = text.lstrip().startswith(self.SPECTRAGURU_EXPORT_HEADING)
+        export_year = re.search(r"^# Export timestamp: (\d{4})", text[:400], flags=re.MULTILINE) if is_spectraguru_export else None
         lines = [line for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
         choice = self._delimiter(lines[-self.SAMPLED_LINES:])
         if choice is None:
@@ -4483,7 +4489,8 @@ class TextFiles(SpectrumFileFormat):
         if values.shape[0] < 2 or (values.shape[0] < len(lines) / 2 and values.shape[0] < 20):
             return None
         column_names = header[1:] if len(header) == column_count and all(header[1:]) else None
-        return {"values": values, "column_names": column_names, "delimiter": delimiter, "decimal_comma": decimal_comma}
+        return {"values": values, "column_names": column_names, "delimiter": delimiter, "decimal_comma": decimal_comma,
+                "is_spectraguru_export": is_spectraguru_export, "export_year": int(export_year.group(1)) if export_year else None}
 
 
 class BwtekFiles(TextFiles):

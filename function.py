@@ -3335,47 +3335,87 @@ def imodified_polyfit(spec_raw, nth = 5, iter_max = 1, scale_factor1 = 1.0, scal
     else:
         return ram_spec
 
-class InstrumentFileReader:
-    """Read instrument-vendor spectrum files into the wide dataframe used by Data Upload.
+class SpectrumFileError(Exception):
+    """A reason a spectrum file could not be loaded, worded for the user."""
 
-    Only the Raman-shift axis and the intensities are kept. Renishaw WDF follows the block
-    layout of Renishaw's renishaw-wdf reader (Apache-2.0). Renishaw WXD has no published
-    description; it is a Metakit datafile (Metakit is MIT-licensed, Copyright (c) 1996-2007
-    Jean-Claude Wippler) whose contents were worked out from files saved by WiRE 3.4.
-    """
+    def __init__(self, message, suggestions=None):
+        super().__init__(message)
+        self.suggestions = list(suggestions or [])
 
-    class Error(Exception):
-        """A reason a file could not be loaded, worded for the user."""
 
-        def __init__(self, message, suggestions=None):
-            super().__init__(message)
-            self.suggestions = list(suggestions or [])
+class SpectrumFileFormat:
+    """Shared tools for the reader of one vendor's or one family's spectrum files."""
 
-    VENDORS = {
-        "renishaw": {
-            "label": "Renishaw WiRE (.wdf / .wxd)",
-            "name": "Renishaw WiRE",
-            "extensions": ["wdf", "wxd"],
-        },
-    }
-
+    DATA_TYPES = ()
+    EXPERIMENTAL = True
     MAX_TOTAL_VALUES = 20_000_000
-    MAX_WDF_BLOCKS = 4096
-    MAX_TABLE_ROWS = 100_000
-    MAX_STREAM_BYTES = 64 * 1024 * 1024
-    AXIS_TOLERANCE = 1e-3
-    RESERVED_COLUMN_NAMES = ("ramanshift", "average", "standard deviation", "all")
-
     DAMAGED_FILE_SUGGESTIONS = [
         "Check that the file opens in the instrument software.",
         "Copy the file from the instrument again; the transfer may have been cut short.",
     ]
-    TEXT_EXPORT_SUGGESTION = "Export the spectra as text from the instrument software and use a text format instead."
-    RAMAN_SHIFT_SUGGESTION = ("SpectraGuru works on Raman-shift axes. Convert the data to Raman shift "
-                              "in the instrument software first.")
+    TEXT_EXPORT_SUGGESTION = "Export the spectra as text from the instrument software and upload the text files instead."
 
-    RAMAN_SHIFT_UNIT = 1
-    UNIT_NAMES = {0: "arbitrary units", 2: "nanometres", 3: "nanometres", 4: "electron volts", 5: "micrometres"}
+    def data_type(self, file_name, file_bytes):
+        """Return the name of the data type when this reader recognises the file, otherwise None."""
+        return None
+
+    def count_spectra(self, file_name, file_bytes, data_type):
+        """Return the number of spectra in the file, read from its structure alone."""
+        raise NotImplementedError
+
+    def read(self, file_name, file_bytes, data_type):
+        """Return x values, one spectrum per row, spectrum names and notes, in file order."""
+        raise NotImplementedError
+
+    def file_stem(self, file_name):
+        """Return the file name without its folder or final extension."""
+        import os
+
+        stem = os.path.splitext(os.path.basename(file_name))[0].strip()
+        # Clustering drops any column whose name contains "Unnamed".
+        return stem.replace("Unnamed", "unnamed") or "spectrum"
+
+    def _text(self, file_bytes):
+        """Return the file as text, or None when it is not a text file."""
+        if file_bytes[:2] in (b"\xff\xfe", b"\xfe\xff"):
+            return file_bytes.decode("utf-16", errors="replace")
+        first_bytes = file_bytes[:4096]
+        if not first_bytes or any(byte < 9 or 13 < byte < 32 for byte in first_bytes):
+            return None
+        try:
+            return file_bytes.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            return file_bytes.decode("latin-1")
+
+    def _integer(self, data, position, size, signed=False):
+        """Return the little-endian integer of `size` bytes stored at `position`."""
+        if position < 0 or position + size > len(data):
+            raise ValueError("integer outside the data")
+        return int.from_bytes(data[position:position + size], "little", signed=signed)
+
+    def _too_large_error(self, file_name, spectrum_count, point_count):
+        return SpectrumFileError(
+            f"{file_name} is too large to load: {spectrum_count} spectra of {point_count} points.",
+            ["Split the measurement or export a subset from the instrument software."],
+        )
+
+    def _unfinished_note(self, file_name, spectrum_count, planned_count):
+        return ("info", f"{file_name} is an unfinished measurement: {spectrum_count} of {planned_count} "
+                        f"planned spectra were collected, and those were loaded.")
+
+
+class RenishawFiles(SpectrumFileFormat):
+    """Read Renishaw WiRE files: WDF, and the older WXD.
+
+    WDF follows the block layout of Renishaw's renishaw-wdf reader (Apache-2.0). WXD has no
+    published description; it is a Metakit datafile (Metakit is MIT-licensed, Copyright (c)
+    1996-2007 Jean-Claude Wippler) whose contents were worked out from files saved by WiRE 3.4.
+    """
+
+    DATA_TYPES = ("Renishaw WDF", "Renishaw WXD")
+    MAX_WDF_BLOCKS = 4096
+    MAX_TABLE_ROWS = 100_000
+    MAX_STREAM_BYTES = 64 * 1024 * 1024
     SPECTRAL_AXIS_TYPES = (1, 19)
     TIME_ORIGIN_TYPE = 11
 
@@ -3399,131 +3439,26 @@ class InstrumentFileReader:
     WXD_NUMBER_TYPES = {2: "<i2", 3: "<i4", 4: "<f4", 5: "<f8"}
     WXD_OBJECT_TYPE = 13
 
-    def __init__(self, vendor):
-        self.vendor = vendor
-        self.vendor_name = self.VENDORS[vendor]["name"]
-        self.extensions = self.VENDORS[vendor]["extensions"]
-
-    def count_spectra(self, file_name, file_bytes):
-        """Return the number of spectra in one file, read from its structure alone."""
-        def count():
-            if self._detect_format(file_name, file_bytes) == "wdf":
-                return self._wdf_layout(file_name, file_bytes)["spectrum_count"]
-            return self._wxd_layout(file_name, file_bytes)["spectrum_count"]
-        return self._read_safely(file_name, count)
-
-    def read_file(self, file_name, file_bytes):
-        """Return ascending Raman shift, one spectrum per row, spectrum names and notices."""
-        import os
-
-        def read():
-            file_format = self._detect_format(file_name, file_bytes)
-            read_format = self._read_wdf if file_format == "wdf" else self._read_wxd
-            raman_shift, intensities, spectrum_names, notes = read_format(file_name, file_bytes)
-            raman_shift, intensities = self._sort_ascending(file_name, raman_shift, intensities)
-            extension = os.path.splitext(file_name)[1].lower().lstrip(".")
-            if extension in self.extensions and extension != file_format:
-                notes.insert(0, ("info", f"{file_name} is a {file_format.upper()} file by content "
-                                         f"and was read as one."))
-            return raman_shift, intensities, spectrum_names, notes
-        return self._read_safely(file_name, read)
-
-    def read_files(self, files):
-        """Read the files of one class into a wide dataframe plus notices for the user."""
-        file_names, axes, intensity_blocks, column_names, notes, stem_uses = [], [], [], [], [], {}
-        for file_name, file_bytes in files:
-            raman_shift, intensities, spectrum_names, file_notes = self.read_file(file_name, file_bytes)
-            stem = self._file_stem(file_name)
-            stem_uses[stem] = stem_uses.get(stem, 0) + 1
-            if stem_uses[stem] > 1:
-                spectrum_names = [f"{stem} ({stem_uses[stem]}){name[len(stem):]}" for name in spectrum_names]
-            file_names.append(file_name)
-            axes.append(raman_shift)
-            intensity_blocks.append(intensities)
-            column_names.extend(spectrum_names)
-            notes.extend(file_notes)
-        if not axes:
-            raise self.Error("No file was provided.")
-        if sum(intensities.size for intensities in intensity_blocks) > self.MAX_TOTAL_VALUES:
-            raise self.Error("The selected files are too large to load together.", ["Upload fewer files at once."])
-
-        column_names, renamed_count = self._unique_column_names(column_names)
-        raman_shift, intensity_blocks, alignment_notes = self._align_axes(file_names, axes, intensity_blocks)
-        notes.extend(alignment_notes)
-        if renamed_count:
-            notes.append(("info", f"{renamed_count} spectrum name(s) were changed so that "
-                                  f"every column name is unique."))
-        return self._build_dataframe(raman_shift, intensity_blocks, column_names), notes
-
-    def _detect_format(self, file_name, file_bytes):
-        """Identify the format from the file's first bytes rather than its extension."""
+    def data_type(self, file_name, file_bytes):
         if file_bytes[:4] == b"WDF1":
-            return "wdf"
+            return "Renishaw WDF"
         if file_bytes[:4] == b"#WXD":
-            return "wxd"
-        first_bytes = file_bytes[:512]
-        if first_bytes and all(32 <= byte < 127 or byte in (9, 10, 13) for byte in first_bytes):
-            raise self.Error(
-                f"{file_name} is a text file, not a {self.vendor_name} file.",
-                ["Choose a text format such as 'Multi TXT (two-column, common x-axis)' for this file."],
-            )
-        raise self.Error(
-            f"{file_name} is not a recognised {self.vendor_name} file.",
-            ["Check that the file opens in the instrument software.", self.TEXT_EXPORT_SUGGESTION],
-        )
+            return "Renishaw WXD"
+        return None
 
-    def _read_safely(self, file_name, read):
-        """Run a reading step, reporting any low-level failure as a damaged file."""
-        import zlib
+    def count_spectra(self, file_name, file_bytes, data_type):
+        if data_type == "Renishaw WDF":
+            return self._wdf_layout(file_name, file_bytes)["spectrum_count"]
+        return self._wxd_layout(file_name, file_bytes)["spectrum_count"]
 
-        try:
-            return read()
-        except self.Error:
-            raise
-        except (IndexError, KeyError, ValueError, OverflowError, zlib.error) as error:
-            raise self.Error(
-                f"{file_name} could not be read; the file appears to be damaged or incomplete.",
-                self.DAMAGED_FILE_SUGGESTIONS,
-            ) from error
-
-    def _file_stem(self, file_name):
-        """Return the file name without its folder or final extension."""
-        import os
-
-        stem = os.path.splitext(os.path.basename(file_name))[0].strip()
-        # Clustering drops any column whose name contains "Unnamed".
-        return stem.replace("Unnamed", "unnamed") or "spectrum"
-
-    def _integer(self, data, position, size, signed=False):
-        """Return the little-endian integer of `size` bytes stored at `position`."""
-        if position < 0 or position + size > len(data):
-            raise ValueError("integer outside the data")
-        return int.from_bytes(data[position:position + size], "little", signed=signed)
-
-    def _sort_ascending(self, file_name, raman_shift, intensities):
-        """Return the axis low-to-high with the spectra reordered to match."""
-        import numpy as np
-
-        if raman_shift.size < 2 or not np.all(np.isfinite(raman_shift)):
-            raise self.Error(f"{file_name} does not contain a usable x-axis.", self.DAMAGED_FILE_SUGGESTIONS)
-        steps = np.diff(raman_shift)
-        if np.all(steps < 0):
-            raman_shift, intensities = raman_shift[::-1], intensities[:, ::-1]
-        elif not np.all(steps > 0):
-            raise self.Error(
-                f"{file_name} has an x-axis that is not in increasing or decreasing order.",
-                [self.TEXT_EXPORT_SUGGESTION],
-            )
-        if not np.all(np.isfinite(intensities)):
-            raise self.Error(
-                f"{file_name} contains intensity values that are not numbers.",
-                [self.TEXT_EXPORT_SUGGESTION],
-            )
-        return np.ascontiguousarray(raman_shift), np.ascontiguousarray(intensities)
+    def read(self, file_name, file_bytes, data_type):
+        if data_type == "Renishaw WDF":
+            return self._read_wdf(file_name, file_bytes)
+        return self._read_wxd(file_name, file_bytes)
 
     def _spectrum_names(self, file_name, spectrum_numbers, origins, elapsed_seconds):
         """Name spectra as WiRE names its text exports: file, number, origin values, elapsed time."""
-        stem = self._file_stem(file_name)
+        stem = self.file_stem(file_name)
         if len(spectrum_numbers) == 1:
             return [stem]
         spectrum_names = []
@@ -3535,95 +3470,10 @@ class InstrumentFileReader:
             spectrum_names.append("__".join(name_parts))
         return spectrum_names
 
-    def _unique_column_names(self, column_names):
-        """Make column names unique and keep them off the names the app reserves."""
-        unique_names, used_names, renamed_count = [], set(), 0
-        for column_name in column_names:
-            unique_name, suffix = column_name, 2
-            while unique_name in used_names or unique_name.lower() in self.RESERVED_COLUMN_NAMES:
-                unique_name = f"{column_name} ({suffix})"
-                suffix += 1
-            if unique_name != column_name:
-                renamed_count += 1
-            used_names.add(unique_name)
-            unique_names.append(unique_name)
-        return unique_names, renamed_count
-
-    def _align_axes(self, file_names, axes, intensity_blocks):
-        """Put the spectra of several files on one axis, interpolating as the class merge does."""
-        import numpy as np
-        from scipy.interpolate import interp1d
-
-        reference_axis = axes[0]
-        if all(axis.size == reference_axis.size and np.max(np.abs(axis - reference_axis)) <= self.AXIS_TOLERANCE
-               for axis in axes[1:]):
-            return reference_axis, intensity_blocks, []
-
-        common_min = int(np.ceil(max(axis[0] for axis in axes)))
-        common_max = int(np.floor(min(axis[-1] for axis in axes)))
-        if common_min >= common_max:
-            raise self.Error(
-                "The selected files have no overlapping Raman-shift range.",
-                [f"{file_name}: {axis[0]:.1f} to {axis[-1]:.1f} cm⁻¹" for file_name, axis in zip(file_names, axes)],
-            )
-        ref_x = np.arange(common_min, common_max + 1, 1)
-        aligned_blocks = []
-        for axis, intensities in zip(axes, intensity_blocks):
-            interpolate = interp1d(axis, intensities, kind='linear', bounds_error=False, fill_value="extrapolate")
-            aligned_blocks.append(interpolate(ref_x))
-
-        spectrum_count = sum(intensities.shape[0] for intensities in intensity_blocks)
-        kept_percent = 100 * (common_max - common_min) / max(axis[-1] - axis[0] for axis in axes)
-        if kept_percent < 50:
-            note = ("warning", (
-                f"The {len(axes)} files in this class cover different Raman-shift ranges. "
-                f"Only the shared range, {common_min} to {common_max} cm⁻¹ ({ref_x.size} points, "
-                f"{kept_percent:.0f}% of the widest file), was kept; all {spectrum_count} spectra were "
-                f"linearly interpolated onto a 1 cm⁻¹ grid."
-            ))
-        else:
-            note = ("info", (
-                f"The {len(axes)} files in this class do not share one Raman-shift axis, "
-                f"so all {spectrum_count} spectra were linearly interpolated onto a common "
-                f"1 cm⁻¹ grid over the range every file covers ({common_min} to {common_max} cm⁻¹, "
-                f"{ref_x.size} points). Data outside this range was dropped."
-            ))
-        return ref_x, aligned_blocks, [note]
-
-    def _build_dataframe(self, raman_shift, intensity_blocks, column_names):
-        """Build the wide dataframe: RamanShift first, then one column per spectrum."""
-        import numpy as np
-        import pandas as pd
-
-        spectrum_count = sum(intensities.shape[0] for intensities in intensity_blocks)
-        table = np.empty((raman_shift.size, spectrum_count + 1), dtype=np.float64)
-        table[:, 0] = raman_shift
-        column = 1
-        for intensities in intensity_blocks:
-            table[:, column:column + intensities.shape[0]] = intensities.T
-            column += intensities.shape[0]
-        return pd.DataFrame(table, columns=["RamanShift"] + column_names)
-
-    def _too_large_error(self, file_name, spectrum_count, point_count):
-        return self.Error(
-            f"{file_name} is too large to load: {spectrum_count} spectra of {point_count} points.",
-            ["Split the measurement or export a subset from the instrument software."],
-        )
-
-    def _unfinished_note(self, file_name, spectrum_count, planned_count):
-        return ("info", f"{file_name} is an unfinished measurement: {spectrum_count} of {planned_count} "
-                        f"planned spectra were collected, and those were loaded.")
-
-    def _axis_unit_error(self, file_name, unit):
-        return self.Error(
-            f"{file_name} has its x-axis in {self.UNIT_NAMES.get(unit, 'an unknown unit')}, not Raman shift.",
-            [self.RAMAN_SHIFT_SUGGESTION],
-        )
-
     def _wdf_layout(self, file_name, file_bytes):
         """Check a WDF file's structure and return where its axis, spectra and origins are stored."""
         if len(file_bytes) < self.WDF_HEADER_SIZE:
-            raise self.Error(f"{file_name} is too short to be a WDF file.", self.DAMAGED_FILE_SUGGESTIONS)
+            raise SpectrumFileError(f"{file_name} is too short to be a WDF file.", self.DAMAGED_FILE_SUGGESTIONS)
         flags = self._integer(file_bytes, 16, 8)
         point_count = self._integer(file_bytes, 60, 4)
         capacity = self._integer(file_bytes, 64, 8)
@@ -3644,33 +3494,30 @@ class InstrumentFileReader:
             blocks.setdefault(bytes(file_bytes[position:position + 4]), (position + 16, block_size - 16))
             position += block_size
         if b"DATA" not in blocks or b"XLST" not in blocks:
-            raise self.Error(f"{file_name} ends before its spectra; the file is incomplete.",
+            raise SpectrumFileError(f"{file_name} ends before its spectra; the file is incomplete.",
                              self.DAMAGED_FILE_SUGGESTIONS)
 
         if y_list_length > 1:
-            raise self.Error(
+            raise SpectrumFileError(
                 f"{file_name} stores detector images rather than single spectra, which cannot be loaded.",
                 [self.TEXT_EXPORT_SUGGESTION],
             )
         if flags & self.WDF_MULTIPLE_AXES_FLAGS:
-            raise self.Error(
+            raise SpectrumFileError(
                 f"{file_name} is a multi-track file with more than one x-axis, which cannot be loaded.",
                 [self.TEXT_EXPORT_SUGGESTION],
             )
         if spectrum_count == 0:
-            raise self.Error(f"{file_name} contains no collected spectra.")
+            raise SpectrumFileError(f"{file_name} contains no collected spectra.")
         if spectrum_count > capacity or point_count < 2 or x_list_length != point_count:
-            raise self.Error(f"{file_name} has an inconsistent header.", self.DAMAGED_FILE_SUGGESTIONS)
+            raise SpectrumFileError(f"{file_name} has an inconsistent header.", self.DAMAGED_FILE_SUGGESTIONS)
         if spectrum_count * point_count > self.MAX_TOTAL_VALUES:
             raise self._too_large_error(file_name, spectrum_count, point_count)
 
         axis_position, axis_size = blocks[b"XLST"]
         data_position, data_size = blocks[b"DATA"]
         if axis_size < 8 + 4 * point_count or data_size < 4 * spectrum_count * point_count:
-            raise self.Error(f"{file_name} is missing part of its spectra.", self.DAMAGED_FILE_SUGGESTIONS)
-        axis_unit = self._integer(file_bytes, axis_position + 4, 4)
-        if axis_unit != self.RAMAN_SHIFT_UNIT:
-            raise self._axis_unit_error(file_name, axis_unit)
+            raise SpectrumFileError(f"{file_name} is missing part of its spectra.", self.DAMAGED_FILE_SUGGESTIONS)
         return {
             "point_count": point_count,
             "spectrum_count": spectrum_count,
@@ -3830,7 +3677,7 @@ class InstrumentFileReader:
         reserved, position = self._metakit_number(root, 0)
         schema_size, position = self._metakit_number(root, position)
         if reserved != 0 or bytes(root[position:position + schema_size]) != self.METAKIT_SCHEMA:
-            raise self.Error(
+            raise SpectrumFileError(
                 f"{file_name} uses a WXD layout that is not supported yet.",
                 ["Save the measurement as .wdf in WiRE, or export the spectra as text."],
             )
@@ -3954,22 +3801,20 @@ class InstrumentFileReader:
         spectrum_numbers = sorted(int(stream_name[7:]) for stream_name in streams
                                   if re.fullmatch(r"DataSet\d+", stream_name))
         if not spectrum_numbers:
-            raise self.Error(f"{file_name} contains no collected spectra.")
+            raise SpectrumFileError(f"{file_name} contains no collected spectra.")
         properties = self._wxd_stream(streams, "Properties")
 
-        spectral_axes = []
-        for stream_name in streams:
-            match = re.fullmatch(r"DataList(\d+)", stream_name)
-            if match and self._wxd_entry(properties, "dataListType" + match.group(1)) in self.SPECTRAL_AXIS_TYPES:
-                spectral_axes.append((stream_name, self._wxd_entry(properties, "dataListUnits" + match.group(1))))
+        spectral_axes = [
+            stream_name for stream_name in streams
+            if re.fullmatch(r"DataList\d+", stream_name)
+            and self._wxd_entry(properties, "dataListType" + stream_name[8:]) in self.SPECTRAL_AXIS_TYPES
+        ]
         if len(spectral_axes) != 1:
-            raise self.Error(
+            raise SpectrumFileError(
                 f"{file_name} does not describe a single spectral axis, so it cannot be loaded.",
                 [self.TEXT_EXPORT_SUGGESTION],
             )
-        axis_stream, axis_unit = spectral_axes[0]
-        if axis_unit != self.RAMAN_SHIFT_UNIT:
-            raise self._axis_unit_error(file_name, axis_unit)
+        axis_stream = spectral_axes[0]
 
         collected_count = self._wxd_entry(properties, "nCollectedDatasets")
         if not isinstance(collected_count, int) or not 0 < collected_count <= len(spectrum_numbers):
@@ -4033,3 +3878,306 @@ class InstrumentFileReader:
         if len(spectrum_numbers) < layout["planned_count"]:
             notes.append(self._unfinished_note(file_name, len(spectrum_numbers), layout["planned_count"]))
         return raman_shift, intensities, spectrum_names, notes
+
+
+class TextFiles(SpectrumFileFormat):
+    """Read delimited text: one two-column spectrum per file, or one table holding several spectra."""
+
+    DATA_TYPES = ("Text, one spectrum per file", "Text table")
+    EXPERIMENTAL = False
+    DELIMITERS = ("\t", ",", ";", None)
+    SAMPLED_LINES = 60
+
+    def __init__(self):
+        self._tables = {}
+
+    def data_type(self, file_name, file_bytes):
+        table = self._table(file_name, file_bytes)
+        if table is None:
+            return None
+        return self.DATA_TYPES[0] if table["values"].shape[1] == 2 else self.DATA_TYPES[1]
+
+    def count_spectra(self, file_name, file_bytes, data_type):
+        return self._table(file_name, file_bytes)["values"].shape[1] - 1
+
+    def read(self, file_name, file_bytes, data_type):
+        import numpy as np
+
+        table = self._table(file_name, file_bytes)
+        values = table["values"][np.argsort(table["values"][:, 0], kind="stable")]
+        if np.any(np.diff(values[:, 0]) == 0):
+            raise SpectrumFileError(f"{file_name} has repeated x values.",
+                                    ["Each x value may appear only once in a file."])
+        stem = self.file_stem(file_name)
+        spectrum_count = values.shape[1] - 1
+        if spectrum_count == 1:
+            spectrum_names = [stem]
+        elif table["column_names"]:
+            spectrum_names = table["column_names"]
+        else:
+            spectrum_names = [f"{stem}_{spectrum_number}" for spectrum_number in range(spectrum_count)]
+        return values[:, 0], values[:, 1:].T, spectrum_names, []
+
+    def _table(self, file_name, file_bytes):
+        """Parse the file once; return its numeric values and column names, or None if it is not a table."""
+        if file_bytes not in self._tables:
+            self._tables[file_bytes] = self._parse_table(file_name, file_bytes)
+        return self._tables[file_bytes]
+
+    def _split_line(self, line, delimiter, decimal_comma):
+        """Return the cells of one line, without quotes or the empty cells a trailing delimiter leaves."""
+        line = line.replace('"', "")
+        if decimal_comma:
+            line = line.replace(",", ".")
+        cells = [cell.strip() for cell in line.split(delimiter)]
+        while cells and not cells[-1]:
+            cells.pop()
+        return cells
+
+    def _numbers(self, cells):
+        """Return the cells as numbers, or None when any of them is not a number."""
+        try:
+            return [float(cell) for cell in cells]
+        except ValueError:
+            return None
+
+    def _delimiter(self, lines):
+        """Return the delimiter, decimal-comma flag and width under which most lines are rows of numbers."""
+        best_count, best_choice = 0, None
+        for delimiter in self.DELIMITERS:
+            for decimal_comma in ((False,) if delimiter == "," else (False, True)):
+                widths = []
+                for line in lines:
+                    cells = self._split_line(line, delimiter, decimal_comma)
+                    if len(cells) >= 2 and self._numbers(cells) is not None:
+                        widths.append(len(cells))
+                if len(widths) > best_count:
+                    best_count, best_choice = len(widths), (delimiter, decimal_comma, max(set(widths), key=widths.count))
+        if best_count < max(2, len(lines) // 2):
+            return None
+        return best_choice
+
+    def _parse_table(self, file_name, file_bytes):
+        import numpy as np
+
+        text = self._text(file_bytes)
+        if text is None:
+            return None
+        lines = [line for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+        choice = self._delimiter(lines[-self.SAMPLED_LINES:])
+        if choice is None:
+            return None
+        delimiter, decimal_comma, column_count = choice
+        if len(lines) * column_count > self.MAX_TOTAL_VALUES:
+            raise SpectrumFileError(f"{file_name} is too large to load: {len(lines)} lines of {column_count} columns.",
+                                    ["Split the file into smaller files."])
+
+        rows, header = [], []
+        for line in lines:
+            cells = self._split_line(line, delimiter, decimal_comma)
+            numbers = self._numbers(cells) if len(cells) == column_count else None
+            if numbers is not None:
+                rows.append(numbers)
+            elif not rows:
+                header = cells
+        values = np.array(rows, dtype=np.float64).reshape(-1, column_count)
+        values = values[np.isfinite(values).all(axis=1)]
+        if values.shape[0] < 2 or (values.shape[0] < len(lines) / 2 and values.shape[0] < 20):
+            return None
+        column_names = header[1:] if len(header) == column_count and all(header[1:]) else None
+        return {"values": values, "column_names": column_names}
+
+
+class SpectrumFileReader:
+    """Detect the data type of uploaded spectrum files and read them into the wide dataframe used by Data Upload."""
+
+    FORMATS = (RenishawFiles, TextFiles)
+    AXIS_TOLERANCE = 1e-3
+    RESERVED_COLUMN_NAMES = ("ramanshift", "average", "standard deviation", "all")
+    EXPERIMENTAL_WARNING = ("This is an **experimental feature**. Data might be **linearly interpolated** "
+                            "to have a common x-axis.")
+
+    def __init__(self):
+        self.formats = [format_class() for format_class in self.FORMATS]
+
+    def supported_data_types(self):
+        """Return the names of every data type that can be read."""
+        return [data_type for file_format in self.formats for data_type in file_format.DATA_TYPES]
+
+    def detect(self, file_name, file_bytes):
+        """Return the reader and the data type of one file, judged by its content."""
+        for file_format in self.formats:
+            data_type = self._read_safely(file_name, lambda: file_format.data_type(file_name, file_bytes))
+            if data_type:
+                return file_format, data_type
+        raise SpectrumFileError(
+            f"{file_name} is not a supported data type.",
+            ["Supported data types: " + "; ".join(self.supported_data_types()) + "."],
+        )
+
+    def inspect_files(self, files):
+        """Return the one data type shared by the files and the number of spectra in each file."""
+        data_type, file_formats = self._detect_one_data_type(files)
+        spectrum_counts = [
+            self._read_safely(file_name, lambda: file_format.count_spectra(file_name, file_bytes, data_type))
+            for (file_name, file_bytes), file_format in zip(files, file_formats)
+        ]
+        return data_type, spectrum_counts
+
+    def read_file(self, file_name, file_bytes):
+        """Return the data type, ascending x values, one spectrum per row, spectrum names and notes."""
+        file_format, data_type = self.detect(file_name, file_bytes)
+        return (data_type,) + self._read_one(file_format, data_type, file_name, file_bytes)
+
+    def read_files(self, files):
+        """Read the files of one class into a wide dataframe plus notices for the user."""
+        data_type, file_formats = self._detect_one_data_type(files)
+        notes = [("info", f"Data type: **{data_type}**")]
+        if file_formats[0].EXPERIMENTAL:
+            notes.append(("warning", self.EXPERIMENTAL_WARNING))
+
+        file_names, axes, intensity_blocks, column_names, stem_uses = [], [], [], [], {}
+        for (file_name, file_bytes), file_format in zip(files, file_formats):
+            x_values, intensities, spectrum_names, file_notes = self._read_one(file_format, data_type, file_name, file_bytes)
+            stem = file_format.file_stem(file_name)
+            stem_uses[stem] = stem_uses.get(stem, 0) + 1
+            if stem_uses[stem] > 1:
+                spectrum_names = [f"{stem} ({stem_uses[stem]}){name[len(stem):]}" if name.startswith(stem) else name
+                                  for name in spectrum_names]
+            file_names.append(file_name)
+            axes.append(x_values)
+            intensity_blocks.append(intensities)
+            column_names.extend(spectrum_names)
+            notes.extend(file_notes)
+        if sum(intensities.size for intensities in intensity_blocks) > SpectrumFileFormat.MAX_TOTAL_VALUES:
+            raise SpectrumFileError("The selected files are too large to load together.", ["Upload fewer files at once."])
+
+        column_names, renamed_count = self._unique_column_names(column_names)
+        x_values, intensity_blocks, alignment_notes = self._align_axes(file_names, axes, intensity_blocks)
+        notes.extend(alignment_notes)
+        if renamed_count:
+            notes.append(("info", f"{renamed_count} spectrum name(s) were changed so that "
+                                  f"every column name is unique."))
+        return self._build_dataframe(x_values, intensity_blocks, column_names), notes
+
+    def _detect_one_data_type(self, files):
+        """Detect every file and require that all of them are the same data type."""
+        if not files:
+            raise SpectrumFileError("No file was provided.")
+        detected = [self.detect(file_name, file_bytes) for file_name, file_bytes in files]
+        data_types = list(dict.fromkeys(data_type for _, data_type in detected))
+        if len(data_types) > 1:
+            raise SpectrumFileError(
+                f"These files are {len(data_types)} different data types. Upload one data type per class.",
+                [f"{file_name}: {data_type}" for (file_name, _), (_, data_type) in zip(files, detected)][:10],
+            )
+        return data_types[0], [file_format for file_format, _ in detected]
+
+    def _read_one(self, file_format, data_type, file_name, file_bytes):
+        def read():
+            x_values, intensities, spectrum_names, notes = file_format.read(file_name, file_bytes, data_type)
+            x_values, intensities = self._sort_ascending(file_name, x_values, intensities)
+            return x_values, intensities, spectrum_names, notes
+        return self._read_safely(file_name, read)
+
+    def _align_axes(self, file_names, axes, intensity_blocks):
+        """Put the spectra of several files on one axis, interpolating as the class merge does."""
+        import numpy as np
+        from scipy.interpolate import interp1d
+
+        reference_axis = axes[0]
+        if all(axis.size == reference_axis.size and np.max(np.abs(axis - reference_axis)) <= self.AXIS_TOLERANCE
+               for axis in axes[1:]):
+            return reference_axis, intensity_blocks, []
+
+        common_min = int(np.ceil(max(axis[0] for axis in axes)))
+        common_max = int(np.floor(min(axis[-1] for axis in axes)))
+        if common_min >= common_max:
+            raise SpectrumFileError(
+                "The selected files have no overlapping x-range.",
+                [f"{file_name}: {axis[0]:.1f} to {axis[-1]:.1f}" for file_name, axis in zip(file_names, axes)][:10],
+            )
+        ref_x = np.arange(common_min, common_max + 1, 1)
+        aligned_blocks = []
+        for axis, intensities in zip(axes, intensity_blocks):
+            interpolate = interp1d(axis, intensities, kind='linear', bounds_error=False, fill_value="extrapolate")
+            aligned_blocks.append(interpolate(ref_x))
+
+        spectrum_count = sum(intensities.shape[0] for intensities in intensity_blocks)
+        kept_percent = 100 * (common_max - common_min) / max(axis[-1] - axis[0] for axis in axes)
+        if kept_percent < 50:
+            note = ("warning", (
+                f"The {len(axes)} files in this class cover different x-ranges. Only the shared range, "
+                f"{common_min} to {common_max} ({ref_x.size} points, {kept_percent:.0f}% of the widest file), "
+                f"was kept; all {spectrum_count} spectra were linearly interpolated onto an axis with a step of 1."
+            ))
+        else:
+            note = ("info", (
+                f"The {len(axes)} files in this class do not share one x-axis, so all {spectrum_count} spectra "
+                f"were linearly interpolated onto a common axis with a step of 1 over the range every file covers "
+                f"({common_min} to {common_max}, {ref_x.size} points). Data outside this range was dropped."
+            ))
+        return ref_x, aligned_blocks, [note]
+
+    def _read_safely(self, file_name, read):
+        """Run a reading step, reporting any low-level failure as a damaged file."""
+        import zlib
+
+        try:
+            return read()
+        except SpectrumFileError:
+            raise
+        except (IndexError, KeyError, ValueError, OverflowError, zlib.error) as error:
+            raise SpectrumFileError(
+                f"{file_name} could not be read; the file appears to be damaged or incomplete.",
+                SpectrumFileFormat.DAMAGED_FILE_SUGGESTIONS,
+            ) from error
+
+    def _sort_ascending(self, file_name, x_values, intensities):
+        """Return the axis low-to-high with the spectra reordered to match."""
+        import numpy as np
+
+        if x_values.size < 2 or not np.all(np.isfinite(x_values)):
+            raise SpectrumFileError(f"{file_name} does not contain a usable x-axis.", SpectrumFileFormat.DAMAGED_FILE_SUGGESTIONS)
+        steps = np.diff(x_values)
+        if np.all(steps < 0):
+            x_values, intensities = x_values[::-1], intensities[:, ::-1]
+        elif not np.all(steps > 0):
+            raise SpectrumFileError(
+                f"{file_name} has an x-axis that is not in increasing or decreasing order.",
+                [SpectrumFileFormat.TEXT_EXPORT_SUGGESTION],
+            )
+        if not np.all(np.isfinite(intensities)):
+            raise SpectrumFileError(
+                f"{file_name} contains intensity values that are not numbers.",
+                [SpectrumFileFormat.TEXT_EXPORT_SUGGESTION],
+            )
+        return np.ascontiguousarray(x_values), np.ascontiguousarray(intensities)
+
+    def _unique_column_names(self, column_names):
+        """Make column names unique and keep them off the names the app reserves."""
+        unique_names, used_names, renamed_count = [], set(), 0
+        for column_name in column_names:
+            unique_name, suffix = column_name, 2
+            while unique_name in used_names or unique_name.lower() in self.RESERVED_COLUMN_NAMES:
+                unique_name = f"{column_name} ({suffix})"
+                suffix += 1
+            if unique_name != column_name:
+                renamed_count += 1
+            used_names.add(unique_name)
+            unique_names.append(unique_name)
+        return unique_names, renamed_count
+
+    def _build_dataframe(self, x_values, intensity_blocks, column_names):
+        """Build the wide dataframe: RamanShift first, then one column per spectrum."""
+        import numpy as np
+        import pandas as pd
+
+        spectrum_count = sum(intensities.shape[0] for intensities in intensity_blocks)
+        table = np.empty((x_values.size, spectrum_count + 1), dtype=np.float64)
+        table[:, 0] = x_values
+        column = 1
+        for intensities in intensity_blocks:
+            table[:, column:column + intensities.shape[0]] = intensities.T
+            column += intensities.shape[0]
+        return pd.DataFrame(table, columns=["RamanShift"] + column_names)

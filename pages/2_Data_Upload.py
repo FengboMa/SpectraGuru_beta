@@ -35,71 +35,12 @@ hide_st_style = """
 """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
-@st.cache_data
-def load_data(file):
-    return pd.read_csv(file, encoding='utf-8', comment='#')
-
-@st.cache_data
-def load_tab_data(file):
-    return pd.read_csv(file, encoding='utf-8', sep='\t')
-
-@st.cache_data
-def load_multi_data(file_paths):
-    def read_columns(file_path):
-        try:
-            df = pd.read_csv(
-                file_path,
-                delim_whitespace=True,
-                skip_blank_lines=True,
-                comment='#',
-                header=None,
-                on_bad_lines='skip'
-            )
-
-            df = df.apply(pd.to_numeric, errors='coerce').dropna()
-
-            if df.shape[1] < 2:
-                raise ValueError("File must contain at least two numeric columns.")
-
-            return df[0], df[1]
-
-        except Exception as e:
-            show_feedback(
-                message=f"Failed to read file: {file_path.name}",
-                severity="error",
-                suggestions=[
-                    "Ensure the file has two numeric columns.",
-                    "Remove header text or comments.",
-                    "Confirm the selected format matches the file type."
-                ],
-                details=traceback.format_exc(),
-                doc_link="https://fengboma.github.io/docs.spectraguru/docs/Data-Upload.html"
-            )
-            st.stop()
-
-    first_columns, second_columns, file_names = [], [], []
-    for file in file_paths:
-        first_col, second_col = read_columns(file)
-        if first_col is None or second_col is None:
-            raise ValueError(f"Failed to read columns from file: {file}")
-        first_columns.append(first_col)
-        second_columns.append(second_col)
-        file_names.append(file.name)
-    if not first_columns:
-        raise ValueError("No columns were read from the files.")
-    reference_column = first_columns[0]
-    for column in first_columns[1:]:
-        if not reference_column.equals(column):
-            raise ValueError("The first column is not the same in all files.")
-    df = pd.concat(second_columns, axis=1)
-    df.insert(0, 'RamanShift', reference_column)
-    df.columns = ['RamanShift'] + file_names
-    return df
+spectrum_file_reader = function.SpectrumFileReader()
 
 @st.cache_data(max_entries=8)
-def load_instrument_data(kind, files):
-    """Read instrument files into the working dataframe plus user notices."""
-    return function.InstrumentFileReader(kind).read_files([(f.name, f.getvalue()) for f in files])
+def load_spectrum_files(files):
+    """Read uploaded files of one data type into the working dataframe plus user notices."""
+    return spectrum_file_reader.read_files([(f.name, f.getvalue()) for f in files])
 
 def show_label_editor(temp_df, default_labels):
     """
@@ -139,7 +80,7 @@ def show_label_editor(temp_df, default_labels):
 
 # ----------------------------------------
 st.write("## Data upload")
-st.write("Upload spectra by class, choose the data source and format, then assign labels before moving to processing.")
+st.write("Upload spectra by class, choose the data source, then assign labels before moving to processing.")
 
 # ----------------------------------------
 # --- Automatic database connection ------------------------------------------
@@ -242,22 +183,9 @@ preview_data = st.toggle(
 if 'selected_counts' not in st.session_state:
     st.session_state.selected_counts = {}   # {class_idx: total_spectra_in_that_class}
 
-# --- Data format options ---
-FORMAT_OPTIONS = {
-    "Multi TXT (two-column, common x-axis)": {"kind": "multi_txt", "multi": True,  "types": ["txt"]},
-    "Multi CSV (two-column, common x-axis)": {"kind": "multi_csv", "multi": True,  "types": ["csv"]},
-    "Single TSV (.tsv / tab-separated)":     {"kind": "single_tsv", "multi": False, "types": ["csv"]},
-    "Single CSV (comma-separated)":          {"kind": "single_csv", "multi": False, "types": ["csv"]},
-}
-# Instrument-vendor formats come from the reader's vendor list and are still experimental.
-for _vendor, _details in function.InstrumentFileReader.VENDORS.items():
-    FORMAT_OPTIONS[_details["label"]] = {
-        "kind": _vendor, "multi": True, "types": _details["extensions"], "experimental": True,
-    }
-
 MAX_TOTAL_SPECTRA = 1000
 
-def process_upload(kind, uploaded, remaining=None, notes=None):
+def process_upload(uploaded, remaining=None, notes=None):
     if not uploaded:
         show_feedback(
             message="No file uploaded.",
@@ -268,52 +196,34 @@ def process_upload(kind, uploaded, remaining=None, notes=None):
         return None
 
     try:
-        if kind in ("multi_txt", "multi_csv"):
-            df = load_multi_data(uploaded)
-
-        elif kind == "single_tsv":
-            df = load_tab_data(uploaded)
-
-        elif kind == "single_csv":
-            df = load_data(uploaded)
-
-        elif kind in function.InstrumentFileReader.VENDORS:
-            # Count from the file headers first, so an over-limit upload is
-            # refused before anything is parsed or cached for this class.
-            reader = function.InstrumentFileReader(kind)
-            counts = [reader.count_spectra(f.name, f.getvalue()) for f in uploaded]
-            if remaining is not None and sum(counts) > remaining:
-                if len(uploaded) == 1:
-                    held = f"{uploaded[0].name} holds {counts[0]} spectra"
-                    suggestions = []
-                else:
-                    held = f"The {len(uploaded)} selected files hold {sum(counts)} spectra"
-                    suggestions = [f"{f.name}: {n} spectra" for f, n in zip(uploaded, counts)][:10]
-                if remaining < MAX_TOTAL_SPECTRA:
-                    suggestions.append(
-                        f"Other classes already hold {MAX_TOTAL_SPECTRA - remaining} spectra, "
-                        f"leaving room for {max(remaining, 0)}."
-                    )
-                suggestions.append("Load fewer files, or save a smaller selection of spectra from the instrument software.")
-                show_feedback(
-                    message=f"{held}, but SpectraGuru accepts {MAX_TOTAL_SPECTRA} in total. Nothing was loaded.",
-                    severity="error",
-                    suggestions=suggestions,
-                    doc_link="https://fengboma.github.io/docs.spectraguru/docs/Data-Upload.html"
+        # Detect the data type and count the spectra first, so a mixed or
+        # over-limit upload is refused before anything is cached for this class.
+        files = [(f.name, f.getvalue()) for f in uploaded]
+        _, counts = spectrum_file_reader.inspect_files(files)
+        if remaining is not None and sum(counts) > remaining:
+            if len(uploaded) == 1:
+                held = f"{uploaded[0].name} holds {counts[0]} spectra"
+                suggestions = []
+            else:
+                held = f"The {len(uploaded)} selected files hold {sum(counts)} spectra"
+                suggestions = [f"{f.name}: {n} spectra" for f, n in zip(uploaded, counts)][:10]
+            if remaining < MAX_TOTAL_SPECTRA:
+                suggestions.append(
+                    f"Other classes already hold {MAX_TOTAL_SPECTRA - remaining} spectra, "
+                    f"leaving room for {max(remaining, 0)}."
                 )
-                return None
-            df, file_notes = load_instrument_data(kind, uploaded)
-            if notes is not None:
-                notes.extend(file_notes)
-
-        else:
+            suggestions.append("Load fewer files, or save a smaller selection of spectra from the instrument software.")
             show_feedback(
-                message="Unsupported format selected.",
+                message=f"{held}, but SpectraGuru accepts {MAX_TOTAL_SPECTRA} in total. Nothing was loaded.",
                 severity="error",
-                suggestions=["Choose a valid format from the dropdown."],
+                suggestions=suggestions,
                 doc_link="https://fengboma.github.io/docs.spectraguru/docs/Data-Upload.html"
             )
             return None
+
+        df, file_notes = load_spectrum_files(uploaded)
+        if notes is not None:
+            notes.extend(file_notes)
 
         if df is None or df.empty:
             show_feedback(
@@ -329,19 +239,7 @@ def process_upload(kind, uploaded, remaining=None, notes=None):
 
         return df
 
-    except pd.errors.ParserError:
-        show_feedback(
-            message="File parsing failed.",
-            severity="error",
-            suggestions=[
-                "Ensure file is valid CSV or TXT.",
-                "Check delimiter selection."
-            ],
-            doc_link="https://fengboma.github.io/docs.spectraguru/docs/Data-Upload.html"
-        )
-        return None
-
-    except function.InstrumentFileReader.Error as e:
+    except function.SpectrumFileError as e:
         show_feedback(
             message=str(e),
             severity="error",
@@ -354,10 +252,7 @@ def process_upload(kind, uploaded, remaining=None, notes=None):
         show_feedback(
             message="Something went wrong while loading your file.",
             severity="error",
-            suggestions=[
-                "Confirm the file format matches your selection.",
-                "Try re-saving the file as UTF-8."
-            ],
+            suggestions=["Confirm the file is one of the supported data types."],
             details=traceback.format_exc(),
             doc_link="https://fengboma.github.io/docs.spectraguru/docs/Data-Upload.html"
         )
@@ -441,58 +336,31 @@ for idx in range(int(n_classes)):
 
         # ======================= 2-A. MANUAL UPLOAD ======================
         if source == "Manual Upload":
-            fmt = st.selectbox(
-                "Select file format",
-                list(FORMAT_OPTIONS.keys()),
-                index=None,
-                placeholder="Choose a format ...",
-                key=pkey(f"class_fmt_{idx}")
+            uploads = st.file_uploader(
+                "Upload file(s)",
+                accept_multiple_files=True,
+                key=pkey(f"class_upload_{idx}"),
+                help="The data type is detected from the files. Upload one data type per class: "
+                     + "; ".join(spectrum_file_reader.supported_data_types()) + "."
             )
-            if fmt:
-                cfg = FORMAT_OPTIONS[fmt]
-                if cfg.get("experimental"):
-                    st.warning(
-                        "This is an **experimental feature**. Data might be **linearly interpolated** "
-                        "to have a common x-axis."
-                    )
-                if cfg["multi"]:
-                    uploads = st.file_uploader(
-                        "Upload file(s)",
-                        type=cfg["types"],
-                        accept_multiple_files=True,
-                        key=pkey(f"class_upload_{idx}")
-                    )
-                    if uploads:
-                        try:
-                            df_this = process_upload(cfg["kind"], uploads, remaining, class_notes)
-                        except Exception as e:
-                            st.error(f"Error loading {class_label}: {e}")
-                            all_ready = False
-                    else:
-                        all_ready = False
-                else:
-                    upload = st.file_uploader(
-                        "Upload file",
-                        type=cfg["types"],
-                        key=pkey(f"class_upload_{idx}")
-                    )
-                    if upload:
-                        try:
-                            df_this = process_upload(cfg["kind"], upload)
-                        except Exception as e:
-                            st.error(f"Error loading {class_label}: {e}")
-                            all_ready = False
-                    else:
-                        all_ready = False
+            if uploads:
+                try:
+                    df_this = process_upload(uploads, remaining, class_notes)
+                except Exception as e:
+                    st.error(f"Error loading {class_label}: {e}")
+                    all_ready = False
             else:
                 all_ready = False
 
             # Sample data option for single-class upload
-            if n_classes == 1 and (df_this is None or not fmt):
+            if n_classes == 1 and df_this is None:
                 st.info("Don't have data? Try with sample data.")
                 if st.button("Load sample data", key=pkey("sample_data_btn")):
                     try:
-                        df_sample = load_data(r'element/sampledata.csv')
+                        with open(r'element/sampledata.csv', 'rb') as sample_file:
+                            df_sample, _ = spectrum_file_reader.read_files(
+                                [('sampledata.csv', sample_file.read())]
+                            )
                         df_this   = df_sample
                         st.session_state.df         = df_sample
                         st.session_state.backup     = df_sample
@@ -528,7 +396,7 @@ for idx in range(int(n_classes)):
                 elif prospective_total > 500:
                     st.warning("Total selected spectra exceed **500**. Processing may be slow.")
             else:
-                st.info("Waiting for format & upload." if fmt else "Select a format.")
+                st.info("Waiting for upload.")
                 # ensure this class doesn't count yet
                 st.session_state.selected_counts[idx] = 0
 

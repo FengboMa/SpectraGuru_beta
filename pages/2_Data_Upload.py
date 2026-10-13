@@ -268,13 +268,14 @@ def describe_loaded_spectra(class_label, df, status="loaded"):
         return f"{class_label} {status} with 1 spectrum containing {point_count} data {point_word}."
     return f"{class_label} {status} with {spectrum_count} spectra, each containing {point_count} data {point_word}."
 
-def show_class_notes(notes):
-    """Show the notices a reader attached to a loaded class."""
+def show_class_notes(notes, above_summary):
+    """Show a loaded class's notices: the detected type and its warning above the summary line, the rest below."""
     for severity, text in notes:
-        if severity == "warning":
-            st.warning(text)
-        else:
-            st.info(text)
+        if severity in ("caption", "experimental"):
+            if above_summary:
+                (st.caption if severity == "caption" else st.warning)(text)
+        elif not above_summary:
+            (st.warning if severity == "warning" else st.info)(text)
 
 if n_classes > 1:
     st.warning(
@@ -303,8 +304,9 @@ for idx in range(int(n_classes)):
         cache_key = pkey(f"class_df_{idx}")
         df_cached = st.session_state.get(cache_key)
         if df_cached is not None:
+            show_class_notes(st.session_state.get(pkey(f"class_notes_{idx}"), []), above_summary=True)
             st.success(describe_loaded_spectra(class_label, df_cached, status="is already loaded"))
-            show_class_notes(st.session_state.get(pkey(f"class_notes_{idx}"), []))
+            show_class_notes(st.session_state.get(pkey(f"class_notes_{idx}"), []), above_summary=False)
             if preview_data:
                 st.dataframe(df_cached, hide_index=True)
 
@@ -378,8 +380,9 @@ for idx in range(int(n_classes)):
                         )
 
             if df_this is not None:
+                show_class_notes(class_notes, above_summary=True)
                 st.success(describe_loaded_spectra(class_label, df_this, status="loaded"))
-                show_class_notes(class_notes)
+                show_class_notes(class_notes, above_summary=False)
                 if preview_data:
                     st.dataframe(df_this, hide_index=True)
                 st.session_state[cache_key] = df_this

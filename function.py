@@ -3387,6 +3387,34 @@ class SpectrumFileFormat:
         except UnicodeDecodeError:
             return file_bytes.decode("latin-1")
 
+    def _numbered_names(self, file_name, spectrum_count):
+        """Name spectra after their file: the file name alone for one spectrum, numbered from 0 for several."""
+        stem = self.file_stem(file_name)
+        if spectrum_count == 1:
+            return [stem]
+        return [f"{stem}_{spectrum_number}" for spectrum_number in range(spectrum_count)]
+
+    def _sorted_points(self, file_name, points):
+        """Return rows of x and y values in ascending x, without exact repeats; other repeated x values are refused."""
+        import numpy as np
+
+        points = np.unique(points, axis=0)
+        if np.any(np.diff(points[:, 0]) == 0):
+            raise SpectrumFileError(f"{file_name} has repeated x values.",
+                                    ["Each x value may appear only once in a file."])
+        return points
+
+    def _shared_axis(self, file_name, axes):
+        """Return the x-axis every spectrum of a file uses, refusing a file whose spectra have different ones."""
+        import numpy as np
+
+        if any(not np.array_equal(axis, axes[0]) for axis in axes[1:]):
+            raise SpectrumFileError(
+                f"{file_name} holds spectra that each have their own x-axis, which cannot be loaded.",
+                [self.TEXT_EXPORT_SUGGESTION],
+            )
+        return axes[0]
+
     def _integer(self, data, position, size, signed=False):
         """Return the little-endian integer of `size` bytes stored at `position`."""
         if position < 0 or position + size > len(data):
@@ -3880,6 +3908,141 @@ class RenishawFiles(SpectrumFileFormat):
         return raman_shift, intensities, spectrum_names, notes
 
 
+class SpcFiles(SpectrumFileFormat):
+    """Read GRAMS SPC files, the format FirstDefender and many other instruments save.
+
+    The layout follows SPC.H, the description of the format published by Galactic Industries.
+    """
+
+    DATA_TYPES = ("GRAMS SPC",)
+    MAX_SPECTRA = 100_000
+    NEW_FORMAT, OLD_FORMAT = 0x4B, 0x4D
+    NEW_HEADER_SIZE = 512
+    OLD_HEADER_SIZE = 224
+    SUBFILE_HEADER_SIZE = 32
+    FLOAT_EXPONENT = -128
+    SIXTEEN_BIT_FLAG = 0x01
+    MULTIPLE_SPECTRA_FLAG = 0x04
+    X_PER_SPECTRUM_FLAG = 0x40
+    X_VALUES_FLAG = 0x80
+
+    def data_type(self, file_name, file_bytes):
+        if len(file_bytes) < 2 or file_bytes[1] not in (self.NEW_FORMAT, self.OLD_FORMAT):
+            return None
+        if not file_name.lower().endswith(".spc"):
+            try:
+                self._layout(file_name, file_bytes)
+            except (SpectrumFileError, ValueError):
+                return None
+        return self.DATA_TYPES[0]
+
+    def count_spectra(self, file_name, file_bytes, data_type):
+        return self._layout(file_name, file_bytes)["spectrum_count"]
+
+    def read(self, file_name, file_bytes, data_type):
+        import numpy as np
+
+        layout = self._layout(file_name, file_bytes)
+        position, point_count = layout["position"], layout["point_count"]
+        axes = []
+        if layout["has_x_values"] and not layout["has_x_per_spectrum"]:
+            axes.append(np.frombuffer(file_bytes, dtype="<f4", count=point_count, offset=position).astype(np.float64))
+            position += 4 * point_count
+        elif not layout["has_x_per_spectrum"]:
+            axes.append(np.linspace(layout["first_x"], layout["last_x"], point_count))
+
+        intensities = []
+        for _ in range(layout["spectrum_count"]):
+            exponent = layout["exponent"]
+            if layout["has_multiple_spectra"]:
+                exponent = self._integer(file_bytes, position + 1, 1, signed=True)
+            if layout["has_x_per_spectrum"]:
+                point_count = self._integer(file_bytes, position + 16, 4)
+                axes.append(np.frombuffer(file_bytes, dtype="<f4", count=point_count,
+                                          offset=position + self.SUBFILE_HEADER_SIZE).astype(np.float64))
+                position += 4 * point_count
+            position += self.SUBFILE_HEADER_SIZE
+            intensities.append(self._intensities(file_bytes, position, point_count, exponent, layout))
+            position += point_count * (2 if layout["is_16_bit"] and exponent != self.FLOAT_EXPONENT else 4)
+
+        x_values = self._shared_axis(file_name, axes)
+        return x_values, np.array(intensities), self._numbered_names(file_name, len(intensities)), []
+
+    def _layout(self, file_name, file_bytes):
+        """Check an SPC file's header and return what is needed to find its spectra."""
+        import struct
+
+        flags, is_old_format = file_bytes[0], file_bytes[1] == self.OLD_FORMAT
+        if len(file_bytes) < (self.OLD_HEADER_SIZE if is_old_format else self.NEW_HEADER_SIZE) + self.SUBFILE_HEADER_SIZE:
+            raise SpectrumFileError(f"{file_name} is too short to be an SPC file.", self.DAMAGED_FILE_SUGGESTIONS)
+        is_16_bit = bool(flags & self.SIXTEEN_BIT_FLAG)
+        has_multiple_spectra = bool(flags & self.MULTIPLE_SPECTRA_FLAG)
+        has_x_values = bool(flags & self.X_VALUES_FLAG) and not is_old_format
+        has_x_per_spectrum = has_x_values and bool(flags & self.X_PER_SPECTRUM_FLAG)
+        smallest_value_size = 2 if is_16_bit else 4
+
+        if is_old_format:
+            position = self.OLD_HEADER_SIZE
+            exponent = self._integer(file_bytes, 2, 1, signed=True)
+            point_count, first_x, last_x = struct.unpack_from("<fff", file_bytes, 4)
+            if not 2 <= point_count <= len(file_bytes) or point_count != int(point_count):
+                raise ValueError("point count is not usable")
+            point_count = int(point_count)
+            spectrum_count = 1
+            if has_multiple_spectra:
+                spectrum_count = (len(file_bytes) - position) // (self.SUBFILE_HEADER_SIZE + smallest_value_size * point_count)
+        else:
+            position = self.NEW_HEADER_SIZE
+            exponent = self._integer(file_bytes, 3, 1, signed=True)
+            point_count = self._integer(file_bytes, 4, 4)
+            first_x, last_x = struct.unpack_from("<dd", file_bytes, 8)
+            spectrum_count = max(self._integer(file_bytes, 24, 4), 1)
+
+        if spectrum_count > self.MAX_SPECTRA:
+            raise self._too_large_error(file_name, spectrum_count, point_count)
+        if has_x_per_spectrum:
+            smallest_file_size = position + spectrum_count * self.SUBFILE_HEADER_SIZE
+        else:
+            if point_count < 2:
+                raise ValueError("point count is not usable")
+            if spectrum_count * point_count > self.MAX_TOTAL_VALUES:
+                raise self._too_large_error(file_name, spectrum_count, point_count)
+            smallest_file_size = (position + (4 * point_count if has_x_values else 0)
+                                  + spectrum_count * (self.SUBFILE_HEADER_SIZE + smallest_value_size * point_count))
+        if spectrum_count < 1 or smallest_file_size > len(file_bytes):
+            raise SpectrumFileError(f"{file_name} ends before its spectra; the file is incomplete.",
+                                    self.DAMAGED_FILE_SUGGESTIONS)
+        return {
+            "position": position,
+            "point_count": point_count,
+            "spectrum_count": spectrum_count,
+            "first_x": first_x,
+            "last_x": last_x,
+            "exponent": exponent,
+            "is_16_bit": is_16_bit,
+            "is_old_format": is_old_format,
+            "has_multiple_spectra": has_multiple_spectra,
+            "has_x_values": has_x_values,
+            "has_x_per_spectrum": has_x_per_spectrum,
+        }
+
+    def _intensities(self, file_bytes, position, point_count, exponent, layout):
+        """Return one spectrum's intensities: stored as floats, or as fractions scaled by two to the exponent."""
+        import numpy as np
+
+        if exponent == self.FLOAT_EXPONENT:
+            return np.frombuffer(file_bytes, dtype="<f4", count=point_count, offset=position).astype(np.float64)
+        if layout["is_16_bit"]:
+            return np.frombuffer(file_bytes, dtype="<i2", count=point_count, offset=position) * 2.0 ** (exponent - 16)
+        if layout["is_old_format"]:
+            # The old format stores the high 16-bit word of each value first.
+            words = np.frombuffer(file_bytes, dtype="<u2", count=2 * point_count, offset=position).astype(np.uint32)
+            fractions = ((words[0::2] << 16) | words[1::2]).view(np.int32)
+        else:
+            fractions = np.frombuffer(file_bytes, dtype="<i4", count=point_count, offset=position)
+        return fractions * 2.0 ** (exponent - 32)
+
+
 class TextFiles(SpectrumFileFormat):
     """Read delimited text: one two-column spectrum per file, or one table holding several spectra."""
 
@@ -3901,21 +4064,13 @@ class TextFiles(SpectrumFileFormat):
         return self._table(file_name, file_bytes)["values"].shape[1] - 1
 
     def read(self, file_name, file_bytes, data_type):
-        import numpy as np
-
         table = self._table(file_name, file_bytes)
-        values = table["values"][np.argsort(table["values"][:, 0], kind="stable")]
-        if np.any(np.diff(values[:, 0]) == 0):
-            raise SpectrumFileError(f"{file_name} has repeated x values.",
-                                    ["Each x value may appear only once in a file."])
-        stem = self.file_stem(file_name)
+        values = self._sorted_points(file_name, table["values"])
         spectrum_count = values.shape[1] - 1
-        if spectrum_count == 1:
-            spectrum_names = [stem]
-        elif table["column_names"]:
+        if spectrum_count > 1 and table["column_names"]:
             spectrum_names = table["column_names"]
         else:
-            spectrum_names = [f"{stem}_{spectrum_number}" for spectrum_number in range(spectrum_count)]
+            spectrum_names = self._numbered_names(file_name, spectrum_count)
         return values[:, 0], values[:, 1:].T, spectrum_names, []
 
     def _table(self, file_name, file_bytes):
@@ -3991,7 +4146,7 @@ class TextFiles(SpectrumFileFormat):
 class SpectrumFileReader:
     """Detect the data type of uploaded spectrum files and read them into the wide dataframe used by Data Upload."""
 
-    FORMATS = (RenishawFiles, TextFiles)
+    FORMATS = (RenishawFiles, SpcFiles, TextFiles)
     AXIS_TOLERANCE = 1e-3
     RESERVED_COLUMN_NAMES = ("ramanshift", "average", "standard deviation", "all")
     EXPERIMENTAL_WARNING = ("This is an **experimental feature**. Data might be **linearly interpolated** "
@@ -4121,13 +4276,14 @@ class SpectrumFileReader:
 
     def _read_safely(self, file_name, read):
         """Run a reading step, reporting any low-level failure as a damaged file."""
+        import struct
         import zlib
 
         try:
             return read()
         except SpectrumFileError:
             raise
-        except (IndexError, KeyError, ValueError, OverflowError, zlib.error) as error:
+        except (IndexError, KeyError, ValueError, OverflowError, struct.error, zlib.error) as error:
             raise SpectrumFileError(
                 f"{file_name} could not be read; the file appears to be damaged or incomplete.",
                 SpectrumFileFormat.DAMAGED_FILE_SUGGESTIONS,

@@ -4277,10 +4277,117 @@ class TextFiles(SpectrumFileFormat):
         return {"values": values, "column_names": column_names}
 
 
+class Tec5Files(TextFiles):
+    """Read the tab-separated text files that tec5 MultiSpec Pro saves.
+
+    The layouts follow the program's manual: one spectrum per file under a "User" and "Title" or a
+    "#Format" heading, one spectrum per row (single file mode), and "Save All To ASCII".
+    """
+
+    DATA_TYPES = ("tec5 ASCII",)
+    EXPERIMENTAL = True
+    SPECTRA_MARKER = "*** Spectra data ***"
+    RESULTS_MARKER = "*** Result data ***"
+    SAMPLE_NAMES = ("sample data", "sample")
+
+    def data_type(self, file_name, file_bytes):
+        return self.DATA_TYPES[0] if self._table(file_name, file_bytes) else None
+
+    def count_spectra(self, file_name, file_bytes, data_type):
+        return len(self._table(file_name, file_bytes)["intensities"])
+
+    def read(self, file_name, file_bytes, data_type):
+        import numpy as np
+
+        table = self._table(file_name, file_bytes)
+        if table["row_names"]:
+            stem = self.file_stem(file_name)
+            spectrum_names = [f"{stem}_{row_name}" for row_name in table["row_names"]]
+        else:
+            spectrum_names = self._numbered_names(file_name, len(table["intensities"]))
+        notes = []
+        if table["incomplete_rows"]:
+            notes.append(("info", f"{table['incomplete_rows']} incomplete row(s) of {file_name} were left out."))
+        if table["other_kinds"]:
+            notes.append(("info", f"{file_name} also holds {', '.join(table['other_kinds'])}; "
+                                  f"only {table['loaded_kind']} was loaded."))
+        return np.array(table["x_values"]), np.array(table["intensities"]), spectrum_names, notes
+
+    def _leading_numbers(self, cells):
+        """Return the numbers at the start of a row, up to the first cell that is not a number."""
+        numbers = []
+        for cell in cells:
+            number = self._numbers([cell])
+            if number is None:
+                break
+            numbers.extend(number)
+        return numbers
+
+    def _parse_table(self, file_name, file_bytes):
+        heading = [line for line in (self._text(file_bytes[:4096]) or "").splitlines() if line.strip()][:4]
+        has_format_heading = bool(heading) and heading[0].startswith("#Format:") and "MSPRO_II" in heading[0]
+        has_user_heading = (bool(heading) and heading[0].startswith("User")
+                            and any(line.lstrip().startswith("Title") for line in heading[1:]))
+        if not has_format_heading and not has_user_heading:
+            return None
+
+        lines = [line for line in self._text(file_bytes).splitlines() if line.strip()]
+        rows = [self._split_line(line, "\t", True) for line in lines]
+        first_cells = [row[0] if row else "" for row in rows]
+        axis_row = next((number for number, line in enumerate(lines[:10])
+                         if line.startswith("\t") and len(self._leading_numbers(rows[number][1:])) > 1), None)
+        table = {"x_values": [], "intensities": [], "row_names": [], "incomplete_rows": 0, "other_kinds": [], "loaded_kind": None}
+        if self.SPECTRA_MARKER in first_cells:
+            self._read_save_all(file_name, rows[first_cells.index(self.SPECTRA_MARKER) + 1:], table)
+        elif axis_row is not None:
+            self._read_row_per_spectrum(rows[axis_row:], table)
+        else:
+            self._read_columns(file_name, super()._parse_table(file_name, file_bytes), table)
+        if len(table["x_values"]) < 2 or len(table["intensities"]) == 0:
+            raise SpectrumFileError(f"{file_name} contains no spectra.")
+        return table
+
+    def _read_columns(self, file_name, text_table, table):
+        """One spectrum in two columns below the heading lines."""
+        if text_table is not None:
+            points = self._sorted_points(file_name, text_table["values"])
+            table["x_values"], table["intensities"] = points[:, 0], points[:, 1:].T
+
+    def _read_row_per_spectrum(self, rows, table):
+        """Single file mode: a row of x values, then one row per spectrum that starts with its date and time."""
+        table["x_values"] = self._leading_numbers(rows[0][1:])
+        for row in rows[1:]:
+            values = self._leading_numbers(row[1:])
+            if len(values) < len(table["x_values"]):
+                table["incomplete_rows"] += 1
+                continue
+            table["intensities"].append(values[:len(table["x_values"])])
+            table["row_names"].append(row[0])
+
+    def _read_save_all(self, file_name, rows, table):
+        """Save All To ASCII: every kind of spectrum side by side as x and y columns; the sample spectrum is read."""
+        import numpy as np
+
+        kinds = rows[0][0::2] if rows else []
+        loaded = next((number for number, kind in enumerate(kinds) if kind.lower() in self.SAMPLE_NAMES), 0)
+        points = []
+        for row in rows[1:]:
+            if row and row[0] == self.RESULTS_MARKER:
+                break
+            point = self._numbers(row[2 * loaded:2 * loaded + 2])
+            if point is not None and len(point) == 2:
+                points.append(point)
+        if len(points) > 1:
+            points = self._sorted_points(file_name, np.array(points))
+            table["x_values"], table["intensities"] = points[:, 0], points[:, 1:].T
+            table["other_kinds"] = [kind for number, kind in enumerate(kinds) if kind and number != loaded]
+            table["loaded_kind"] = kinds[loaded]
+
+
 class SpectrumFileReader:
     """Detect the data type of uploaded spectrum files and read them into the wide dataframe used by Data Upload."""
 
-    FORMATS = (RenishawFiles, SpcFiles, JcampFiles, TextFiles)
+    FORMATS = (RenishawFiles, SpcFiles, JcampFiles, Tec5Files, TextFiles)
     AXIS_TOLERANCE = 1e-3
     RESERVED_COLUMN_NAMES = ("ramanshift", "average", "standard deviation", "all")
     EXPERIMENTAL_WARNING = ("This is an **experimental feature**. Data might be **linearly interpolated** "

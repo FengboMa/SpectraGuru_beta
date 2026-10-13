@@ -3370,8 +3370,8 @@ class SpectrumFileFormat:
         raise NotImplementedError
 
     def describe(self, file_name, file_bytes, data_type):
-        """Return the full name of the data type and, where the file states them, the program that wrote it and the year."""
-        return data_type, None, None
+        """Return the full name of the data type and, where the file states it, the program that wrote it."""
+        return data_type, None
 
     def file_stem(self, file_name):
         """Return the file name without its folder or final extension."""
@@ -3566,19 +3566,11 @@ class RenishawFiles(SpectrumFileFormat):
         return self._read_wxd(file_name, file_bytes)
 
     def describe(self, file_name, file_bytes, data_type):
-        import datetime
-
         if data_type == "Renishaw WXD":
-            layout = self._wxd_layout(file_name, file_bytes)
-            first_spectrum = self._wxd_stream(layout["streams"], f"DataSet{layout['spectrum_numbers'][0]}")
-            collection_day, year = self._wxd_entry(first_spectrum, "OriginalDate"), None
-            if isinstance(collection_day, float) and abs(collection_day) < 1e6:
-                year = (datetime.datetime(1899, 12, 30) + datetime.timedelta(days=collection_day)).year
-            return "Renishaw WiRE data file, older format (WXD)", None, year
+            return "Renishaw WiRE data file, older format (WXD)", None
         program = bytes(file_bytes[96:120]).split(b"\0")[0].decode("utf-8", errors="replace")
         version = f"{self._integer(file_bytes, 120, 2)}.{self._integer(file_bytes, 122, 2)}"
-        start = datetime.datetime(1601, 1, 1) + datetime.timedelta(microseconds=self._integer(file_bytes, 136, 8) // 10)
-        return "Renishaw WiRE data file (WDF)", f"{program} {version}".strip(), start.year
+        return "Renishaw WiRE data file (WDF)", f"{program} {version}".strip()
 
     def _spectrum_names(self, file_name, spectrum_numbers, origins, elapsed_seconds):
         """Name spectra as WiRE names its text exports: file, number, origin values, elapsed time."""
@@ -4065,9 +4057,7 @@ class SpcFiles(SpectrumFileFormat):
         return x_values, np.array(intensities), self._numbered_names(file_name, len(intensities)), []
 
     def describe(self, file_name, file_bytes, data_type):
-        if file_bytes[1] == self.OLD_FORMAT:
-            return "GRAMS SPC spectrum file, older layout", None, self._integer(file_bytes, 18, 2) & 0x0FFF
-        return "GRAMS SPC spectrum file", None, self._integer(file_bytes, 32, 4) >> 20
+        return "GRAMS SPC spectrum file" + (", older layout" if file_bytes[1] == self.OLD_FORMAT else ""), None
 
     def _layout(self, file_name, file_bytes):
         """Check an SPC file's header and return what is needed to find its spectra."""
@@ -4191,10 +4181,8 @@ class JcampFiles(SpectrumFileFormat):
 
         heading = self._text(file_bytes[:4096]) or ""
         version = re.search(r"##\s*JCAMP[\s\-_]*DX\s*=\s*([\d.]+)(?:\s*\$\$\s*(.*))?", heading, flags=re.IGNORECASE)
-        year = re.search(r"##\s*LONG[\s\-_]*DATE\s*=\s*(\d{4})", heading, flags=re.IGNORECASE)
         program = version.group(2).strip()[:60] if version and version.group(2) else None
-        return (f"JCAMP-DX {version.group(1)} spectrum file" if version else "JCAMP-DX spectrum file",
-                program or None, int(year.group(1)) if year else None)
+        return f"JCAMP-DX {version.group(1)} spectrum file" if version else "JCAMP-DX spectrum file", program or None
 
     def _label(self, line):
         """Return the label of a labelled data record without case, spaces or punctuation, or None for other lines."""
@@ -4344,12 +4332,7 @@ class JascoFiles(SpectrumFileFormat):
                 self._numbered_names(file_name, spectrum_count), notes)
 
     def describe(self, file_name, file_bytes, data_type):
-        import datetime
-
-        year = None
-        if file_bytes[:4] == self.SINGLE_BLOCK_SIGNATURE:
-            year = (datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=self._integer(file_bytes, 704, 4))).year
-        return "JASCO Spectra Manager spectrum file (JWS)", None, year
+        return "JASCO Spectra Manager spectrum file (JWS)", None
 
     def _layout(self, file_name, file_bytes):
         """Read the heading: how many spectra, channels and points the file holds, and where its x-axis starts.
@@ -4417,7 +4400,7 @@ class TextFiles(SpectrumFileFormat):
     def describe(self, file_name, file_bytes, data_type):
         table = self._table(file_name, file_bytes)
         delimiter_name = self.DELIMITER_NAMES[table["delimiter"]] + (", decimal comma" if table["decimal_comma"] else "")
-        return f"{data_type}, {delimiter_name}", None, table["export_year"]
+        return f"{data_type}, {delimiter_name}", None
 
     def _table(self, file_name, file_bytes):
         """Parse the file once; return its numeric values and column names, or None if it is not a table."""
@@ -4459,14 +4442,12 @@ class TextFiles(SpectrumFileFormat):
         return best_choice
 
     def _parse_table(self, file_name, file_bytes):
-        import re
         import numpy as np
 
         text = self._text(file_bytes)
         if text is None:
             return None
         is_spectraguru_export = text.lstrip().startswith(self.SPECTRAGURU_EXPORT_HEADING)
-        export_year = re.search(r"^# Export timestamp: (\d{4})", text[:400], flags=re.MULTILINE) if is_spectraguru_export else None
         lines = [line for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
         choice = self._delimiter(lines[-self.SAMPLED_LINES:])
         if choice is None:
@@ -4490,7 +4471,7 @@ class TextFiles(SpectrumFileFormat):
             return None
         column_names = header[1:] if len(header) == column_count and all(header[1:]) else None
         return {"values": values, "column_names": column_names, "delimiter": delimiter, "decimal_comma": decimal_comma,
-                "is_spectraguru_export": is_spectraguru_export, "export_year": int(export_year.group(1)) if export_year else None}
+                "is_spectraguru_export": is_spectraguru_export}
 
 
 class BwtekFiles(TextFiles):
@@ -4520,9 +4501,7 @@ class BwtekFiles(TextFiles):
 
         heading = self._text(file_bytes[:4096]) or ""
         program = re.search(r"^File Version[;,=](.+)$", heading, flags=re.MULTILINE)
-        year = re.search(r"^Date[;,=](\d{4})", heading, flags=re.MULTILINE)
-        return ("B&W Tek BWSpec spectrum text file", program.group(1).strip() if program else None,
-                int(year.group(1)) if year else None)
+        return "B&W Tek BWSpec spectrum text file", program.group(1).strip() if program else None
 
     def _parse_table(self, file_name, file_bytes):
         heading = (self._text(file_bytes[:4096]) or "")[:400]
@@ -4594,7 +4573,7 @@ class Tec5Files(TextFiles):
         return np.array(table["x_values"]), np.array(table["intensities"]), spectrum_names, notes
 
     def describe(self, file_name, file_bytes, data_type):
-        return "tec5 MultiSpec Pro text file, tab-separated", None, None
+        return "tec5 MultiSpec Pro text file, tab-separated", None
 
     def _leading_numbers(self, cells):
         """Return the numbers at the start of a row, up to the first cell that is not a number."""
@@ -4741,27 +4720,24 @@ class SpectrumFileReader:
 
     def _detected_type(self, files, file_formats, data_type):
         """Say what was uploaded: how many files, their extension, the full name of the data type, and the
-        program and year the files themselves state."""
+        program the files themselves name."""
         import os
 
-        full_names, programs, years = [], [], []
+        full_names, programs = [], []
         for (file_name, file_bytes), file_format in zip(files, file_formats):
             try:
-                full_name, program, year = self._read_safely(
+                full_name, program = self._read_safely(
                     file_name, lambda: file_format.describe(file_name, file_bytes, data_type))
             except SpectrumFileError:
-                full_name, program, year = data_type, None, None
+                full_name, program = data_type, None
             full_names.append(full_name)
             programs.append(program)
-            years.append(year if year and 1970 <= year <= 2100 else None)
         extensions = [os.path.splitext(file_name)[1].lower() for file_name, _ in files]
-        years = sorted(year for year in set(years) if year)
         parts = [
             "single file" if len(files) == 1 else f"multiple files ({len(files)})",
             ", ".join(dict.fromkeys(extension for extension in extensions if extension)),
             "; ".join(dict.fromkeys(full_names)),
             ", ".join(sorted(set(program for program in programs if program))[:3]),
-            "" if not years else str(years[0]) if len(years) == 1 else f"{years[0]}\u2013{years[-1]}",
         ]
         return "Detected type: " + " \u00b7 ".join(part for part in parts if part)
 

@@ -3381,7 +3381,7 @@ class SpectrumFileFormat:
         """Return the file as text, or None when it is not a text file."""
         if file_bytes[:2] in (b"\xff\xfe", b"\xfe\xff"):
             return file_bytes.decode("utf-16", errors="replace")
-        first_bytes = file_bytes[:4096]
+        first_bytes = file_bytes[:4096].rstrip(b"\x1a")
         if not first_bytes or any(byte < 9 or 13 < byte < 32 for byte in first_bytes):
             return None
         try:

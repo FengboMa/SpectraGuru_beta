@@ -3354,6 +3354,8 @@ class SpectrumFileFormat:
         "Copy the file from the instrument again; the transfer may have been cut short.",
     ]
     TEXT_EXPORT_SUGGESTION = "Export the spectra as text from the instrument software and upload the text files instead."
+    COMPOUND_FILE_SIGNATURE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+    COMPOUND_FILE_LAST_SECTOR = 0xFFFFFFFA
 
     def data_type(self, file_name, file_bytes):
         """Return the name of the data type when this reader recognises the file, otherwise None."""
@@ -3414,6 +3416,81 @@ class SpectrumFileFormat:
                 [self.TEXT_EXPORT_SUGGESTION],
             )
         return axes[0]
+
+    def _compound_file(self, file_bytes):
+        """Open an OLE2 compound file; return its streams as {path: (start, size)} and a function that reads one.
+
+        Paths join storage and stream names with "/". The layout follows Microsoft's published [MS-CFB] description.
+        """
+        import struct
+
+        if file_bytes[:8] != self.COMPOUND_FILE_SIGNATURE:
+            raise ValueError("not a compound file")
+        sector_size = 1 << self._integer(file_bytes, 30, 2)
+        mini_sector_size = 1 << self._integer(file_bytes, 32, 2)
+        (fat_sector_count, directory_start, _, mini_stream_cutoff,
+         mini_fat_start, _, difat_start, _) = struct.unpack_from("<8I", file_bytes, 44)
+        if not 512 <= sector_size <= 65536 or not 8 <= mini_sector_size <= sector_size:
+            raise ValueError("unusable sector sizes")
+        numbers_per_sector = sector_size // 4
+
+        def sector(number):
+            start = (number + 1) * sector_size
+            if start >= len(file_bytes):
+                raise ValueError("sector outside the file")
+            return file_bytes[start:start + sector_size].ljust(sector_size, b"\0")
+
+        def chain(first, next_numbers, read_part):
+            parts, number = [], first
+            for _ in range(len(next_numbers) + 1):
+                if number >= self.COMPOUND_FILE_LAST_SECTOR:
+                    break
+                parts.append(read_part(number))
+                number = next_numbers[number]
+            return b"".join(parts)
+
+        fat_sectors, next_difat_sector = list(struct.unpack_from("<109I", file_bytes, 76)), difat_start
+        for _ in range(len(file_bytes) // sector_size + 1):
+            if next_difat_sector >= self.COMPOUND_FILE_LAST_SECTOR:
+                break
+            numbers = struct.unpack(f"<{numbers_per_sector}I", sector(next_difat_sector))
+            fat_sectors += numbers[:-1]
+            next_difat_sector = numbers[-1]
+        fat = []
+        for number in fat_sectors[:fat_sector_count]:
+            fat += struct.unpack(f"<{numbers_per_sector}I", sector(number))
+
+        directory = chain(directory_start, fat, sector)
+        entries = [directory[position:position + 128] for position in range(0, len(directory) - 127, 128)]
+        streams, pending, visited = {}, [(self._integer(entries[0], 76, 4), "")], set()
+        while pending:
+            number, folder = pending.pop()
+            if number >= len(entries) or number in visited:
+                continue
+            visited.add(number)
+            entry = entries[number]
+            name = entry[:max(self._integer(entry, 64, 2) - 2, 0)].decode("utf-16-le", errors="replace")
+            pending += [(self._integer(entry, 68, 4), folder), (self._integer(entry, 72, 4), folder)]
+            if entry[66] == 1:
+                pending.append((self._integer(entry, 76, 4), f"{folder}{name}/"))
+            elif entry[66] == 2:
+                streams[folder + name] = (self._integer(entry, 116, 4), self._integer(entry, 120, 4))
+
+        mini_stream = chain(self._integer(entries[0], 116, 4), fat, sector)
+        mini_fat_bytes = chain(mini_fat_start, fat, sector)
+        mini_fat = struct.unpack(f"<{len(mini_fat_bytes) // 4}I", mini_fat_bytes)
+
+        def read_stream(path):
+            start, size = streams[path]
+            if size < mini_stream_cutoff:
+                content = chain(start, mini_fat, lambda number: mini_stream[number * mini_sector_size:(number + 1) * mini_sector_size])
+            else:
+                content = chain(start, fat, sector)
+            if len(content) < size:
+                raise ValueError("stream is shorter than its stated size")
+            return content[:size]
+
+        return streams, read_stream
 
     def _integer(self, data, position, size, signed=False):
         """Return the little-endian integer of `size` bytes stored at `position`."""
@@ -4177,6 +4254,78 @@ class JcampFiles(SpectrumFileFormat):
         return line_x_values, y_values
 
 
+class JascoFiles(SpectrumFileFormat):
+    """Read JASCO Spectra Manager files: JWS, and JWB series of spectra.
+
+    JASCO publishes no description of these files. Two layouts exist: an OLE2 compound file with a
+    DataInfo heading and the values in Y-Data, and a single block that starts with "L~S". Both
+    were worked out from sample files and the text files Spectra Manager exported from them.
+    """
+
+    DATA_TYPES = ("JASCO JWS",)
+    SINGLE_BLOCK_SIGNATURE = b"L~S "
+    SINGLE_BLOCK_VALUES_POSITION = 1856
+
+    def data_type(self, file_name, file_bytes):
+        if file_bytes[:4] == self.SINGLE_BLOCK_SIGNATURE:
+            return self.DATA_TYPES[0]
+        if file_bytes[:8] != self.COMPOUND_FILE_SIGNATURE:
+            return None
+        streams, _ = self._compound_file(file_bytes)
+        return self.DATA_TYPES[0] if "DataInfo" in streams and "Y-Data" in streams else None
+
+    def count_spectra(self, file_name, file_bytes, data_type):
+        return self._layout(file_name, file_bytes)["spectrum_count"]
+
+    def read(self, file_name, file_bytes, data_type):
+        import numpy as np
+
+        layout = self._layout(file_name, file_bytes)
+        spectrum_count, point_count = layout["spectrum_count"], layout["point_count"]
+        if layout["read_stream"] is None:
+            values, x_values = file_bytes[self.SINGLE_BLOCK_VALUES_POSITION:], None
+        else:
+            values = layout["read_stream"]("Y-Data")
+            x_values = layout["read_stream"]("X-Data") if layout["has_x_values"] else None
+        if x_values is not None:
+            x_values = np.frombuffer(x_values, dtype="<f4", count=point_count).astype(np.float64)
+        elif layout["x_step"]:
+            x_values = layout["first_x"] + layout["x_step"] * np.arange(point_count)
+        else:
+            x_values = np.linspace(layout["first_x"], layout["last_x"], point_count)
+        # The values hold every spectrum of the first channel, then every spectrum of the next channel.
+        intensities = np.frombuffer(values, dtype="<f4", count=spectrum_count * point_count).astype(np.float64)
+        notes = []
+        if layout["channel_count"] > 1:
+            notes.append(("info", f"{file_name} holds {layout['channel_count']} channels; only the first was loaded."))
+        return (x_values, intensities.reshape(spectrum_count, point_count),
+                self._numbered_names(file_name, spectrum_count), notes)
+
+    def _layout(self, file_name, file_bytes):
+        """Read the heading: how many spectra, channels and points the file holds, and its x range."""
+        import struct
+
+        if file_bytes[:4] == self.SINGLE_BLOCK_SIGNATURE:
+            spectrum_count, channel_count, point_count = 1, self._integer(file_bytes, 130, 2), self._integer(file_bytes, 132, 4)
+            first_x, last_x, x_step = struct.unpack_from("<3d", file_bytes, 136)
+            stored_size, has_x_values, read_stream = len(file_bytes) - self.SINGLE_BLOCK_VALUES_POSITION, False, None
+        else:
+            streams, read_stream = self._compound_file(file_bytes)
+            data_info = read_stream("DataInfo")
+            spectrum_count, _, channel_count, _, point_count = struct.unpack_from("<5I", data_info, 4)
+            first_x, last_x, x_step = struct.unpack_from("<3d", data_info, 24)
+            stored_size, has_x_values = streams["Y-Data"][1], "X-Data" in streams
+        if spectrum_count < 1 or channel_count < 1 or point_count < 2:
+            raise SpectrumFileError(f"{file_name} contains no spectra.")
+        if spectrum_count * point_count > self.MAX_TOTAL_VALUES:
+            raise self._too_large_error(file_name, spectrum_count, point_count)
+        if stored_size < 4 * spectrum_count * channel_count * point_count:
+            raise SpectrumFileError(f"{file_name} is missing part of its spectra.", self.DAMAGED_FILE_SUGGESTIONS)
+        return {"spectrum_count": spectrum_count, "channel_count": channel_count, "point_count": point_count,
+                "first_x": first_x, "last_x": last_x, "x_step": x_step, "has_x_values": has_x_values,
+                "read_stream": read_stream}
+
+
 class TextFiles(SpectrumFileFormat):
     """Read delimited text: one two-column spectrum per file, or one table holding several spectra."""
 
@@ -4387,7 +4536,7 @@ class Tec5Files(TextFiles):
 class SpectrumFileReader:
     """Detect the data type of uploaded spectrum files and read them into the wide dataframe used by Data Upload."""
 
-    FORMATS = (RenishawFiles, SpcFiles, JcampFiles, Tec5Files, TextFiles)
+    FORMATS = (RenishawFiles, SpcFiles, JcampFiles, JascoFiles, Tec5Files, TextFiles)
     AXIS_TOLERANCE = 1e-3
     RESERVED_COLUMN_NAMES = ("ramanshift", "average", "standard deviation", "all")
     EXPERIMENTAL_WARNING = ("This is an **experimental feature**. Data might be **linearly interpolated** "

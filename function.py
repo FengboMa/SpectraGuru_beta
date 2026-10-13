@@ -46,11 +46,11 @@ def show_feedback(message, severity="error", details=None, suggestions=None, doc
         "info": st.info,
         "success": st.success
     }.get(severity, st.error)
-    content = f"### {message}\n\n📖 Documentation: [SpectraGuru Docs]({doc_link})\n\n"
+    content = f"**{message}**\n\n📖 Documentation: [SpectraGuru Docs]({doc_link})\n\n"
     if suggestions:
-        content += "##### 💡 Suggestions\n" + "".join(f"- {suggestion}\n" for suggestion in suggestions) + "\n"
+        content += "**💡 Suggestions**\n\n" + "".join(f"- {suggestion}\n" for suggestion in suggestions) + "\n"
     if details:
-        content += f"##### 🔧 Technical Details\n```text\n{details}\n```\n"
+        content += f"**🔧 Technical Details**\n\n```text\n{details}\n```\n"
     display_func(content)
 
 # airPLS function
@@ -4659,8 +4659,9 @@ class SpectrumFileReader:
         self.formats = [format_class() for format_class in self.FORMATS]
 
     def supported_data_types(self):
-        """Return the names of every data type that can be read."""
-        return [data_type for file_format in self.formats for data_type in file_format.DATA_TYPES]
+        """Return the names of every data type that can be read: plain text and SpectraGuru's own export first."""
+        text_first = sorted(self.formats, key=lambda file_format: file_format.EXPERIMENTAL)
+        return [data_type for file_format in text_first for data_type in file_format.DATA_TYPES]
 
     def detect(self, file_name, file_bytes):
         """Return the reader and the data type of one file, judged by its content."""

@@ -4292,7 +4292,7 @@ class JascoFiles(SpectrumFileFormat):
         elif layout["x_step"]:
             x_values = layout["first_x"] + layout["x_step"] * np.arange(point_count)
         else:
-            x_values = np.linspace(layout["first_x"], layout["last_x"], point_count)
+            raise SpectrumFileError(f"{file_name} does not contain a usable x-axis.", self.DAMAGED_FILE_SUGGESTIONS)
         # The values hold every spectrum of the first channel, then every spectrum of the next channel.
         intensities = np.frombuffer(values, dtype="<f4", count=spectrum_count * point_count).astype(np.float64)
         notes = []
@@ -4302,18 +4302,22 @@ class JascoFiles(SpectrumFileFormat):
                 self._numbered_names(file_name, spectrum_count), notes)
 
     def _layout(self, file_name, file_bytes):
-        """Read the heading: how many spectra, channels and points the file holds, and its x range."""
+        """Read the heading: how many spectra, channels and points the file holds, and where its x-axis starts.
+
+        The heading also states a last x value, but a scan that stopped early keeps the planned one, so the
+        axis is built from the first value and the step.
+        """
         import struct
 
         if file_bytes[:4] == self.SINGLE_BLOCK_SIGNATURE:
             spectrum_count, channel_count, point_count = 1, self._integer(file_bytes, 130, 2), self._integer(file_bytes, 132, 4)
-            first_x, last_x, x_step = struct.unpack_from("<3d", file_bytes, 136)
+            first_x, _, x_step = struct.unpack_from("<3d", file_bytes, 136)
             stored_size, has_x_values, read_stream = len(file_bytes) - self.SINGLE_BLOCK_VALUES_POSITION, False, None
         else:
             streams, read_stream = self._compound_file(file_bytes)
             data_info = read_stream("DataInfo")
             spectrum_count, _, channel_count, _, point_count = struct.unpack_from("<5I", data_info, 4)
-            first_x, last_x, x_step = struct.unpack_from("<3d", data_info, 24)
+            first_x, _, x_step = struct.unpack_from("<3d", data_info, 24)
             stored_size, has_x_values = streams["Y-Data"][1], "X-Data" in streams
         if spectrum_count < 1 or channel_count < 1 or point_count < 2:
             raise SpectrumFileError(f"{file_name} contains no spectra.")
@@ -4322,8 +4326,7 @@ class JascoFiles(SpectrumFileFormat):
         if stored_size < 4 * spectrum_count * channel_count * point_count:
             raise SpectrumFileError(f"{file_name} is missing part of its spectra.", self.DAMAGED_FILE_SUGGESTIONS)
         return {"spectrum_count": spectrum_count, "channel_count": channel_count, "point_count": point_count,
-                "first_x": first_x, "last_x": last_x, "x_step": x_step, "has_x_values": has_x_values,
-                "read_stream": read_stream}
+                "first_x": first_x, "x_step": x_step, "has_x_values": has_x_values, "read_stream": read_stream}
 
 
 class TextFiles(SpectrumFileFormat):

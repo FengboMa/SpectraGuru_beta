@@ -4238,7 +4238,10 @@ class JcampFiles(SpectrumFileFormat):
                     difference = float(self.DIFFERENCE_DIGITS[token[0]] + token[1:])
                     line_values.append(line_values[-1] + difference)
                 elif token[0] in self.REPEAT_DIGITS:
-                    for _ in range(int(self.REPEAT_DIGITS[token[0]] + token[1:]) - 1):
+                    repeat_count = int(self.REPEAT_DIGITS[token[0]] + token[1:]) - 1
+                    if len(y_values) + len(line_values) + repeat_count > self.MAX_TOTAL_VALUES:
+                        raise ValueError("repeat count is not usable")
+                    for _ in range(repeat_count):
                         line_values.append(line_values[-1] + (difference or 0.0))
                 else:
                     difference = None

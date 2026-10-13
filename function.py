@@ -4426,6 +4426,61 @@ class TextFiles(SpectrumFileFormat):
         return {"values": values, "column_names": column_names}
 
 
+class BwtekFiles(TextFiles):
+    """Read the text files that B&W Tek (Metrohm) BWSpec and BWRam save.
+
+    B&W Tek publishes no description of the files. They hold lines of settings and then one row
+    per detector pixel under a heading that names the columns; the layout was read off sample files.
+    """
+
+    DATA_TYPES = ("B&W Tek BWSpec",)
+    EXPERIMENTAL = True
+    X_COLUMNS = ("Raman Shift", "Wavelength", "Wavenumber", "Pixel")
+    Y_COLUMNS = ("Dark Subtracted", "Raw data")
+
+    def data_type(self, file_name, file_bytes):
+        return None if self._table(file_name, file_bytes) is None else self.DATA_TYPES[0]
+
+    def count_spectra(self, file_name, file_bytes, data_type):
+        return self._table(file_name, file_bytes).shape[1] - 1
+
+    def read(self, file_name, file_bytes, data_type):
+        points = self._table(file_name, file_bytes)
+        return points[:, 0], points[:, 1:].T, self._numbered_names(file_name, points.shape[1] - 1), []
+
+    def _parse_table(self, file_name, file_bytes):
+        heading = (self._text(file_bytes[:4096]) or "")[:400]
+        if not heading.startswith(("File Version", "File Format")) or not ("BWSpec" in heading or "BWRam" in heading):
+            return None
+
+        import numpy as np
+
+        lines = self._text(file_bytes).splitlines()
+        names_row = next((number for number, line in enumerate(lines) if line.startswith("Pixel")), None)
+        if names_row is None:
+            raise SpectrumFileError(f"{file_name} contains no spectra.")
+        delimiter = ";" if ";" in lines[names_row] else ","
+        column_names = self._split_line(lines[names_row], delimiter, False)
+        rows = [self._split_line(line, delimiter, delimiter != ",") for line in lines[names_row + 1:]]
+        if delimiter == "," and sum(len(row) > len(column_names) for row in rows) > len(rows) / 2:
+            raise SpectrumFileError(
+                f"{file_name} uses commas both between its numbers and as their decimal mark, so it cannot be loaded.",
+                ["Save the spectrum from BWSpec as a .txt file and upload that instead."],
+            )
+
+        y_columns = next(([number for number, name in enumerate(column_names) if name.startswith(kind)]
+                          for kind in self.Y_COLUMNS if any(name.startswith(kind) for name in column_names)), [])
+        for x_name in self.X_COLUMNS:
+            if x_name not in column_names or not y_columns:
+                continue
+            x_column = column_names.index(x_name)
+            points = [numbers for numbers in (self._numbers([row[column] for column in [x_column] + y_columns])
+                                              for row in rows if len(row) > max(y_columns + [x_column])) if numbers is not None]
+            if len(points) > 1:
+                return self._sorted_points(file_name, np.array(points))
+        raise SpectrumFileError(f"{file_name} contains no spectra.")
+
+
 class Tec5Files(TextFiles):
     """Read the tab-separated text files that tec5 MultiSpec Pro saves.
 
@@ -4536,7 +4591,7 @@ class Tec5Files(TextFiles):
 class SpectrumFileReader:
     """Detect the data type of uploaded spectrum files and read them into the wide dataframe used by Data Upload."""
 
-    FORMATS = (RenishawFiles, SpcFiles, JcampFiles, JascoFiles, Tec5Files, TextFiles)
+    FORMATS = (RenishawFiles, SpcFiles, JcampFiles, JascoFiles, BwtekFiles, Tec5Files, TextFiles)
     AXIS_TOLERANCE = 1e-3
     RESERVED_COLUMN_NAMES = ("ramanshift", "average", "standard deviation", "all")
     EXPERIMENTAL_WARNING = ("This is an **experimental feature**. Data might be **linearly interpolated** "

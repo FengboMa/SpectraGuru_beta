@@ -3334,3 +3334,702 @@ def imodified_polyfit(spec_raw, nth = 5, iter_max = 1, scale_factor1 = 1.0, scal
         return fluo_spec
     else:
         return ram_spec
+
+class InstrumentFileReader:
+    """Read instrument-vendor spectrum files into the wide dataframe used by Data Upload.
+
+    Only the Raman-shift axis and the intensities are kept. Renishaw WDF follows the block
+    layout of Renishaw's renishaw-wdf reader (Apache-2.0). Renishaw WXD has no published
+    description; it is a Metakit datafile (Metakit is MIT-licensed, Copyright (c) 1996-2007
+    Jean-Claude Wippler) whose contents were worked out from files saved by WiRE 3.4.
+    """
+
+    class Error(Exception):
+        """A reason a file could not be loaded, worded for the user."""
+
+        def __init__(self, message, suggestions=None):
+            super().__init__(message)
+            self.suggestions = list(suggestions or [])
+
+    VENDORS = {
+        "renishaw": {
+            "label": "Renishaw WiRE (.wdf / .wxd)",
+            "name": "Renishaw WiRE",
+            "extensions": ["wdf", "wxd"],
+        },
+    }
+
+    MAX_TOTAL_VALUES = 20_000_000
+    MAX_WDF_BLOCKS = 4096
+    MAX_TABLE_ROWS = 100_000
+    MAX_STREAM_BYTES = 64 * 1024 * 1024
+    AXIS_TOLERANCE = 1e-3
+    RESERVED_COLUMN_NAMES = ("ramanshift", "average", "standard deviation", "all")
+
+    DAMAGED_FILE_SUGGESTIONS = [
+        "Check that the file opens in the instrument software.",
+        "Copy the file from the instrument again; the transfer may have been cut short.",
+    ]
+    TEXT_EXPORT_SUGGESTION = "Export the spectra as text from the instrument software and use a text format instead."
+    RAMAN_SHIFT_SUGGESTION = ("SpectraGuru works on Raman-shift axes. Convert the data to Raman shift "
+                              "in the instrument software first.")
+
+    RAMAN_SHIFT_UNIT = 1
+    UNIT_NAMES = {0: "arbitrary units", 2: "nanometres", 3: "nanometres", 4: "electron volts", 5: "micrometres"}
+    SPECTRAL_AXIS_TYPES = (1, 19)
+    TIME_ORIGIN_TYPE = 11
+
+    WDF_HEADER_SIZE = 512
+    WDF_MULTIPLE_AXES_FLAGS = (1 << 0) | (1 << 3)
+
+    METAKIT_SCHEMA = (b"dirs[name:S,parent:I,ctime:I,atime:I,mtime:I,clsid:S,state:I,"
+                      b"files[_B[name:S,size:I,date:I,state:I,contents:B]]]")
+    METAKIT_SHORT_COLUMN_WIDTHS = (
+        (8, 16, 1, 32, 2, 4),
+        (4, 8, 1, 16, 2, 0),
+        (2, 4, 8, 1, 0, 16),
+        (2, 4, 0, 8, 1, 0),
+        (1, 2, 4, 0, 8, 0),
+        (1, 2, 4, 0, 0, 8),
+        (1, 2, 0, 4, 0, 0),
+    )
+
+    WXD_LIST_NAME = "DataList".encode("utf-16-le")
+    WXD_LIST_END = b"\xc0\xff\xee\x01"
+    WXD_NUMBER_TYPES = {2: "<i2", 3: "<i4", 4: "<f4", 5: "<f8"}
+    WXD_OBJECT_TYPE = 13
+
+    def __init__(self, vendor):
+        self.vendor = vendor
+        self.vendor_name = self.VENDORS[vendor]["name"]
+        self.extensions = self.VENDORS[vendor]["extensions"]
+
+    def count_spectra(self, file_name, file_bytes):
+        """Return the number of spectra in one file, read from its structure alone."""
+        def count():
+            if self._detect_format(file_name, file_bytes) == "wdf":
+                return self._wdf_layout(file_name, file_bytes)["spectrum_count"]
+            return self._wxd_layout(file_name, file_bytes)["spectrum_count"]
+        return self._read_safely(file_name, count)
+
+    def read_file(self, file_name, file_bytes):
+        """Return ascending Raman shift, one spectrum per row, spectrum names and notices."""
+        import os
+
+        def read():
+            file_format = self._detect_format(file_name, file_bytes)
+            read_format = self._read_wdf if file_format == "wdf" else self._read_wxd
+            raman_shift, intensities, spectrum_names, notes = read_format(file_name, file_bytes)
+            raman_shift, intensities = self._sort_ascending(file_name, raman_shift, intensities)
+            extension = os.path.splitext(file_name)[1].lower().lstrip(".")
+            if extension in self.extensions and extension != file_format:
+                notes.insert(0, ("info", f"{file_name} is a {file_format.upper()} file by content "
+                                         f"and was read as one."))
+            return raman_shift, intensities, spectrum_names, notes
+        return self._read_safely(file_name, read)
+
+    def read_files(self, files):
+        """Read the files of one class into a wide dataframe plus notices for the user."""
+        file_names, axes, intensity_blocks, column_names, notes, stem_uses = [], [], [], [], [], {}
+        for file_name, file_bytes in files:
+            raman_shift, intensities, spectrum_names, file_notes = self.read_file(file_name, file_bytes)
+            stem = self._file_stem(file_name)
+            stem_uses[stem] = stem_uses.get(stem, 0) + 1
+            if stem_uses[stem] > 1:
+                spectrum_names = [f"{stem} ({stem_uses[stem]}){name[len(stem):]}" for name in spectrum_names]
+            file_names.append(file_name)
+            axes.append(raman_shift)
+            intensity_blocks.append(intensities)
+            column_names.extend(spectrum_names)
+            notes.extend(file_notes)
+        if not axes:
+            raise self.Error("No file was provided.")
+        if sum(intensities.size for intensities in intensity_blocks) > self.MAX_TOTAL_VALUES:
+            raise self.Error("The selected files are too large to load together.", ["Upload fewer files at once."])
+
+        column_names, renamed_count = self._unique_column_names(column_names)
+        raman_shift, intensity_blocks, alignment_notes = self._align_axes(file_names, axes, intensity_blocks)
+        notes.extend(alignment_notes)
+        if renamed_count:
+            notes.append(("info", f"{renamed_count} spectrum name(s) were changed so that "
+                                  f"every column name is unique."))
+        return self._build_dataframe(raman_shift, intensity_blocks, column_names), notes
+
+    def _detect_format(self, file_name, file_bytes):
+        """Identify the format from the file's first bytes rather than its extension."""
+        if file_bytes[:4] == b"WDF1":
+            return "wdf"
+        if file_bytes[:4] == b"#WXD":
+            return "wxd"
+        first_bytes = file_bytes[:512]
+        if first_bytes and all(32 <= byte < 127 or byte in (9, 10, 13) for byte in first_bytes):
+            raise self.Error(
+                f"{file_name} is a text file, not a {self.vendor_name} file.",
+                ["Choose a text format such as 'Multi TXT (two-column, common x-axis)' for this file."],
+            )
+        raise self.Error(
+            f"{file_name} is not a recognised {self.vendor_name} file.",
+            ["Check that the file opens in the instrument software.", self.TEXT_EXPORT_SUGGESTION],
+        )
+
+    def _read_safely(self, file_name, read):
+        """Run a reading step, reporting any low-level failure as a damaged file."""
+        import zlib
+
+        try:
+            return read()
+        except self.Error:
+            raise
+        except (IndexError, KeyError, ValueError, OverflowError, zlib.error) as error:
+            raise self.Error(
+                f"{file_name} could not be read; the file appears to be damaged or incomplete.",
+                self.DAMAGED_FILE_SUGGESTIONS,
+            ) from error
+
+    def _file_stem(self, file_name):
+        """Return the file name without its folder or final extension."""
+        import os
+
+        stem = os.path.splitext(os.path.basename(file_name))[0].strip()
+        # Clustering drops any column whose name contains "Unnamed".
+        return stem.replace("Unnamed", "unnamed") or "spectrum"
+
+    def _integer(self, data, position, size, signed=False):
+        """Return the little-endian integer of `size` bytes stored at `position`."""
+        if position < 0 or position + size > len(data):
+            raise ValueError("integer outside the data")
+        return int.from_bytes(data[position:position + size], "little", signed=signed)
+
+    def _sort_ascending(self, file_name, raman_shift, intensities):
+        """Return the axis low-to-high with the spectra reordered to match."""
+        import numpy as np
+
+        if raman_shift.size < 2 or not np.all(np.isfinite(raman_shift)):
+            raise self.Error(f"{file_name} does not contain a usable x-axis.", self.DAMAGED_FILE_SUGGESTIONS)
+        steps = np.diff(raman_shift)
+        if np.all(steps < 0):
+            raman_shift, intensities = raman_shift[::-1], intensities[:, ::-1]
+        elif not np.all(steps > 0):
+            raise self.Error(
+                f"{file_name} has an x-axis that is not in increasing or decreasing order.",
+                [self.TEXT_EXPORT_SUGGESTION],
+            )
+        if not np.all(np.isfinite(intensities)):
+            raise self.Error(
+                f"{file_name} contains intensity values that are not numbers.",
+                [self.TEXT_EXPORT_SUGGESTION],
+            )
+        return np.ascontiguousarray(raman_shift), np.ascontiguousarray(intensities)
+
+    def _spectrum_names(self, file_name, spectrum_numbers, origins, elapsed_seconds):
+        """Name spectra as WiRE names its text exports: file, number, origin values, elapsed time."""
+        stem = self._file_stem(file_name)
+        if len(spectrum_numbers) == 1:
+            return [stem]
+        spectrum_names = []
+        for row, spectrum_number in enumerate(spectrum_numbers):
+            name_parts = [f"{stem}_{spectrum_number}"]
+            name_parts += [f"{label}_{values[row]:.6g}" for label, values in origins]
+            if elapsed_seconds is not None:
+                name_parts.append(f"Time_{round(float(elapsed_seconds[row]))}")
+            spectrum_names.append("__".join(name_parts))
+        return spectrum_names
+
+    def _unique_column_names(self, column_names):
+        """Make column names unique and keep them off the names the app reserves."""
+        unique_names, used_names, renamed_count = [], set(), 0
+        for column_name in column_names:
+            unique_name, suffix = column_name, 2
+            while unique_name in used_names or unique_name.lower() in self.RESERVED_COLUMN_NAMES:
+                unique_name = f"{column_name} ({suffix})"
+                suffix += 1
+            if unique_name != column_name:
+                renamed_count += 1
+            used_names.add(unique_name)
+            unique_names.append(unique_name)
+        return unique_names, renamed_count
+
+    def _align_axes(self, file_names, axes, intensity_blocks):
+        """Put the spectra of several files on one axis, interpolating as the class merge does."""
+        import numpy as np
+        from scipy.interpolate import interp1d
+
+        reference_axis = axes[0]
+        if all(axis.size == reference_axis.size and np.max(np.abs(axis - reference_axis)) <= self.AXIS_TOLERANCE
+               for axis in axes[1:]):
+            return reference_axis, intensity_blocks, []
+
+        common_min = int(np.ceil(max(axis[0] for axis in axes)))
+        common_max = int(np.floor(min(axis[-1] for axis in axes)))
+        if common_min >= common_max:
+            raise self.Error(
+                "The selected files have no overlapping Raman-shift range.",
+                [f"{file_name}: {axis[0]:.1f} to {axis[-1]:.1f} cm⁻¹" for file_name, axis in zip(file_names, axes)],
+            )
+        ref_x = np.arange(common_min, common_max + 1, 1)
+        aligned_blocks = []
+        for axis, intensities in zip(axes, intensity_blocks):
+            interpolate = interp1d(axis, intensities, kind='linear', bounds_error=False, fill_value="extrapolate")
+            aligned_blocks.append(interpolate(ref_x))
+
+        spectrum_count = sum(intensities.shape[0] for intensities in intensity_blocks)
+        kept_percent = 100 * (common_max - common_min) / max(axis[-1] - axis[0] for axis in axes)
+        if kept_percent < 50:
+            note = ("warning", (
+                f"The {len(axes)} files in this class cover different Raman-shift ranges. "
+                f"Only the shared range, {common_min} to {common_max} cm⁻¹ ({ref_x.size} points, "
+                f"{kept_percent:.0f}% of the widest file), was kept; all {spectrum_count} spectra were "
+                f"linearly interpolated onto a 1 cm⁻¹ grid."
+            ))
+        else:
+            note = ("info", (
+                f"The {len(axes)} files in this class do not share one Raman-shift axis, "
+                f"so all {spectrum_count} spectra were linearly interpolated onto a common "
+                f"1 cm⁻¹ grid over the range every file covers ({common_min} to {common_max} cm⁻¹, "
+                f"{ref_x.size} points). Data outside this range was dropped."
+            ))
+        return ref_x, aligned_blocks, [note]
+
+    def _build_dataframe(self, raman_shift, intensity_blocks, column_names):
+        """Build the wide dataframe: RamanShift first, then one column per spectrum."""
+        import numpy as np
+        import pandas as pd
+
+        spectrum_count = sum(intensities.shape[0] for intensities in intensity_blocks)
+        table = np.empty((raman_shift.size, spectrum_count + 1), dtype=np.float64)
+        table[:, 0] = raman_shift
+        column = 1
+        for intensities in intensity_blocks:
+            table[:, column:column + intensities.shape[0]] = intensities.T
+            column += intensities.shape[0]
+        return pd.DataFrame(table, columns=["RamanShift"] + column_names)
+
+    def _too_large_error(self, file_name, spectrum_count, point_count):
+        return self.Error(
+            f"{file_name} is too large to load: {spectrum_count} spectra of {point_count} points.",
+            ["Split the measurement or export a subset from the instrument software."],
+        )
+
+    def _unfinished_note(self, file_name, spectrum_count, planned_count):
+        return ("info", f"{file_name} is an unfinished measurement: {spectrum_count} of {planned_count} "
+                        f"planned spectra were collected, and those were loaded.")
+
+    def _axis_unit_error(self, file_name, unit):
+        return self.Error(
+            f"{file_name} has its x-axis in {self.UNIT_NAMES.get(unit, 'an unknown unit')}, not Raman shift.",
+            [self.RAMAN_SHIFT_SUGGESTION],
+        )
+
+    def _wdf_layout(self, file_name, file_bytes):
+        """Check a WDF file's structure and return where its axis, spectra and origins are stored."""
+        if len(file_bytes) < self.WDF_HEADER_SIZE:
+            raise self.Error(f"{file_name} is too short to be a WDF file.", self.DAMAGED_FILE_SUGGESTIONS)
+        flags = self._integer(file_bytes, 16, 8)
+        point_count = self._integer(file_bytes, 60, 4)
+        capacity = self._integer(file_bytes, 64, 8)
+        spectrum_count = self._integer(file_bytes, 72, 8)
+        y_list_length = self._integer(file_bytes, 84, 4)
+        x_list_length = self._integer(file_bytes, 88, 4)
+
+        blocks, position, reached_end = {}, 0, False
+        for _ in range(self.MAX_WDF_BLOCKS):
+            if position == len(file_bytes):
+                reached_end = True
+                break
+            if position + 16 > len(file_bytes):
+                break
+            block_size = self._integer(file_bytes, position + 8, 8)
+            if block_size < 16 or position + block_size > len(file_bytes):
+                break
+            blocks.setdefault(bytes(file_bytes[position:position + 4]), (position + 16, block_size - 16))
+            position += block_size
+        if b"DATA" not in blocks or b"XLST" not in blocks:
+            raise self.Error(f"{file_name} ends before its spectra; the file is incomplete.",
+                             self.DAMAGED_FILE_SUGGESTIONS)
+
+        if y_list_length > 1:
+            raise self.Error(
+                f"{file_name} stores detector images rather than single spectra, which cannot be loaded.",
+                [self.TEXT_EXPORT_SUGGESTION],
+            )
+        if flags & self.WDF_MULTIPLE_AXES_FLAGS:
+            raise self.Error(
+                f"{file_name} is a multi-track file with more than one x-axis, which cannot be loaded.",
+                [self.TEXT_EXPORT_SUGGESTION],
+            )
+        if spectrum_count == 0:
+            raise self.Error(f"{file_name} contains no collected spectra.")
+        if spectrum_count > capacity or point_count < 2 or x_list_length != point_count:
+            raise self.Error(f"{file_name} has an inconsistent header.", self.DAMAGED_FILE_SUGGESTIONS)
+        if spectrum_count * point_count > self.MAX_TOTAL_VALUES:
+            raise self._too_large_error(file_name, spectrum_count, point_count)
+
+        axis_position, axis_size = blocks[b"XLST"]
+        data_position, data_size = blocks[b"DATA"]
+        if axis_size < 8 + 4 * point_count or data_size < 4 * spectrum_count * point_count:
+            raise self.Error(f"{file_name} is missing part of its spectra.", self.DAMAGED_FILE_SUGGESTIONS)
+        axis_unit = self._integer(file_bytes, axis_position + 4, 4)
+        if axis_unit != self.RAMAN_SHIFT_UNIT:
+            raise self._axis_unit_error(file_name, axis_unit)
+        return {
+            "point_count": point_count,
+            "spectrum_count": spectrum_count,
+            "capacity": capacity,
+            "reached_end": reached_end,
+            "axis_position": axis_position + 8,
+            "data_position": data_position,
+            "origin_block": blocks.get(b"ORGN"),
+        }
+
+    def _wdf_origins(self, file_bytes, layout):
+        """Return the origin values and elapsed times that WiRE writes into spectrum names."""
+        import numpy as np
+
+        origins, elapsed_seconds = [], None
+        if layout["origin_block"] is None:
+            return origins, elapsed_seconds
+        block_position, block_size = layout["origin_block"]
+        spectrum_count = layout["spectrum_count"]
+        origin_size = 24 + 8 * layout["capacity"]
+        origin_count = self._integer(file_bytes, block_position, 4)
+        if origin_count > 64 or 4 + origin_count * origin_size > block_size:
+            raise ValueError("origin block does not match the header")
+        for origin_index in range(origin_count):
+            position = block_position + 4 + origin_index * origin_size
+            type_and_flags = self._integer(file_bytes, position, 4)
+            label = bytes(file_bytes[position + 8:position + 24]).split(b"\0")[0].decode("utf-8", "replace")
+            if type_and_flags & 0x7FFFFFFF == self.TIME_ORIGIN_TYPE:
+                file_times = np.frombuffer(file_bytes, dtype="<i8", count=spectrum_count, offset=position + 24)
+                elapsed_seconds = (file_times - file_times[0]) / 1e7
+            elif type_and_flags >> 31 and label:
+                values = np.frombuffer(file_bytes, dtype="<f8", count=spectrum_count, offset=position + 24)
+                origins.append((label, values))
+        return origins, elapsed_seconds
+
+    def _read_wdf(self, file_name, file_bytes):
+        """Return Raman shift, intensities, spectrum names and notes for one WDF file, in file order."""
+        import numpy as np
+
+        layout = self._wdf_layout(file_name, file_bytes)
+        point_count, spectrum_count = layout["point_count"], layout["spectrum_count"]
+        raman_shift = np.frombuffer(file_bytes, dtype="<f4", count=point_count, offset=layout["axis_position"])
+        intensities = np.frombuffer(file_bytes, dtype="<f4", count=spectrum_count * point_count,
+                                    offset=layout["data_position"])
+        with np.errstate(invalid="ignore"):
+            raman_shift = raman_shift.astype(np.float64)
+            intensities = intensities.astype(np.float64).reshape(spectrum_count, point_count)
+
+        try:
+            origins, elapsed_seconds = self._wdf_origins(file_bytes, layout)
+        except (ValueError, IndexError):
+            origins, elapsed_seconds = [], None
+        spectrum_names = self._spectrum_names(file_name, list(range(spectrum_count)), origins, elapsed_seconds)
+
+        notes = []
+        if spectrum_count < layout["capacity"]:
+            notes.append(self._unfinished_note(file_name, spectrum_count, layout["capacity"]))
+        if not layout["reached_end"]:
+            notes.append(("warning", f"{file_name} is damaged after its spectra; "
+                                     f"the spectra themselves were read in full."))
+        return raman_shift, intensities, spectrum_names, notes
+
+    def _metakit_slice(self, datafile, position, size):
+        """Return `size` bytes of the datafile at `position`, refusing references outside it."""
+        if position < 0 or size < 0 or position + size > len(datafile):
+            raise ValueError("reference outside the datafile")
+        return datafile[position:position + size]
+
+    def _metakit_number(self, buffer, position):
+        """Read one variable-length number; return (value, next position)."""
+        if buffer[position] == 0:
+            raise ValueError("negative number")
+        value = 0
+        for _ in range(6):
+            byte = buffer[position]
+            position += 1
+            value = (value << 7) + byte
+            if byte & 0x80:
+                return value - 0x80, position
+        raise ValueError("number too long")
+
+    def _metakit_column_reference(self, buffer, position):
+        """Read where a column is stored; return ((column position, column size), next position)."""
+        column_size, position = self._metakit_number(buffer, position)
+        column_position = 0
+        if column_size > 0:
+            column_position, position = self._metakit_number(buffer, position)
+        return (column_position, column_size), position
+
+    def _metakit_row_count(self, buffer, position):
+        """Read the start of a table; return (row count, next position)."""
+        reserved, position = self._metakit_number(buffer, position)
+        row_count, position = self._metakit_number(buffer, position)
+        if reserved != 0 or row_count > self.MAX_TABLE_ROWS:
+            raise ValueError("bad table header")
+        return row_count, position
+
+    def _metakit_integers(self, datafile, column_reference, row_count):
+        """Decode a column of integers stored at Metakit's adaptive bit width."""
+        column_position, column_size = column_reference
+        if column_size == 0 or row_count == 0:
+            return [0] * row_count
+        bit_width = (column_size << 3) // row_count
+        if row_count <= 7 and column_size <= 6:
+            bit_width = self.METAKIT_SHORT_COLUMN_WIDTHS[row_count - 1][column_size - 1]
+        column = self._metakit_slice(datafile, column_position, column_size)
+        if bit_width in (1, 2, 4):
+            values_per_byte, mask = 8 // bit_width, (1 << bit_width) - 1
+            return [(column[row // values_per_byte] >> ((row % values_per_byte) * bit_width)) & mask
+                    for row in range(row_count)]
+        if bit_width in (8, 16, 32, 64):
+            byte_width = bit_width // 8
+            return [self._integer(column, row * byte_width, byte_width, signed=True) for row in range(row_count)]
+        raise ValueError("bad integer width")
+
+    def _metakit_items(self, datafile, buffer, position, row_count):
+        """Decode a column of strings or byte items; return (items, next position)."""
+        data_reference, position = self._metakit_column_reference(buffer, position)
+        sizes_reference = (0, 0)
+        if data_reference[1] > 0:
+            sizes_reference, position = self._metakit_column_reference(buffer, position)
+        separate_reference, position = self._metakit_column_reference(buffer, position)
+
+        item_sizes = self._metakit_integers(datafile, sizes_reference, row_count)
+        data = self._metakit_slice(datafile, *data_reference)
+        if any(item_size < 0 for item_size in item_sizes) or sum(item_sizes) != len(data):
+            raise ValueError("item sizes do not match the column")
+        items, data_position = [], 0
+        for item_size in item_sizes:
+            items.append(data[data_position:data_position + item_size])
+            data_position += item_size
+
+        # Large items are stored on their own and listed by row.
+        separate_items = self._metakit_slice(datafile, *separate_reference)
+        list_position, row = 0, 0
+        while list_position < len(separate_items):
+            rows_skipped, list_position = self._metakit_number(separate_items, list_position)
+            row += rows_skipped
+            item_reference, list_position = self._metakit_column_reference(separate_items, list_position)
+            items[row] = self._metakit_slice(datafile, *item_reference)
+            row += 1
+        return items, position
+
+    def _metakit_streams(self, file_name, file_bytes):
+        """Return the streams of the storage's root folder as {name: (size, stored bytes)}."""
+        skip_mark = file_bytes[-16:-12]
+        if (len(file_bytes) < 24 or file_bytes[-8] != 0x80
+                or not (skip_mark == b"\x80\0\0\0" or skip_mark[0] & 0xF0 == 0x90)):
+            raise ValueError("no datafile tail")
+        datafile_start = len(file_bytes) - 16 - int.from_bytes(file_bytes[-12:-8], "big")
+        if datafile_start < 0 or file_bytes[datafile_start:datafile_start + 3] != b"JL\x1a":
+            raise ValueError("no datafile header")
+        datafile = memoryview(file_bytes)[datafile_start:]
+        root = self._metakit_slice(datafile, int.from_bytes(file_bytes[-4:], "big"),
+                                   int.from_bytes(file_bytes[-7:-4], "big"))
+
+        reserved, position = self._metakit_number(root, 0)
+        schema_size, position = self._metakit_number(root, position)
+        if reserved != 0 or bytes(root[position:position + schema_size]) != self.METAKIT_SCHEMA:
+            raise self.Error(
+                f"{file_name} uses a WXD layout that is not supported yet.",
+                ["Save the measurement as .wdf in WiRE, or export the spectra as text."],
+            )
+        root_row_count, position = self._metakit_number(root, position + schema_size)
+        if root_row_count != 1:
+            raise ValueError("bad root table")
+        folders_reference, position = self._metakit_column_reference(root, position)
+
+        folders = self._metakit_slice(datafile, *folders_reference)
+        folder_count, position = self._metakit_row_count(folders, 0)
+        _, position = self._metakit_items(datafile, folders, position, folder_count)
+        parents_reference, position = self._metakit_column_reference(folders, position)
+        for _ in range(3):
+            _, position = self._metakit_column_reference(folders, position)
+        _, position = self._metakit_items(datafile, folders, position, folder_count)
+        _, position = self._metakit_column_reference(folders, position)
+        files_reference, position = self._metakit_column_reference(folders, position)
+        root_folder = self._metakit_integers(datafile, parents_reference, folder_count).index(-1)
+
+        # Each folder's file table is split into blocks; the rows of every block,
+        # the trailing separator block included, are real files.
+        file_tables = self._metakit_slice(datafile, *files_reference)
+        streams, position = {}, 0
+        for folder in range(folder_count):
+            block_count, position = self._metakit_row_count(file_tables, position)
+            if block_count == 0:
+                continue
+            blocks_reference, position = self._metakit_column_reference(file_tables, position)
+            if folder != root_folder:
+                continue
+            blocks, block_position = self._metakit_slice(datafile, *blocks_reference), 0
+            for _ in range(block_count):
+                file_count, block_position = self._metakit_row_count(blocks, block_position)
+                if file_count == 0:
+                    continue
+                stream_names, block_position = self._metakit_items(datafile, blocks, block_position, file_count)
+                sizes_reference, block_position = self._metakit_column_reference(blocks, block_position)
+                for _ in range(2):
+                    _, block_position = self._metakit_column_reference(blocks, block_position)
+                stored_contents, block_position = self._metakit_items(datafile, blocks, block_position, file_count)
+                stream_sizes = self._metakit_integers(datafile, sizes_reference, file_count)
+                for stream_name, stream_size, stored in zip(stream_names, stream_sizes, stored_contents):
+                    streams[bytes(stream_name).rstrip(b"\0").decode("utf-8")] = (stream_size, stored)
+        return streams
+
+    def _wxd_stream(self, streams, stream_name, size_limit=None):
+        """Return a stream's bytes; contents are zlib-packed when shorter than the stated size."""
+        import zlib
+
+        stream_size, stored = streams[stream_name]
+        if stream_size < 0 or stream_size > (self.MAX_STREAM_BYTES if size_limit is None else size_limit):
+            raise ValueError("stream too large")
+        if len(stored) == stream_size:
+            return bytes(stored)
+        unpacker = zlib.decompressobj()
+        stream = unpacker.decompress(stored, stream_size + 1)
+        if len(stream) != stream_size or not unpacker.eof:
+            raise ValueError("stream does not unpack to its stated size")
+        return stream
+
+    def _wxd_entry(self, stream, entry_name):
+        """Return the value of a named entry (integer, number or text), or None if it is absent."""
+        import numpy as np
+
+        encoded_name = entry_name.encode("utf-16-le") + b"\0\0"
+        position = stream.find(encoded_name)
+        while position >= 0:
+            if position >= 4 and self._integer(stream, position - 4, 4) == len(encoded_name):
+                value_position = position + len(encoded_name) + 2
+                variant_type = self._integer(stream, value_position - 2, 2)
+                if variant_type in (3, 22):
+                    return self._integer(stream, value_position, 4, signed=True)
+                if variant_type == 2:
+                    return self._integer(stream, value_position, 2, signed=True)
+                if variant_type in (5, 7):
+                    return float(np.frombuffer(stream, dtype="<f8", count=1, offset=value_position)[0])
+                if variant_type == 8:
+                    text_size = self._integer(stream, value_position, 4)
+                    text = stream[value_position + 4:value_position + 4 + text_size]
+                    return text.decode("utf-16-le", "replace").rstrip("\0")
+                return None
+            position = stream.find(encoded_name, position + 2)
+        return None
+
+    def _wxd_number_list(self, stream, position):
+        """Decode the list of numbers that starts at `position`."""
+        import numpy as np
+
+        value_count = self._integer(stream, position, 8)
+        if not 0 < value_count <= self.MAX_TOTAL_VALUES:
+            raise ValueError("bad list length")
+        number_type = self.WXD_NUMBER_TYPES[self._integer(stream, position + 8, 2)]
+        records = np.frombuffer(stream, dtype=[("type", "<u2"), ("value", number_type)],
+                                count=value_count, offset=position + 8)
+        list_end = position + 8 + records.nbytes
+        if np.any(records["type"] != records["type"][0]) or stream[list_end:list_end + 4] != self.WXD_LIST_END:
+            raise ValueError("bad list")
+        return records["value"].astype(np.float64)
+
+    def _wxd_spectrum(self, dataset):
+        """Return the intensity list embedded in one DataSet stream, found by its entry name."""
+        import re
+
+        position = dataset.find(self.WXD_LIST_NAME)
+        while position >= 0:
+            name_size = self._integer(dataset, position - 4, 4) if position >= 4 else 0
+            if 0 < name_size <= 64:
+                entry_name = dataset[position:position + name_size].decode("utf-16-le", "replace")
+                value_position = position + name_size + 2
+                if (re.fullmatch(r"DataList\d+\0", entry_name)
+                        and self._integer(dataset, value_position - 2, 2) == self.WXD_OBJECT_TYPE):
+                    return self._wxd_number_list(dataset, value_position + 16)
+            position = dataset.find(self.WXD_LIST_NAME, position + 2)
+        raise ValueError("no spectrum in dataset")
+
+    def _wxd_layout(self, file_name, file_bytes):
+        """Check a WXD file's structure and return its streams, axis stream and spectrum numbers."""
+        import re
+
+        streams = self._metakit_streams(file_name, file_bytes)
+        spectrum_numbers = sorted(int(stream_name[7:]) for stream_name in streams
+                                  if re.fullmatch(r"DataSet\d+", stream_name))
+        if not spectrum_numbers:
+            raise self.Error(f"{file_name} contains no collected spectra.")
+        properties = self._wxd_stream(streams, "Properties")
+
+        spectral_axes = []
+        for stream_name in streams:
+            match = re.fullmatch(r"DataList(\d+)", stream_name)
+            if match and self._wxd_entry(properties, "dataListType" + match.group(1)) in self.SPECTRAL_AXIS_TYPES:
+                spectral_axes.append((stream_name, self._wxd_entry(properties, "dataListUnits" + match.group(1))))
+        if len(spectral_axes) != 1:
+            raise self.Error(
+                f"{file_name} does not describe a single spectral axis, so it cannot be loaded.",
+                [self.TEXT_EXPORT_SUGGESTION],
+            )
+        axis_stream, axis_unit = spectral_axes[0]
+        if axis_unit != self.RAMAN_SHIFT_UNIT:
+            raise self._axis_unit_error(file_name, axis_unit)
+
+        collected_count = self._wxd_entry(properties, "nCollectedDatasets")
+        if not isinstance(collected_count, int) or not 0 < collected_count <= len(spectrum_numbers):
+            collected_count = len(spectrum_numbers)
+        return {
+            "streams": streams,
+            "properties": properties,
+            "axis_stream": axis_stream,
+            "spectrum_numbers": spectrum_numbers[:collected_count],
+            "spectrum_count": collected_count,
+            "planned_count": len(spectrum_numbers),
+        }
+
+    def _wxd_origins(self, layout, collection_dates):
+        """Return the origin values and elapsed times that WiRE writes into spectrum names."""
+        import math
+
+        streams, properties, spectrum_numbers = layout["streams"], layout["properties"], layout["spectrum_numbers"]
+        origins = []
+        for origin_index in range(64):
+            label = self._wxd_entry(properties, f"dataOriginName{origin_index}")
+            origin_stream = f"DataOriginList{origin_index}"
+            if not isinstance(label, str) or not label or origin_stream not in streams:
+                break
+            values = self._wxd_number_list(self._wxd_stream(streams, origin_stream), 0)
+            origins.append((label, values[spectrum_numbers]))
+        elapsed_seconds = None
+        if all(isinstance(collection_date, float) and math.isfinite(collection_date)
+               for collection_date in collection_dates):
+            elapsed_seconds = [(collection_date - collection_dates[0]) * 86400 for collection_date in collection_dates]
+        return origins, elapsed_seconds
+
+    def _read_wxd(self, file_name, file_bytes):
+        """Return Raman shift, intensities, spectrum names and notes for one WXD file, in file order."""
+        import numpy as np
+
+        layout = self._wxd_layout(file_name, file_bytes)
+        streams, spectrum_numbers = layout["streams"], layout["spectrum_numbers"]
+        raman_shift = self._wxd_number_list(self._wxd_stream(streams, layout["axis_stream"]), 0)
+        if len(spectrum_numbers) * raman_shift.size > self.MAX_TOTAL_VALUES:
+            raise self._too_large_error(file_name, len(spectrum_numbers), raman_shift.size)
+
+        intensities = np.empty((len(spectrum_numbers), raman_shift.size), dtype=np.float64)
+        dataset_size_limit = 12 * raman_shift.size + 65536
+        collection_dates = []
+        for row, spectrum_number in enumerate(spectrum_numbers):
+            dataset = self._wxd_stream(streams, f"DataSet{spectrum_number}", dataset_size_limit)
+            spectrum = self._wxd_spectrum(dataset)
+            if spectrum.size != raman_shift.size:
+                raise ValueError("spectrum length differs from the axis")
+            intensities[row] = spectrum
+            collection_dates.append(self._wxd_entry(dataset, "OriginalDate"))
+
+        try:
+            origins, elapsed_seconds = self._wxd_origins(layout, collection_dates)
+        except (ValueError, IndexError, KeyError):
+            origins, elapsed_seconds = [], None
+        spectrum_names = self._spectrum_names(file_name, spectrum_numbers, origins, elapsed_seconds)
+
+        notes = []
+        if len(spectrum_numbers) < layout["planned_count"]:
+            notes.append(self._unfinished_note(file_name, len(spectrum_numbers), layout["planned_count"]))
+        return raman_shift, intensities, spectrum_names, notes

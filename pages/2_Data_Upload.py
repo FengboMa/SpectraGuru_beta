@@ -5,7 +5,6 @@ import psycopg2
 import numpy as np
 from scipy.interpolate import interp1d
 import auth_utils
-import instrument_readers
 from function import show_feedback
 import traceback
 
@@ -100,7 +99,7 @@ def load_multi_data(file_paths):
 @st.cache_data(max_entries=8)
 def load_instrument_data(kind, files):
     """Read instrument files into the working dataframe plus user notices."""
-    return instrument_readers.read_files(kind, [(f.name, f.getvalue()) for f in files])
+    return function.InstrumentFileReader(kind).read_files([(f.name, f.getvalue()) for f in files])
 
 def show_label_editor(temp_df, default_labels):
     """
@@ -250,9 +249,11 @@ FORMAT_OPTIONS = {
     "Single TSV (.tsv / tab-separated)":     {"kind": "single_tsv", "multi": False, "types": ["csv"]},
     "Single CSV (comma-separated)":          {"kind": "single_csv", "multi": False, "types": ["csv"]},
 }
-# Instrument-vendor formats come from the reader registry.
-for _kind, _reader in instrument_readers.READERS.items():
-    FORMAT_OPTIONS[_reader["label"]] = {"kind": _kind, "multi": True, "types": _reader["types"]}
+# Instrument-vendor formats come from the reader's vendor list and are still experimental.
+for _vendor, _details in function.InstrumentFileReader.VENDORS.items():
+    FORMAT_OPTIONS[_details["label"]] = {
+        "kind": _vendor, "multi": True, "types": _details["extensions"], "experimental": True,
+    }
 
 MAX_TOTAL_SPECTRA = 1000
 
@@ -276,10 +277,11 @@ def process_upload(kind, uploaded, remaining=None, notes=None):
         elif kind == "single_csv":
             df = load_data(uploaded)
 
-        elif kind in instrument_readers.READERS:
+        elif kind in function.InstrumentFileReader.VENDORS:
             # Count from the file headers first, so an over-limit upload is
             # refused before anything is parsed or cached for this class.
-            counts = [instrument_readers.count_spectra(kind, f.name, f.getvalue()) for f in uploaded]
+            reader = function.InstrumentFileReader(kind)
+            counts = [reader.count_spectra(f.name, f.getvalue()) for f in uploaded]
             if remaining is not None and sum(counts) > remaining:
                 if len(uploaded) == 1:
                     held = f"{uploaded[0].name} holds {counts[0]} spectra"
@@ -339,7 +341,7 @@ def process_upload(kind, uploaded, remaining=None, notes=None):
         )
         return None
 
-    except instrument_readers.InstrumentFileError as e:
+    except function.InstrumentFileReader.Error as e:
         show_feedback(
             message=str(e),
             severity="error",
@@ -448,6 +450,11 @@ for idx in range(int(n_classes)):
             )
             if fmt:
                 cfg = FORMAT_OPTIONS[fmt]
+                if cfg.get("experimental"):
+                    st.warning(
+                        "This is an **experimental feature**. Data might be **linearly interpolated** "
+                        "to have a common x-axis."
+                    )
                 if cfg["multi"]:
                     uploads = st.file_uploader(
                         "Upload file(s)",

@@ -173,9 +173,13 @@ st.markdown(
     """
 )
 
-# Add expander to show the flyer
-with st.expander("View SpectraGuru™ flyer"):
-    st.image("element/Spectraguru flyer.png", caption="SpectraGuru™ flyer", width="stretch")
+st.markdown(
+    "Through November 18, 2026, SpectraGuru recorded **1,433,580 visits since launch** "
+    "from **122 countries and regions**."
+)
+with st.expander("View SpectraGuru™ traffic report"):
+    st.image("element/spectraguru_cumulative_visits.png", width="stretch")
+    st.image("element/spectraguru_traffic_by_region.png", width="content")
 st.divider()
 
 
@@ -228,12 +232,11 @@ st.markdown(
 
 st.divider()
 
-col1, col3 = st.columns([2,3])
+st.markdown("### Features include")
+feature_column, diagram_column = st.columns([2, 3])
 
-col1.markdown(
+feature_column.markdown(
     """
-    ### Features include
-
     #### Data upload page
     **Data input**
     - Manual upload for TXT, CSV, and TSV files
@@ -243,18 +246,12 @@ col1.markdown(
     - Automatic interpolation and overlap-range cropping for multiple classes
     - Label editing for downstream classification
     - Optional data preview controls
-""")
+    """
+)
 
-
-col1.markdown(
+feature_column.markdown(
     """
     #### Processing page
-    """)
-
-
-
-col1.markdown(
-    """
     **Processing**
     - Interpolation
     - Crop
@@ -279,28 +276,10 @@ col1.markdown(
         - Normalize by peak
         - Min-max normalization
     - Outlier removal
-    """)
-# col2.write("")
-# col2.write("")
-# col2.write("")
-# col2.write("")
-# col2.write("")
-# col2.write("")
-# col2.write("")
-# col2.write("")
-# col2.write("")
-# col2.write("")
-# col2.write("")
-# col2.write("")
-# col2.write("")
-# col2.write("")
-# col2.write("")
-# col2.write("")
-# col2.write("")
-# col2.write("")
-# col2.write("")
+    """
+)
 
-col1.markdown(
+feature_column.markdown(
     """
     **Visualization**
     - Preview data
@@ -312,16 +291,12 @@ col1.markdown(
     - Spectrum selection for plots and exports
     - Downloads generated on request
     - Preprocessing reset confirmation
-    """)
+    """
+)
 
-col3.image(r'element/SpectraGuru Welcome Page Flow Chart.png')
+diagram_column.image(r"element/SpectraGuru Welcome Page Flow Chart.png")
 
-# st.markdown(
-#     """
-    
-#     """)
-# col1, col2,col3 = st.columns([1,1,3])
-col1.markdown(
+diagram_column.markdown(
     """
     #### Analytics page
     - Average plot with original spectra
@@ -342,7 +317,8 @@ col1.markdown(
     #### Toolbox page
     - Spectrum simulation
     - Peak assignment table
-    """)
+    """
+)
 
 
 st.markdown(

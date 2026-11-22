@@ -173,9 +173,13 @@ st.markdown(
     """
 )
 
-# Add expander to show the flyer
-with st.expander("View SpectraGuru™ flyer"):
-    st.image("element/Spectraguru flyer.png", caption="SpectraGuru™ flyer", width="stretch")
+st.markdown(
+    "Through November 18, 2026, SpectraGuru recorded **1,433,580 visits since launch** "
+    "from **122 countries and regions**."
+)
+with st.expander("View SpectraGuru™ traffic report"):
+    st.image("element/spectraguru_cumulative_visits.png", width="stretch")
+    st.image("element/spectraguru_traffic_by_region.png", width="content")
 st.divider()
 
 
